@@ -63,6 +63,8 @@ def build_command(
     top_p: float = 0.8,
     top_k: int = 20,
     device: str = devices.AUTO,
+    adapter_path: str | None = None,
+    system_prompt: str = "",
 ) -> list[str]:
     layers = devices.layers_for(device, gpu_layers)
     layers = ALL_LAYERS if layers < 0 else layers
@@ -76,6 +78,8 @@ def build_command(
         "--predict", str(int(max_new_tokens)),
         "--seed", str(normalize_seed(seed)),
     ]
+    if adapter_path:
+        command += ["--lora", adapter_path]
     for kind, path in attachments:
         flag = FLAG_FOR_KIND.get(kind)
         if flag is None:
@@ -89,6 +93,8 @@ def build_command(
             "--top-p", f"{float(top_p):g}",
             "--top-k", str(int(top_k)),
         ]
+    if system_prompt:
+        command += ["--system-prompt", system_prompt]
     # Last, so the instruction is never mistaken for a value of another flag.
     command += ["--prompt", instruction]
     return command
@@ -149,6 +155,7 @@ def describe(
     image=None,
     audio=None,
     video=None,
+    attachments: list[tuple[str, str]] | None = None,
     max_frames: int = media.DEFAULT_MAX_FRAMES,
     gpu_layers: int = -1,
     n_ctx: int = CONTEXT_FROM_MODEL,
@@ -161,33 +168,61 @@ def describe(
     device: str = devices.AUTO,
     backend: str = "auto",
     auto_download: bool = True,
+    adapter_path: str | None = None,
+    system_prompt: str = "",
     progress: NodeProgress | None = None,
 ) -> str:
-    """Fetch the runtime if needed, describe the attachments once, and return the text."""
+    """Fetch the runtime if needed, describe the attachments once, and return the text.
+
+    ``adapter_path`` is here for the 8B rewriter rather than for captioning.
+    That model reads the reference frames itself, so its LoRA has to be attached
+    to the same process that holds the images -- there is no separate text pass
+    to hang it on. A captioner passes nothing here and nothing changes for it.
+
+    ``attachments`` is for the same caller, and for the same reason. Two
+    reference frames are two ordered pictures with a role each, not a batch: the
+    model is told which is the first frame and which is the last, and the two
+    can be different sizes. So that caller writes its own files and states the
+    order, rather than handing over one IMAGE for this to take apart.
+    """
     device = devices.validate(device)
-    if image is None and audio is None and video is None:
+    if attachments is None and image is None and audio is None and video is None:
         raise ValueError(
             "nothing to describe: connect an image, an audio clip or a video, or type the "
             "description in by hand."
         )
+    if attachments is not None and not attachments:
+        raise ValueError("nothing to describe: 'attachments' is empty.")
 
     binary = llamacpp.ensure_mtmd(backend, auto_download, progress)
 
     with media.Workspace() as workspace:
-        attachments, notes, note = attachments_from(workspace, image, audio, video, max_frames)
+        note = ""
+        if attachments is None:
+            attachments, notes, note = attachments_from(
+                workspace, image, audio, video, max_frames
+            )
+        else:
+            kinds = dict.fromkeys(kind for kind, _path in attachments)
+            notes = [
+                f"{sum(kind == wanted for kind, _path in attachments)} {wanted}(s)"
+                for wanted in kinds
+            ]
         if note:
             instruction = f"{note}\n\n{instruction}"
         command = build_command(
             binary, model_path, mmproj_path, instruction, attachments,
             gpu_layers, n_ctx, seed, greedy, max_new_tokens, temperature, top_p, top_k, device,
+            adapter_path, system_prompt,
         )
 
         runner.free_comfy_vram(device)
         if progress is not None:
             where = "" if device == devices.AUTO else f" on {device}"
+            lora = f" + {os.path.basename(adapter_path)}" if adapter_path else ""
             progress.set_total(max(int(max_new_tokens), 1))
             progress.text(
-                f"Describing {' + '.join(notes)}\n{os.path.basename(model_path)}{where}",
+                f"Describing {' + '.join(notes)}\n{os.path.basename(model_path)}{lora}{where}",
                 force=True,
             )
 
@@ -210,4 +245,4 @@ def describe(
 
     if progress is not None:
         progress.finish(f"Done · {len(text)} chars{runner.speed(stderr_text)}")
-    return text
+    return text.replace("\r\n", "\n")

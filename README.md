@@ -26,21 +26,23 @@ English, which is what MiniMax-H3 expects.
               MiniMax-H3 video + synchronized audio
 ```
 
-There are two ways to get that output, and the pack ships both:
+There are three ways to get that output, and the pack ships all of them:
 
-| | Rewriter node | Writer nodes |
-|---|---|---|
-| Where the format comes from | the LoRA — a 27B trained until H3 output came out of it unprompted | MiniMax's own writing guide, in the system prompt |
-| Model | Qwen3.6-27B only | any instruction-following GGUF |
-| Smallest working setup | ~10 GB download, ~13 GB VRAM | **2.6 GB download, ~5 GB VRAM** |
-| Tasks | T2VA | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
-| Quality | the reference | close, and it runs on hardware the LoRA cannot touch |
+| | Rewriter node | Rewriter 8B | Writer nodes |
+|---|---|---|---|
+| Where the format comes from | the LoRA — a 27B trained until H3 output came out of it unprompted | a second LoRA, on a model that also sees | MiniMax's own writing guide, in the system prompt |
+| Model | Qwen3.6-27B only | Qwen3-VL-8B-Instruct only | any instruction-following GGUF |
+| Smallest working setup | ~10 GB download, ~13 GB VRAM | ~6.1 GB download, ~9 GB VRAM | **2.6 GB download, ~5 GB VRAM** |
+| Tasks | T2VA | T2VA, I2VA, FL2VA, L2VA | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
+| Reference frames | described to it in words | **it looks at them** | described to it in words |
+| Quality | the reference | the same trained contract, at a third of the download; wobblier on the alignment line | close, and it runs on hardware the LoRA cannot touch |
 
-Both read text. A third node, [Reference Caption](#minimax-h3-reference-caption),
+Two of the three read text only. [Reference Caption](#minimax-h3-reference-caption)
 turns an image, an audio clip or a video into the text they need — 3 to 5 seconds
 per asset on a 3.4 GB model. When a whole shot's worth of references is waiting,
 [Multi Reference Caption](#minimax-h3-multi-reference-caption) does all of them at
-once.
+once. The 8B rewriter needs none of that for its reference *frames*: connect the
+picture and it reads it.
 
 If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2vai2vafl2val2va).
 
@@ -120,12 +122,68 @@ releases the VRAM again.
   on only when iterating on prompts back-to-back.
 - `options` — optional; connect a **MiniMax-H3 Rewriter Options** node.
 
+### MiniMax-H3 Prompt Rewriter 8B (sees frames)
+
+The same idea on a much smaller model that is also multimodal. LightX2V's second
+adapter is trained on
+[Qwen3-VL-8B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct), so
+where the 27B has to be *told* what a reference frame contains, this one is shown
+the frame and writes the alignment line from what it sees. It covers four tasks
+rather than one, and fits on a card the 27B cannot go near.
+
+![The 8B rewriter node in ComfyUI, set to T2VA: the options node on the left, the rewriter with its first_frame and last_frame inputs in the middle, and the finished rewrite on the right with numbered shots, (S1) and (S2) speaker ids and a <d>[English] Hello.</d> dialogue tag](docs/node_rewriter_8b.png)
+
+**Outputs** are the same four as the rewriter above, so the two are
+interchangeable downstream.
+
+**Inputs**
+
+- `prompt`, `resolution`, `duration`, `greedy`, `seed` — as above.
+- `model` — a Qwen3-VL base and its projector, which are two files from the same
+  conversion. Entries prefixed `on disk:` are pairs already in your model
+  folders. **Only the 8B fits the adapter**; a Qwen3-VL of another size loads and
+  then runs as a plain model with no rewriter, and the node says so before
+  downloading anything.
+- `task` — `T2VA`, `I2VA`, `FL2VA`, `L2VA`. The model's own name for these is
+  T2AV, I2AV, FL2AV and L2AV; they are the same four tasks.
+- `first_frame` / `last_frame` — optional IMAGE inputs. `I2VA` reads
+  `first_frame`, `L2VA` reads `last_frame`, `FL2VA` reads both, `T2VA` reads
+  neither. Connect the wrong one and the node says which is missing before
+  anything loads — which end of the clip a picture belongs to is part of what
+  the model is told.
+- `keep_model_loaded` — **only `T2VA` can honour it.** The three tasks with
+  frames run through `llama-mtmd-cli`, a fresh process each time, which takes
+  the model with it when it exits.
+- `options` — the same options node as everything else. Its `adapter` dropdown
+  lists both LoRAs; the first entry picks whichever one matches the base model
+  you chose, so it needs no attention.
+
+**What it costs**
+
+| | Download | VRAM |
+|---|---|---|
+| Q4_K_M base + projector + Q8_0 adapter | 4.7 + 0.7 + 0.7 GB | ~9 GB |
+| Q8_0 base + projector + F16 adapter | 8.1 + 0.7 + 1.3 GB | ~13 GB |
+
+**What to expect of it.** All four tasks produce the trained shape: `T2VA` starts
+straight in on the three fields, and the other three open with the alignment
+sentence MiniMax-H3 itself reads. The shot markers are the visible difference the
+adapter makes — with `use_lora` off the same model still fills the three fields,
+because the contract is in the system prompt, but it stops writing `[Shot 2]`
+cut markers and the answer comes back about a third as long.
+
+It is an 8B, and it shows in one place: the alignment line's timestamp is
+sometimes formatted to three decimals instead of two, and on `FL2VA` the final
+picture is occasionally credited to `Shot 1` rather than the last shot. The
+27B does not do this. Nothing downstream parses that line, so it costs
+correctness nowhere — but it is worth a glance before pasting.
+
 ### MiniMax-H3 Rewriter Options
 
 Everything you rarely touch, kept off the main node. Leave it unconnected and the
 rewriter uses the decoding parameters the adapter was published with.
 
-![The Rewriter Options node, one output socket and fifteen widgets: max_new_tokens, temperature, top_p, top_k, repetition_penalty, attn_implementation, the adapter repository, use_lora, auto_download, gpu_layers, n_ctx, gguf_runtime, device, llama_backend and trust_remote_code](docs/node_options.png)
+![The Rewriter Options node, one output socket and fifteen widgets: max_new_tokens, temperature, top_p, top_k, repetition_penalty, attn_implementation, the adapter to apply, use_lora, auto_download, gpu_layers, n_ctx, gguf_runtime, device, llama_backend and trust_remote_code](docs/node_options.png)
 
 | Input | Default | Purpose |
 |---|---|---|
@@ -133,8 +191,8 @@ rewriter uses the decoding parameters the adapter was published with.
 | `temperature` / `top_p` / `top_k` | 0.7 / 0.8 / 20 | Sampling, used only when `greedy` is off |
 | `repetition_penalty` | 1.05 | |
 | `attn_implementation` | `sdpa` | `eager` or `flash_attention_2` if you have it |
-| `adapter` | the LightX2V repo | Repository id or local folder of the LoRA — see below |
-| `use_lora` | on | Turn off for the plain Qwen3.6-27B baseline |
+| `adapter` | the LightX2V repo | Which build of the LoRA to apply — see below |
+| `use_lora` | on | Turn off for the plain base-model baseline |
 | `auto_download` | on | Turn off to fail loudly instead of fetching 52 GB |
 | `device` | `auto` | Which GPU runs the language model — see below |
 | `trust_remote_code` | **off** | Allow a checkpoint to run the Python it ships with — see below |
@@ -142,15 +200,29 @@ rewriter uses the decoding parameters the adapter was published with.
 The same options node feeds the writer nodes and the captioner; `adapter` and
 `use_lora` simply do not apply there.
 
-#### `adapter` — the one field a workflow can still choose
+#### `adapter` — a dropdown, and what is in it
 
-Every model on these nodes is picked from a dropdown, so what a saved workflow
-carries is the *name* of an entry and never a path: paths live in your
-`models.json`, which stays on your machine. `adapter` is the exception — it is a
-text field, because pointing it at a `.gguf` LoRA you converted yourself is a
-thing people do. That means a workflow you downloaded gets to fill it in.
+The list holds, in order:
 
-Two consequences, both handled and neither of them a restriction on you:
+- **`lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA`**, the default and the entry to
+  leave alone. It means *whichever build the model list names for the base model
+  you picked* — the PEFT adapter for a `transformers` base, the catalog's GGUF
+  for a GGUF one, and the 8B adapter on the 8B node.
+- **Every published precision of both LoRAs.** F16 and Q8_0 for each; the Q8_0 is
+  half the download and rewrites the same. Picking one that is not on disk
+  downloads it from the repository it belongs to.
+- **Every `.gguf` LoRA already in your ComfyUI model folders**, prefixed
+  `on disk:` with its architecture in the label, so `qwen35` and `qwen3vl` are
+  told apart at a glance. This is how a LoRA you converted yourself gets in:
+  drop the file in `models/LLM` and it appears.
+
+Choosing a quantisation used to mean editing `models.json` by hand, which is a
+power-user path rather than an interface. Saved workflows are unaffected: a combo
+serialises as the string it displays, and the old default is still the first
+entry, character for character.
+
+Two things are still true of this field, because it is the one setting a
+downloaded workflow gets any say in:
 
 - **A network path is refused.** `\\host\share\...` and `//host/share/...` are
   rejected before anything reads them, because merely looking at one is an
@@ -555,7 +627,7 @@ in your desktop's JSON editor — on the machine running ComfyUI, which is not
 necessarily the one looking at the browser tab. It is seeded from the packaged
 copy on first use, so updating the node pack never overwrites your edits.
 
-It holds three lists with the same fields. **`models`** feeds the LoRA rewriter
+It holds four lists with the same fields. **`models`** feeds the LoRA rewriter
 and has to be Qwen3.6-27B:
 
 ```json
@@ -566,6 +638,26 @@ and has to be Qwen3.6-27B:
   "vram": "~29 GB, no extra package needed"
 }
 ```
+
+**`models_8b`** feeds the 8B rewriter, has to be Qwen3-VL-8B-Instruct, and needs
+an `mmproj` beside the model — being multimodal, it is two files:
+
+```json
+{
+  "name": "Qwen3-VL-8B-Instruct GGUF Q4_K_M",
+  "repo": "Qwen/Qwen3-VL-8B-Instruct-GGUF",
+  "file": "Qwen3VL-8B-Instruct-Q4_K_M.gguf",
+  "mmproj": "mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf",
+  "format": "gguf",
+  "download_gb": 5.4,
+  "vram": "~9 GB with the adapter"
+}
+```
+
+A list of its own rather than more entries in `models`, because an entry from
+either would fail to load in the other's node — different architecture,
+different adapter. The two adapters live apart for the same reason, under
+`adapters` and `adapters_8b`.
 
 **`writers`** feeds the writer nodes and can be anything, as long as it is a GGUF
 language model with a chat template:
@@ -853,9 +945,10 @@ the CUDA figure.
 > [writer nodes](#minimax-h3-prompt-writer-t2vai2vafl2val2va) do on purpose, with
 > the full guide in the prompt instead of seven lines.
 
-The GGUF route uses a **converted** adapter, not the PEFT one. Point the options
-node's `adapter` at a local `.gguf`, or set `adapters.gguf.repo` in the model
-list. The prompt is built from the GGUF's own chat template with
+The GGUF route uses a **converted** adapter, not the PEFT one. It is fetched
+without asking; to use one of your own, drop the `.gguf` into `models/LLM` and
+pick it from the options node's `adapter` list, or set `adapters.gguf.repo` in
+the model list. The prompt is built from the GGUF's own chat template with
 `enable_thinking=False`, and the result is byte-identical to what
 `transformers.apply_chat_template` produces — the model sees exactly the text the
 LoRA was trained on.
@@ -929,13 +1022,16 @@ maintained.
 | Component | Source |
 |---|---|
 | LoRA adapter | [lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA) |
+| LoRA adapter, 8B | [lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA-8B](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA-8B) |
 | Base language model | [Qwen/Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B) |
+| Base language model, 8B | [Qwen/Qwen3-VL-8B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct) |
 | Video/audio generator | [MiniMaxAI/MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) |
 | Prompt-writing guides | [MiniMaxAI/MiniMax-H3 `docs/`](https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/main/docs) — fetched at run time, see above |
 | Inference framework | [ModelTC/LightX2V](https://github.com/ModelTC/LightX2V) |
 
-The prompt template in `minimax_h3_rewriter/prompt_template.py` is reproduced
-byte-for-byte from the adapter repository; changing it degrades the rewrite.
+The prompt templates in `minimax_h3_rewriter/prompt_template.py` and
+`prompt_template_8b.py` are reproduced byte-for-byte from their adapter
+repositories; changing them degrades the rewrite.
 
 Use of MiniMax-H3 is governed by the licence and acceptable-use terms in the
 [official MiniMax-H3 repository](https://huggingface.co/MiniMaxAI/MiniMax-H3).

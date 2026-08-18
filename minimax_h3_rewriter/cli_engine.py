@@ -104,6 +104,7 @@ def build_command(
         "--seed", str(normalize_seed(seed)),
         "--repeat-penalty", f"{float(repetition_penalty):g}",
         "-no-cnv",
+        "-st",
         "--no-display-prompt",
         "--no-warmup",
         "--simple-io",

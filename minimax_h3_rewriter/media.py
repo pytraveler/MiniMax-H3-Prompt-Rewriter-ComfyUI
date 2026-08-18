@@ -69,8 +69,17 @@ def frame_indices(count: int, limit: int) -> list[int]:
     return sorted({int(round(index * step)) for index in range(limit)})
 
 
-def image_files(image, workspace: Workspace, max_frames: int = DEFAULT_MAX_FRAMES) -> list[str]:
-    """Write an IMAGE batch out as PNGs. Returns the paths, in order."""
+def image_files(
+    image,
+    workspace: Workspace,
+    max_frames: int = DEFAULT_MAX_FRAMES,
+    prefix: str = "frame",
+) -> list[str]:
+    """Write an IMAGE batch out as PNGs. Returns the paths, in order.
+
+    ``prefix`` keeps two calls on one workspace from writing over each other,
+    which is what the 8B rewriter does with its first and last reference frame.
+    """
     from PIL import Image
 
     numpy = _numpy()
@@ -86,7 +95,7 @@ def image_files(image, workspace: Workspace, max_frames: int = DEFAULT_MAX_FRAME
         frame = numpy.clip(array[index] * 255.0 + 0.5, 0, 255).astype(numpy.uint8)
         if frame.shape[-1] == 1:
             frame = frame[..., 0]
-        path = workspace.file(f"frame_{position:03d}.png")
+        path = workspace.file(f"{prefix}_{position:03d}.png")
         Image.fromarray(frame).save(path, format="PNG")
         paths.append(path)
     return paths

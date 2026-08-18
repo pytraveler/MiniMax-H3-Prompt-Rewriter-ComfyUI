@@ -1,5 +1,5 @@
 {
-  "seed_version": "0.9.3",
+  "seed_version": "0.13.0",
   "_comment": [
     "Base models offered by the MiniMax-H3 Prompt Rewriter node.",
     "",
@@ -33,11 +33,18 @@
     "rather than the PEFT one. They are the low-VRAM route: a Q4_K_M base is 15.7 GB",
     "instead of 52 GB, and the IQ2/IQ3 quants go lower still at some quality cost.",
     "",
-    "The adapter itself also comes in two sizes. 'file' is what is fetched by default;",
-    "put any name from 'alternatives' in the options node's 'adapter' field and it is",
-    "downloaded from the same repository. Q8_0 is 1.85 GB against F16's 3.48 GB and",
-    "still produces the trained cut-point form, so it is the better default on a card",
-    "that is tight for room.",
+    "The adapter itself also comes in two sizes. 'file' is what is fetched by default,",
+    "and everything under 'alternatives' is offered beside it in the options node's",
+    "'adapter' dropdown and downloaded from the same repository when picked. Q8_0 is",
+    "1.85 GB against F16's 3.48 GB and still produces the trained cut-point form, so",
+    "it is the better choice on a card that is tight for room.",
+    "",
+    "'models_8b' and 'adapters_8b' are the second rewriter: a much smaller model that",
+    "is multimodal, so it reads the first and last frame itself instead of a caption",
+    "of them. Separate lists because the two take different architectures - an entry",
+    "from one will not load in the other's node, and offering it there would only",
+    "produce a tensor-shape error after a multi-gigabyte download. Same fields, and",
+    "the base needs an 'mmproj' for the same reason a captioner does.",
     "",
     "'writers' is a separate list, for the guided writer nodes. Those carry the H3",
     "format in the system prompt instead of in a LoRA, so any instruction-following",
@@ -62,14 +69,28 @@
       "download_gb": 3.48
     },
     "gguf": {
-      "repo": "ivanfromm/MiniMax-H3-Prompt-Rewriter-LoRA-GGUF",
+      "repo": "pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-GGUF",
       "file": "MiniMax-H3-Prompt-Rewriter-LoRA-F16.gguf",
       "download_gb": 3.48,
       "alternatives": [
         {
           "file": "MiniMax-H3-Prompt-Rewriter-LoRA-Q8_0.gguf",
           "download_gb": 1.85,
-          "note": "half the size, same rewrite behaviour; name it in the options node's 'adapter' field"
+          "note": "half the size, same rewrite behaviour"
+        }
+      ]
+    }
+  },
+  "adapters_8b": {
+    "gguf": {
+      "repo": "pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-8B-GGUF",
+      "file": "MiniMax-H3-Prompt-Rewriter-LoRA-8B-F16.gguf",
+      "download_gb": 1.3,
+      "alternatives": [
+        {
+          "file": "MiniMax-H3-Prompt-Rewriter-LoRA-8B-Q8_0.gguf",
+          "download_gb": 0.69,
+          "note": "half the size, same rewrite behaviour"
         }
       ]
     }
@@ -199,6 +220,26 @@
       "download_gb": 16.3,
       "vram": "~20 GB with the adapter",
       "note": "abliterated fine-tune, not the base the LoRA was trained on"
+    }
+  ],
+  "models_8b": [
+    {
+      "name": "Qwen3-VL-8B-Instruct GGUF Q4_K_M",
+      "repo": "Qwen/Qwen3-VL-8B-Instruct-GGUF",
+      "file": "Qwen3VL-8B-Instruct-Q4_K_M.gguf",
+      "mmproj": "mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf",
+      "format": "gguf",
+      "download_gb": 5.4,
+      "vram": "~9 GB with the adapter"
+    },
+    {
+      "name": "Qwen3-VL-8B-Instruct GGUF Q8_0",
+      "repo": "Qwen/Qwen3-VL-8B-Instruct-GGUF",
+      "file": "Qwen3VL-8B-Instruct-Q8_0.gguf",
+      "mmproj": "mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf",
+      "format": "gguf",
+      "download_gb": 8.8,
+      "vram": "~13 GB with the adapter"
     }
   ],
   "writers": [

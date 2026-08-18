@@ -6,6 +6,80 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.13.0 - 2026-08-19
+
+### Added
+
+- **MiniMax-H3 Prompt Rewriter 8B (sees frames)** - a second rewriter node, for
+  LightX2V's new adapter on Qwen3-VL-8B-Instruct. It is multimodal, so where the
+  27B has to be told in words what a reference frame contains, this one is shown
+  the frame and writes the alignment line from what it sees. Four tasks -
+  T2VA, I2VA, FL2VA, L2VA - against the 27B node's one, on ~6.1 GB of download
+  and ~9 GB of VRAM.
+
+  Two engines, picked by the task. T2VA has no pictures in it and takes the
+  ordinary text path, so no projector is loaded and `keep_model_loaded` works.
+  The other three carry frames and go through `llama-mtmd-cli`, which is a fresh
+  process per run and therefore cannot keep anything resident; the node says so
+  in the log rather than ignoring the switch.
+
+  Verified on all four tasks against Qwen3-VL-8B-Instruct Q4_K_M with the F16
+  adapter. T2VA opens straight on the three fields; the other three open with
+  the alignment sentence, verbatim in the trained wording. With `use_lora` off
+  the same model still fills the three fields - the contract is in the system
+  prompt, not only in the LoRA - but stops writing `[Shot 2]` cut markers and
+  comes back about a third as long, which is the adapter's visible work.
+
+- **`adapter` is a dropdown.** It lists both LoRAs at both published precisions,
+  plus every `.gguf` adapter already in your ComfyUI model folders, labelled with
+  its architecture so `qwen35` and `qwen3vl` are told apart. Picking a
+  quantisation used to mean hand-editing `models.json`, which is a power-user
+  path rather than an interface. The first entry is the old default string,
+  character for character, and means "whichever build matches the base model you
+  picked" - so saved workflows keep their choice and pick up the right adapter on
+  either node.
+
+  What is lost with it: the field can no longer be typed into, so a converted
+  LoRA is pointed at by putting the file in `models/LLM` rather than by writing a
+  path. A path that a saved workflow already carries still resolves.
+
+- **`models_8b` and `adapters_8b` in the model list**, holding the 8B base models
+  (Q4_K_M and Q8_0, each with its projector) and the 8B adapter. Lists of their
+  own because an entry from either family would fail to load in the other's node.
+  Both are merged into an existing `models.json` on update, and the previous copy
+  is kept as `.bak` as always.
+
+### Fixed
+
+- **A folder holding several models and one projector paired all of them with
+  it.** `models/LLM` with a dozen unrelated GGUFs in it and a single `mmproj`
+  satisfied "only one projector, so it must be the right one", and the captioner
+  list offered every model in the folder paired with that projector - a 27B text
+  model handed a projector built for an 8B, which loads and then writes gibberish
+  rather than failing. The shortcut now applies only when there is exactly one
+  model in the folder too; otherwise the names have to match, as they already did
+  when there was more than one projector.
+
+- **The Q8_0 build of the 27B adapter was invisible to anyone who installed
+  before it existed.** `adapters` is a dictionary, and the merge that keeps model
+  lists current is set algebra over named entries in a *list*, so it never
+  reached it. The packaged alternatives are now folded into a live list that
+  points at the same repository and names none of its own - which includes a list
+  written before the publisher's account was renamed, since the old id is
+  recognised as the same publication.
+
+### Changed
+
+- The packaged list names `pytraveler/...` for the converted GGUF adapters, the
+  account having been renamed from `ivanfromm`. Hugging Face redirects the old
+  id, so nothing has to be edited and existing lists keep working.
+
+- `llama-cli` is now called with `-st`. It is the fallback binary, used only when
+  `llama-completion` is missing, and on Qwen3-VL it enters chat mode despite
+  `-no-cnv` and then waits for a second turn - so the node hangs rather than
+  fails. On `llama-completion`, which is what actually runs, it changes nothing:
+  byte-identical output on Qwen2.5-Omni-3B and on Qwen3-VL-8B.
+
 ## 0.12.1 - 2026-08-17
 
 ### Fixed

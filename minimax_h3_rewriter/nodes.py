@@ -454,6 +454,81 @@ def _refuse_remote(value: str) -> None:
     )
 
 
+_ADAPTER_MAP: dict[str, str] = {}
+
+
+def _build_adapter_map() -> dict[str, str]:
+    """Label -> what ``_locate_adapter`` should be handed.
+
+    The first entry is the exact string this widget has held since it was a text
+    field, so a saved workflow keeps its choice when the field becomes a list.
+    It means "whichever build the model list names for the base model you
+    picked": the PEFT repository for a transformers base, ``adapters.gguf.file``
+    for a GGUF one.
+
+    Below it, every published precision of every adapter family, and then
+    whatever is already on disk. Picking a quantisation used to mean editing
+    ``models.json``, which is a power-user path rather than an interface.
+    """
+    mapping: dict[str, str] = {ADAPTER_REPO: ADAPTER_REPO}
+    for section in catalog.ADAPTER_SECTIONS:
+        try:
+            for entry in catalog.adapter_entries(FORMAT_GGUF, section):
+                mapping[entry.label] = entry.file
+        except Exception:
+            log.warning(
+                "[minimax_h3_rewriter._build_adapter_map] '%s' unreadable", section, exc_info=True
+            )
+    try:
+        for label, path in discovery.scan_local_gguf_adapters():
+            mapping[f"{LOCAL_PREFIX}{label}"] = path
+    except Exception:
+        log.warning("[minimax_h3_rewriter._build_adapter_map] adapter scan failed", exc_info=True)
+
+    _ADAPTER_MAP.clear()
+    _ADAPTER_MAP.update(mapping)
+    return mapping
+
+
+def adapter_choices() -> list[str]:
+    return list(_build_adapter_map())
+
+
+def _resolve_adapter_choice(choice: str) -> str:
+    """Turn a label back into a file name, a path or a repository id.
+
+    An unknown string is returned unchanged rather than refused. Everything a
+    dropdown cannot express -- a path to a LoRA somebody converted themselves --
+    used to be typed into this field, and those workflows keep working; the
+    resolution below has always accepted a path, and still does.
+    """
+    found = _ADAPTER_MAP.get(choice)
+    if found is None:
+        found = _build_adapter_map().get(choice)
+    return choice if found is None else found
+
+
+def _adapter_source(file_name: str) -> catalog.AdapterSpec | None:
+    """Which published family a bare adapter file name belongs to.
+
+    There is more than one repository now, so the file name decides where it is
+    fetched from. Without this the 8B adapter would be looked for in the 27B's
+    repository, and the download would 404 with nothing to say why.
+    """
+    for section in catalog.ADAPTER_SECTIONS:
+        try:
+            spec = catalog.adapter(FORMAT_GGUF, section)
+        except Exception:
+            log.debug("[minimax_h3_rewriter._adapter_source] '%s' unreadable", section)
+            continue
+        if not spec.configured:
+            continue
+        for candidate in (spec, *spec.alternatives):
+            if candidate.file and candidate.file.casefold() == file_name.casefold():
+                return candidate
+    return None
+
+
 def _announce_adapter(fmt: str, value: str, path: str) -> None:
     """Record which LoRA was applied, and say so louder when it is an unusual one.
 
@@ -469,11 +544,16 @@ def _announce_adapter(fmt: str, value: str, path: str) -> None:
         return
 
     expected = {ADAPTER_REPO.casefold()}
-    try:
-        spec = catalog.adapter(fmt)
-        expected.update(part.casefold() for part in (spec.repo, spec.file) if part)
-    except Exception:
-        log.debug("[minimax_h3_rewriter._announce_adapter] catalog unreadable", exc_info=True)
+    for section in catalog.ADAPTER_SECTIONS:
+        try:
+            spec = catalog.adapter(fmt, section)
+        except Exception:
+            log.debug("[minimax_h3_rewriter._announce_adapter] catalog unreadable", exc_info=True)
+            continue
+        for candidate in (spec, *spec.alternatives):
+            expected.update(
+                part.casefold() for part in (candidate.repo, candidate.file) if part
+            )
 
     if value.casefold() not in expected:
         log.warning(
@@ -484,27 +564,49 @@ def _announce_adapter(fmt: str, value: str, path: str) -> None:
         )
 
 
-def _resolve_adapter(fmt: str, setting: str, auto_download: bool, progress: NodeProgress) -> str:
-    """Locate the adapter matching the base model's format."""
-    value = (setting or "").strip()
+def _resolve_adapter(
+    fmt: str,
+    setting: str,
+    auto_download: bool,
+    progress: NodeProgress,
+    section: str = catalog.ADAPTERS_27B,
+) -> str:
+    """Locate the adapter matching the base model's format.
+
+    ``section`` is which family the node belongs to, and it only decides what
+    the widget's first entry -- "whatever the model list names" -- resolves to.
+    Every other value names a file, and a file is looked up across all the
+    families, so picking the 8B adapter by name in a 27B node still finds it,
+    and llama.cpp is the one that says the shapes do not match.
+    """
+    value = _resolve_adapter_choice((setting or "").strip())
     _refuse_remote(value)
-    path = _locate_adapter(fmt, value, auto_download, progress)
+    path = _locate_adapter(fmt, value, auto_download, progress, section)
     _announce_adapter(fmt, value, path)
     return path
 
 
-def _locate_adapter(fmt: str, value: str, auto_download: bool, progress: NodeProgress) -> str:
+def _locate_adapter(
+    fmt: str,
+    value: str,
+    auto_download: bool,
+    progress: NodeProgress,
+    section: str = catalog.ADAPTERS_27B,
+) -> str:
     if fmt == FORMAT_TRANSFORMERS:
         return _ensure_present(value or ADAPTER_REPO, ADAPTER_SPEC, auto_download, progress)
 
-    spec = catalog.adapter(FORMAT_GGUF)
+    spec = catalog.adapter(FORMAT_GGUF, section)
 
     if value.lower().endswith(".gguf"):
         for candidate in (value, os.path.join(models_root(), value)):
             if os.path.isfile(candidate):
                 return candidate
-        if not os.path.dirname(value) and "/" not in value and spec.configured:
-            return _ensure_file(spec.repo, value, "Prompt-rewriter LoRA", auto_download, progress)
+        if not os.path.dirname(value) and "/" not in value:
+            source = _adapter_source(value)
+            repo = source.repo if source is not None else (spec.repo if spec.configured else "")
+            if repo:
+                return _ensure_file(repo, value, "Prompt-rewriter LoRA", auto_download, progress)
         raise RuntimeError(
             f"Prompt-rewriter LoRA: '{value}' does not exist, and is not a file name that "
             f"could be fetched from '{spec.repo or 'the configured adapter repository'}'."
@@ -523,6 +625,33 @@ def _locate_adapter(fmt: str, value: str, auto_download: bool, progress: NodePro
             "plain base model instead." + hint
         )
     return _ensure_file(spec.repo, spec.file, "Prompt-rewriter LoRA", auto_download, progress)
+
+
+def _gguf_text(settings: dict, **common) -> str:
+    """Generate through whichever GGUF runtime this installation has.
+
+    Both rewriters ask the same question -- resident wheel, or the official
+    binaries in a subprocess -- and the answer does not depend on which of them
+    is asking, so it is answered once.
+    """
+    runtime = settings.get("gguf_runtime", RUNTIME_AUTO)
+    if runtime == RUNTIME_AUTO:
+        runtime = RUNTIME_WHEEL if gguf_engine.available() else RUNTIME_BINARY
+
+    if runtime == RUNTIME_WHEEL:
+        if not gguf_engine.available():
+            raise RuntimeError(
+                f"gguf_runtime is set to '{RUNTIME_WHEEL}', but it is not importable "
+                f"here. Install it, or set gguf_runtime to '{RUNTIME_AUTO}' or "
+                f"'{RUNTIME_BINARY}' to run the official binaries instead.\n\n"
+                + gguf_engine.INSTALL_HINT
+            )
+        return gguf_engine.rewrite(**common)
+    return cli_engine.rewrite(
+        backend=settings["llama_backend"],
+        auto_download=settings["auto_download"],
+        **common,
+    )
 
 
 class MiniMaxH3RewriterOptions:
@@ -549,12 +678,15 @@ class MiniMaxH3RewriterOptions:
             },
             "optional": {
                 "adapter": (
-                    "STRING",
+                    adapter_choices(),
                     {
                         "default": ADAPTER_REPO,
                         "tooltip": (
-                            "Repository id or local folder of the LoRA. For a GGUF base model, "
-                            "give the path to a converted '.gguf' adapter instead."
+                            "Which build of the prompt-rewriter LoRA to use. The first entry "
+                            "means whichever one the model list names for the base model you "
+                            "picked. Below it are the published precisions - F16 and the "
+                            "smaller Q8_0, which rewrites the same and halves the download - "
+                            "and any '.gguf' adapter already in your ComfyUI model folders."
                         ),
                     },
                 ),
@@ -835,25 +967,7 @@ class MiniMaxH3PromptRewriter:
                 progress=progress,
                 **decoding,
             )
-            runtime = settings.get("gguf_runtime", RUNTIME_AUTO)
-            if runtime == RUNTIME_AUTO:
-                runtime = RUNTIME_WHEEL if gguf_engine.available() else RUNTIME_BINARY
-
-            if runtime == RUNTIME_WHEEL:
-                if not gguf_engine.available():
-                    raise RuntimeError(
-                        f"gguf_runtime is set to '{RUNTIME_WHEEL}', but it is not importable "
-                        f"here. Install it, or set gguf_runtime to '{RUNTIME_AUTO}' or "
-                        f"'{RUNTIME_BINARY}' to run the official binaries instead.\n\n"
-                        + gguf_engine.INSTALL_HINT
-                    )
-                text = gguf_engine.rewrite(**common)
-            else:
-                text = cli_engine.rewrite(
-                    backend=settings["llama_backend"],
-                    auto_download=settings["auto_download"],
-                    **common,
-                )
+            text = _gguf_text(settings, **common)
         else:
             _verify_base_model(choice.reference, progress)
             base_dir = _ensure_present(choice.reference, BASE_SPEC, settings["auto_download"], progress)

@@ -4,6 +4,10 @@ import logging
 
 from .minimax_h3_rewriter import routes as _routes  # registers HTTP routes
 from .minimax_h3_rewriter.nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+from .minimax_h3_rewriter import writer_8b
+
+NODE_CLASS_MAPPINGS.update(writer_8b.NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(writer_8b.NODE_DISPLAY_NAME_MAPPINGS)
 
 log = logging.getLogger(__name__)
 

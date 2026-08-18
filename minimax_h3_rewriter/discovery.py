@@ -50,6 +50,17 @@ GGUF_SCAN_DEPTH = 2
 GGUF_BLOCK_COUNT = 64
 GGUF_EMBEDDING_LENGTH = 5120
 
+#: The same three numbers for the multimodal 8B rewriter, whose base is
+#: Qwen3-VL-8B-Instruct. Its adapter is a different LoRA on a different
+#: architecture, so nothing here is shared with the 27B above.
+GGUF_ARCH_8B = "qwen3vl"
+GGUF_BLOCK_COUNT_8B = 36
+GGUF_EMBEDDING_LENGTH_8B = 4096
+
+#: What the shape refusals call each base, in the voice a user would use.
+BASE_NAME = "Qwen3.6-27B"
+BASE_NAME_8B = "Qwen3-VL-8B-Instruct"
+
 HEADER_KEYS = (
     "general.architecture",
     "general.type",
@@ -422,20 +433,30 @@ def gguf_architecture(path: str) -> str:
     return gguf_header(path)["arch"]
 
 
-def gguf_problem(path: str) -> str:
+def gguf_problem(
+    path: str,
+    arch: str = GGUF_ARCH,
+    blocks_wanted: int = GGUF_BLOCK_COUNT,
+    width_wanted: int = GGUF_EMBEDDING_LENGTH,
+    base: str = BASE_NAME,
+) -> str:
     """Why this GGUF cannot host the adapter, or "" when it can.
 
     An adapter is bound to one shape. llama.cpp does catch the mismatch, but
     only once the weights are in memory, and it reports it as a tensor shape
     error that says nothing about which model to use instead.
+
+    The shape is a parameter because there are two rewriters now. Everything
+    that makes the message worth reading -- naming the base, naming both shapes,
+    saying what happens if you run it anyway -- is the same for either.
     """
     header = gguf_header(path)
     if not header["arch"]:
         return f"'{os.path.basename(path)}' is not a readable GGUF file"
-    if header["arch"] != GGUF_ARCH:
+    if header["arch"] != arch:
         return (
             f"'{os.path.basename(path)}' is a '{header['arch']}' model; the adapter needs "
-            f"'{GGUF_ARCH}' (Qwen3.6-27B)"
+            f"'{arch}' ({base})"
         )
     if header["kind"] == "adapter":
         return f"'{os.path.basename(path)}' is a LoRA adapter, not a base model"
@@ -443,14 +464,21 @@ def gguf_problem(path: str) -> str:
     blocks, width = header["blocks"], header["width"]
     if blocks is None or width is None:
         return ""
-    if blocks != GGUF_BLOCK_COUNT or width != GGUF_EMBEDDING_LENGTH:
+    if blocks != blocks_wanted or width != width_wanted:
         return (
             f"'{os.path.basename(path)}' has {blocks} blocks of width {width}; the adapter was "
-            f"trained on {GGUF_BLOCK_COUNT} of {GGUF_EMBEDDING_LENGTH} (Qwen3.6-27B). It shares "
-            f"the '{GGUF_ARCH}' architecture but not the shape, so llama.cpp cannot attach the "
-            f"LoRA to it — a smaller Qwen3.5 will run, but as a plain model with no rewriter."
+            f"trained on {blocks_wanted} of {width_wanted} ({base}). It shares the '{arch}' "
+            f"architecture but not the shape, so llama.cpp cannot attach the LoRA to it — "
+            f"the model will run, but as a plain one with no rewriter."
         )
     return ""
+
+
+def gguf_problem_8b(path: str) -> str:
+    """The same question for the multimodal 8B rewriter's base model."""
+    return gguf_problem(
+        path, GGUF_ARCH_8B, GGUF_BLOCK_COUNT_8B, GGUF_EMBEDDING_LENGTH_8B, BASE_NAME_8B
+    )
 
 
 def _gguf_candidates(root: str, depth: int) -> list[str]:
@@ -515,8 +543,15 @@ def scan_local_gguf() -> list[tuple[str, str]]:
 
 
 def scan_local_gguf_adapters() -> list[tuple[str, str]]:
-    """Return ``(label, path)`` for local GGUF LoRA adapters for this architecture."""
-    return _scan_gguf("adapter")
+    """Return ``(label, path)`` for every local GGUF LoRA adapter, any architecture.
+
+    No longer filtered to one architecture: there are two rewriters now, and a
+    converted LoRA for either is a legitimate answer. The label carries the
+    architecture instead, so ``qwen35`` and ``qwen3vl`` are told apart at a
+    glance. A mismatched pair is refused by llama.cpp, by name -- which is more
+    than a scan that silently left the file out of the list could manage.
+    """
+    return _scan_gguf("adapter", arch=None)
 
 
 def scan_writer_gguf() -> list[tuple[str, str]]:
@@ -524,16 +559,25 @@ def scan_writer_gguf() -> list[tuple[str, str]]:
     return _scan_gguf("model", arch=None)
 
 
-def _pair_mmproj(model: str, projectors: list[str]) -> str:
+def _pair_mmproj(model: str, projectors: list[str], models: int = 1) -> str:
     """Pick the projector belonging to one model within the same folder.
 
-    One projector in the folder is unambiguous and by far the common case. With
-    several, the names are compared: ``mmproj-Qwen2.5-Omni-3B-Q8_0.gguf`` shares
-    a stem with ``Qwen2.5-Omni-3B-Q4_K_M.gguf`` and not with anything else.
+    One model and one projector alone together is unambiguous, and a folder per
+    captioner is what the node's own downloads produce. Otherwise the names are
+    compared: ``mmproj-Qwen2.5-Omni-3B-Q8_0.gguf`` shares a stem with
+    ``Qwen2.5-Omni-3B-Q4_K_M.gguf`` and with nothing else in the folder.
+
+    ``models`` matters more than it looks. A flat ``models/LLM`` holding a dozen
+    unrelated GGUFs and exactly one projector used to satisfy "only one
+    projector, so it must be the right one", and every model in that folder was
+    offered paired with it -- a 27B text model handed a projector built for an
+    8B, which loads and then writes gibberish rather than failing. So the
+    shortcut applies only when there is nothing else it could belong to.
+
     Pairing the wrong two produces gibberish rather than an error, so an
     ambiguous folder yields nothing instead of a guess.
     """
-    if len(projectors) == 1:
+    if len(projectors) == 1 and models <= 1:
         return projectors[0]
 
     def stem_of(path: str, drop_mmproj: bool = False) -> str:
@@ -556,12 +600,16 @@ def _pair_mmproj(model: str, projectors: list[str]) -> str:
     return best if best_score >= 6 else ""
 
 
-def scan_captioner_gguf() -> list[tuple[str, str, str]]:
+def scan_captioner_gguf(arch: str | None = None) -> list[tuple[str, str, str]]:
     """Return ``(label, model path, mmproj path)`` for local multimodal pairs.
 
     A captioner is two files, and they have to come from the same conversion.
     Only folders that hold both are offered, so the node never starts a run that
     is missing half of itself.
+
+    ``arch`` narrows the answer to one architecture, which is what the 8B
+    rewriter wants: any multimodal pair will caption, but only a ``qwen3vl`` one
+    can carry its LoRA.
     """
     found: list[tuple[str, str, str]] = []
     seen: set[str] = set()
@@ -587,7 +635,11 @@ def scan_captioner_gguf() -> list[tuple[str, str, str]]:
         if not projectors:
             continue
         for model in sorted(models):
-            projector = _pair_mmproj(model, projectors)
+            # After counting the models, not before: how many there are is what
+            # decides whether a lone projector in the folder can be trusted.
+            if arch is not None and gguf_header(model)["arch"] != arch:
+                continue
+            projector = _pair_mmproj(model, projectors, len(models))
             if not projector:
                 log.info(
                     "[minimax_h3_rewriter.scan_captioner_gguf] no obvious projector for %s among %s",
