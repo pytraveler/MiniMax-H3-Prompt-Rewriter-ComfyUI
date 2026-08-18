@@ -497,13 +497,19 @@ def _locate_adapter(fmt: str, value: str, auto_download: bool, progress: NodePro
     if fmt == FORMAT_TRANSFORMERS:
         return _ensure_present(value or ADAPTER_REPO, ADAPTER_SPEC, auto_download, progress)
 
+    spec = catalog.adapter(FORMAT_GGUF)
+
     if value.lower().endswith(".gguf"):
         for candidate in (value, os.path.join(models_root(), value)):
             if os.path.isfile(candidate):
                 return candidate
-        raise RuntimeError(f"Prompt-rewriter LoRA: '{value}' does not exist.")
+        if not os.path.dirname(value) and "/" not in value and spec.configured:
+            return _ensure_file(spec.repo, value, "Prompt-rewriter LoRA", auto_download, progress)
+        raise RuntimeError(
+            f"Prompt-rewriter LoRA: '{value}' does not exist, and is not a file name that "
+            f"could be fetched from '{spec.repo or 'the configured adapter repository'}'."
+        )
 
-    spec = catalog.adapter(FORMAT_GGUF)
     if not spec.configured:
         try:
             nearby = [path for _label, path in discovery.scan_local_gguf_adapters()]

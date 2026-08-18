@@ -33,6 +33,12 @@
     "rather than the PEFT one. They are the low-VRAM route: a Q4_K_M base is 15.7 GB",
     "instead of 52 GB, and the IQ2/IQ3 quants go lower still at some quality cost.",
     "",
+    "The adapter itself also comes in two sizes. 'file' is what is fetched by default;",
+    "put any name from 'alternatives' in the options node's 'adapter' field and it is",
+    "downloaded from the same repository. Q8_0 is 1.85 GB against F16's 3.48 GB and",
+    "still produces the trained cut-point form, so it is the better default on a card",
+    "that is tight for room.",
+    "",
     "'writers' is a separate list, for the guided writer nodes. Those carry the H3",
     "format in the system prompt instead of in a LoRA, so any instruction-following",
     "GGUF works and nothing here has to be Qwen3.6-27B. Same fields, gguf only.",
@@ -58,7 +64,14 @@
     "gguf": {
       "repo": "ivanfromm/MiniMax-H3-Prompt-Rewriter-LoRA-GGUF",
       "file": "MiniMax-H3-Prompt-Rewriter-LoRA-F16.gguf",
-      "download_gb": 3.48
+      "download_gb": 3.48,
+      "alternatives": [
+        {
+          "file": "MiniMax-H3-Prompt-Rewriter-LoRA-Q8_0.gguf",
+          "download_gb": 1.85,
+          "note": "half the size, same rewrite behaviour; name it in the options node's 'adapter' field"
+        }
+      ]
     }
   },
   "models": [
