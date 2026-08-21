@@ -773,9 +773,11 @@ class MiniMaxH3RewriterOptions:
                             "supported NVIDIA card (511 MB, about twice as fast) and Vulkan "
                             "otherwise. Pick 'vulkan' to keep the download at 34 MB.\n\n"
                             "Nothing is fetched at all when llama.cpp is already here: a build "
-                            f"on PATH, or one named in {llamacpp.BIN_ENV}, is run as it is. "
-                            "That is the way to a CUDA llama.cpp on Linux, where upstream "
-                            "publishes no CUDA build."
+                            f"on PATH, one named in {llamacpp.BIN_ENV}, or a path written into "
+                            f"user/minimax_h3_rewriter/{llamacpp.BIN_FILE} is run as it is -- "
+                            "the file being the one that works when the server's environment "
+                            "is not yours to set. That is the way to a CUDA llama.cpp on Linux, "
+                            "where upstream publishes no CUDA build."
                         ),
                     },
                 ),

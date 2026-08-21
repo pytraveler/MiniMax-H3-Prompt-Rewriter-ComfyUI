@@ -6,6 +6,32 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.16.1 - 2026-08-22
+
+### Added
+
+- **A path in a file, for a server whose environment is not yours to set.** One
+  line in `ComfyUI/user/minimax_h3_rewriter/llama_bin.txt` — the folder your
+  llama.cpp was built in, or the binary itself — and the node runs that build.
+  It is read after `MINIMAX_H3_LLAMA_BIN` and before everything else.
+
+  This is what `MINIMAX_H3_LLAMA_BIN` cannot do on a server. An export reaches a
+  server started from that same shell and nothing else: a systemd unit, a
+  container entrypoint or a launcher script hands the process an environment of
+  its own and never reads your `~/.bashrc`, so the variable is simply absent
+  where it matters — and so is anything you added to `PATH` the same way. The
+  file is read by the node itself, and does not care who started ComfyUI.
+
+### Changed
+
+- **When no llama.cpp is found anywhere, the refusal prints what this process
+  actually had.** The variable and whether it is set here, the file and whether
+  it exists, the unpacked runtime folder, and `PATH` with its entry count — plus,
+  on Linux, the one command that shows the running server's real environment.
+  "Put it on PATH" is useless advice to someone who did exactly that in a shell
+  the server never saw, so the message reports the search rather than repeating
+  the instruction.
+
 ## 0.16.0 - 2026-08-21
 
 ### Added

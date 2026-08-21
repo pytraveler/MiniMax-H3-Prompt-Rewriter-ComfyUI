@@ -1122,12 +1122,23 @@ when the binaries are in use:
 | `cpu` | 17 MB | no GPU at all |
 
 **An llama.cpp you already have is run as it is.** Before fetching anything the
-node looks in three places, in order: the path in `MINIMAX_H3_LLAMA_BIN`, then
-its own `runtime/` folder, then `PATH`. A build you compiled yourself therefore
-needs no setting at all — put its `build/bin` on `PATH`, or name it outright:
+node looks in four places, in order: the path in `MINIMAX_H3_LLAMA_BIN`, the
+path written in `ComfyUI/user/minimax_h3_rewriter/llama_bin.txt`, its own
+`runtime/` folder, then `PATH`. A build you compiled yourself therefore needs no
+setting at all — put its `build/bin` on `PATH`, or name it outright:
 
 ```sh
 export MINIMAX_H3_LLAMA_BIN=/opt/llama.cpp/build/bin   # the folder, or the binary in it
+```
+
+**On a server, prefer the file.** An export reaches a server started from that
+same shell and nothing else — a systemd unit, a container entrypoint or a
+launcher script hands the process an environment of its own, and never reads
+your `~/.bashrc`. One line in `llama_bin.txt` is read by the node itself and
+does not care who started ComfyUI:
+
+```sh
+echo /opt/llama.cpp/build/bin > ~/comfy/ComfyUI/user/minimax_h3_rewriter/llama_bin.txt
 ```
 
 `llama_backend` then stops mattering: it picks which archive to download, not
@@ -1135,8 +1146,13 @@ what an existing binary was compiled against. This is the road to a CUDA
 llama.cpp on Linux — build it once with `-DGGML_CUDA=ON`, name it here, and
 `device = cuda:0` does what it says. The caption nodes look for
 `llama-mtmd-cli` beside it; a build without that target sends the node back to
-the archive for that one job. A variable pointing at nothing is an error rather
-than a quiet download, so a typo says so instead of costing half a gigabyte.
+the archive for that one job.
+
+A path pointing at nothing is an error rather than a quiet download, so a typo
+says so instead of costing half a gigabyte. And when nothing is found anywhere,
+the refusal prints what the ComfyUI **process** actually had — the variable, the
+file, the folder and its `PATH` — instead of repeating advice you may already
+have taken in a shell it never saw.
 
 > **Why not the `llama-cpp-python` CUDA wheels.** Both current ones fail on
 > ordinary consumer hardware, in two unrelated ways:
