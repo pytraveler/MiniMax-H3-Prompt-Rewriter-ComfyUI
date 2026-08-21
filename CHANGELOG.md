@@ -6,6 +6,92 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.14.0 - 2026-08-21
+
+### Added
+
+- **MiniMax-H3 Universal Writer** - one node for a whole shot: the references,
+  the order they are in, and the rewrite. It covers what Multi Reference Caption
+  and both writer nodes cover, for all five tasks at once. Those three are
+  unchanged and stay in the menu, so nothing already built stops working.
+
+  The reason to fold them together is order. `Picture 1` and `Picture 2` are not
+  interchangeable in FL2VA - one opens the video and the other closes it - and
+  until now the only thing deciding which was which was the order the caption
+  node happened to write them in, which came in turn from which slot each was
+  plugged into. Real, load-bearing, and nowhere on screen.
+
+  One socket takes an image, a clip or a sound, and slots grow as they fill. The
+  strip under the inputs is where a reference gets its label and its number: drag
+  a square to move it, click its label to say what an image is for (`pic`,
+  `subj`, `vid`), click its number to switch it off without unplugging it. So one
+  socket still produces the four labels Ref2VA allows, and the distinction Multi
+  Reference Caption makes with four groups of inputs is made here on the square.
+
+  Verified in ComfyUI 0.30 on every task. FL2VA and I2VA with two images; Ref2VA
+  with an image, a second image relabelled a subject, and an audio clip on the
+  same growing socket, which came back as `Subject 1`, `Video 1` and `Audio 1` in
+  strip order; T2VA with references connected and correctly ignored without
+  loading a captioner at all. Reordering the strip reorders the block.
+  Relabelling a square changes both the instruction the captioner is given and
+  the label the answer is written under. A task the strip does not match is
+  refused before anything is downloaded or loaded, and so is Ref2VA with every
+  reference switched off. A workflow saved and reloaded came back with every
+  widget value in place.
+
+- **The reference strip, the task switch and the aspect-ratio picker are drawn
+  controls**, in HTML through `addDOMWidget` rather than on the canvas. That is
+  the one widget mechanism ComfyUI renders in both the classic canvas and the
+  Nodes 2.0 renderer, and it needs no Vue: the frontend is a Vue application but
+  does not export Vue, and its own registry of Vue widget types is a closed list.
+
+  Each control takes over an ordinary widget the node declares and keeps that
+  widget's name and its place in the node. A workflow stores widget values by
+  position, so a control sitting *beside* the widget it replaces rather than in
+  place of it would shift every value after it; and a browser that never loads
+  the script falls back to a text field and two dropdowns, with the node still
+  running.
+
+  They are kept off the right-side Parameters panel with `hideInPanel`, the flag
+  ComfyUI's own Load3D and text-preview widgets use. That panel picks a component
+  with `getComponent(widget.type) || WidgetLegacy` and has no branch for a DOM
+  widget, so all it can draw is an empty labelled row - and it could not do better
+  anyway, since showing one HTML element in the panel would mean taking it off the
+  node.
+
+- **`duration` is a slider on the new node**, in tenths of a second. Its upper
+  end is the node's own `max_duration` property - right-click, Properties Panel -
+  and 30 seconds until changed. A widget's range is fixed when the node is
+  declared and one number cannot suit every graph, so the server accepts up to
+  ten minutes while the slider spans whatever the graph actually uses. The other
+  nodes keep their whole-second `duration` exactly as it was.
+
+### Changed
+
+- `guide_prompt` accepts a fractional duration. The task line is written as `10s`
+  and `7.5s` rather than `10.0s`, so a whole number of seconds still reads like
+  one. Every existing node passes whole seconds and is unaffected.
+
+- The checkboxes drawn on input rows are shared code. `web/js/slot_switches.js`
+  now holds the drawing, the hit test and the column arithmetic that
+  `multi_caption_switch.js` used to carry alone, and both nodes configure it with
+  their own idea of which slots take a checkbox and where the state is kept.
+  No behaviour change on Multi Reference Caption.
+
+  Worth knowing while that code is on the move, and true before this release as
+  well: those checkboxes are canvas drawing, and ComfyUI's experimental "Modern
+  Node Design (Nodes 2.0)" returns from `LGraphCanvas.drawNode` before any
+  per-node callback runs. On that setting they are neither drawn nor clickable,
+  on either node. The new node's squares reach the same state, which is one
+  reason each of them carries the on/off toggle as well.
+
+- An empty caption is reported rather than passed on quietly. The label still
+  goes into the block, because the strip promised that number to that square and
+  closing the gap would make it lie - but a bare `Subject 1:` tells the writer an
+  asset exists without saying what it is, so the node now names the slot on
+  screen and in the log. Seen on a thinking-model text encoder through the `clip`
+  route, where the answer is a reasoning block that never closes.
+
 ## 0.13.0 - 2026-08-19
 
 ### Added

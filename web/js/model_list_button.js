@@ -6,11 +6,13 @@ const MODEL_LIST_NODES = [
     "MiniMaxH3GuidedWriter",
     "MiniMaxH3GuidedWriterRef",
     "MiniMaxH3ReferenceCaption",
+    "MiniMaxH3UniversalWriter",
 ];
 const GUIDE_NODES = [
     "MiniMaxH3GuidedWriter",
     "MiniMaxH3GuidedWriterRef",
     "MiniMaxH3GuidePrompt",
+    "MiniMaxH3UniversalWriter",
 ];
 
 const MODEL_LIST = {

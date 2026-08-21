@@ -74,11 +74,22 @@ CONTEXT_HEADROOM = 1.1
 CONTEXT_GRANULARITY = 1024
 
 
+def seconds(duration) -> str:
+    """The duration as the guide writes it: ``10s``, ``7.5s``.
+
+    A whole number of seconds has to stay whole. The universal node offers a
+    tenth-of-a-second slider, so the value arriving here is a float even when the
+    user picked ten; ``10.0s`` in the task line is a small thing that the guide
+    never shows and the model has no reason to imitate.
+    """
+    return f"{float(duration):g}s"
+
+
 def _fields_block(names: tuple[str, ...]) -> str:
     return "\n".join(f"  {name}: ..." for name in names)
 
 
-def _alignment_rule(mode: str, duration: int) -> str:
+def _alignment_rule(mode: str, duration: float) -> str:
     if mode == "T2VA":
         return (
             "- T2VA has no image-alignment instruction: start the answer directly with "
@@ -94,7 +105,7 @@ def _alignment_rule(mode: str, duration: int) -> str:
     return rule
 
 
-def _base_system(guide: str, mode: str, duration: int) -> str:
+def _base_system(guide: str, mode: str, duration: float) -> str:
     return "\n".join(
         [
             ROLE,
@@ -123,7 +134,7 @@ def _base_system(guide: str, mode: str, duration: int) -> str:
     )
 
 
-def _ref_system(guide: str, duration: int) -> str:
+def _ref_system(guide: str, duration: float) -> str:
     return "\n".join(
         [
             ROLE,
@@ -155,7 +166,7 @@ def _ref_system(guide: str, duration: int) -> str:
     )
 
 
-def system_prompt(guide: str, mode: str, duration: int) -> str:
+def system_prompt(guide: str, mode: str, duration: float) -> str:
     """The full system message for one mode, with the guide embedded."""
     if mode not in ALL_MODES:
         raise ValueError(f"unknown mode '{mode}'; expected one of {', '.join(ALL_MODES)}")
@@ -167,7 +178,7 @@ def system_prompt(guide: str, mode: str, duration: int) -> str:
     return _base_system(guide, mode, duration)
 
 
-def user_prompt(mode: str, prompt: str, resolution: str, duration: int, references: str = "") -> str:
+def user_prompt(mode: str, prompt: str, resolution: str, duration: float, references: str = "") -> str:
     """The task message: what to write, for what shape, from what material."""
     prompt = (prompt or "").strip()
     if not prompt:
@@ -176,7 +187,7 @@ def user_prompt(mode: str, prompt: str, resolution: str, duration: int, referenc
     lines = [
         f"task: {mode}",
         f"resolution: {resolution}",
-        f"duration: {int(duration)}s",
+        f"duration: {seconds(duration)}",
     ]
     references = (references or "").strip()
     if references:
@@ -191,7 +202,7 @@ def build_messages(
     mode: str,
     prompt: str,
     resolution: str,
-    duration: int,
+    duration: float,
     references: str = "",
 ) -> list[dict[str, str]]:
     """The chat messages a guided writer sends to whatever model is running."""

@@ -1012,7 +1012,7 @@ def _guided_text(
     model: str,
     prompt: str,
     resolution: str,
-    duration: int,
+    duration: float,
     references: str,
     greedy: bool,
     seed: int,
@@ -1039,7 +1039,7 @@ def _guided_text(
         guide_prompt.GUIDE_FOR_MODE[mode], settings["auto_download"], progress
     )
     messages = guide_prompt.build_messages(
-        guide, mode, prompt, resolution, int(duration), references
+        guide, mode, prompt, resolution, duration, references
     )
 
     max_new_tokens = int(settings["max_new_tokens"])

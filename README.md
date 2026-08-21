@@ -41,8 +41,10 @@ Two of the three read text only. [Reference Caption](#minimax-h3-reference-capti
 turns an image, an audio clip or a video into the text they need — 3 to 5 seconds
 per asset on a 3.4 GB model. When a whole shot's worth of references is waiting,
 [Multi Reference Caption](#minimax-h3-multi-reference-caption) does all of them at
-once. The 8B rewriter needs none of that for its reference *frames*: connect the
-picture and it reads it.
+once — or [Universal Writer](#minimax-h3-universal-writer) describes them and writes
+the prompt in the same node, with their order a widget you can drag rather than a
+consequence of which slot you happened to use. The 8B rewriter needs none of that
+for its reference *frames*: connect the picture and it reads it.
 
 If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2vai2vafl2val2va).
 
@@ -375,6 +377,114 @@ analysis from them. Or let
 [MiniMax-H3 Reference Caption](#minimax-h3-reference-caption) write those lines
 for you from the assets themselves.
 
+### MiniMax-H3 Universal Writer
+
+One node for a whole shot: the references, the order they are in, and the
+rewrite. It does what [Multi Reference Caption](#minimax-h3-multi-reference-caption)
+and both writer nodes do, in a single box, for all five tasks. Those three stay
+exactly as they are — nothing you have already built stops working.
+
+The reason to fold them together is **order**. `Picture 1` and `Picture 2` are
+not interchangeable in FL2VA: one opens the video and the other closes it. Until
+now the only thing deciding which was which was the order the caption node
+happened to write them in, which came in turn from which slot each was plugged
+into. Real, load-bearing, and nowhere on screen.
+
+![The Universal Writer node: five reference slots each with a checkbox on its own row, then a strip of four coloured squares reading subj 1 over ref_1, pic 1 over ref_0, vid 1 over ref_3 and aud 1 over ref_2 with a line of help under them, a task switch with Ref2VA lit, six aspect-ratio rectangles drawn to proportion with 1:1 chosen, a duration slider at 7.2, and the prompt and both model dropdowns below](docs/node_universal_writer.png)
+
+*Four references on one growing socket — an image used as a subject, an image
+used as a frame, a clip and a sound. The squares are not in slot order: `ref_1`
+was dragged to the front, so it is the one the block will call `Subject 1`. The
+number is a position and renumbers as things move; the slot name under it is
+what stays with a square.*
+
+**One socket takes an image, a clip or a sound**, and more slots appear as you
+fill them. There is no wrong socket to plug into here, because which socket you
+used no longer decides anything.
+
+**The strip under the inputs decides it.** Every connected reference gets a
+square, coloured by what it is for and numbered exactly as the block will number
+it. Under the number is the slot it arrived on, and that is the part of a square
+that stays with it: the number is a position, so it renumbers the moment anything
+moves.
+
+| Square | Label | What it means |
+|---|---|---|
+| `pic` | `<Picture N>` | an image serving as an actual frame — first, last, key, composition anchor |
+| `subj` | `<Subject N>` | reusable visible content — a person, an animal, a place, a costume, a style |
+| `vid` | `<Video N>` | a clip, or a batch of frames you want read as one |
+| `aud` | `<Audio N>` | a voice timbre, music, ambience, an effect |
+
+- **Drag a square** to move it. The numbering follows immediately.
+- **Click its label** to change what an image is for: `pic` → `subj` → `vid` and
+  round again. A clip and a sound are what they are, so those do not cycle.
+- **Click its number** to switch that reference off without unplugging it — the
+  checkbox on the slot's own row does the same thing from the other side.
+
+So one socket still produces the four labels Ref2VA allows, and the distinction
+Multi Reference Caption makes structurally — a subject is not a frame — is made
+here on the square instead.
+
+**The task switch and the aspect-ratio picker are the same idea**: the choice is
+the picture rather than a line of text in a dropdown. `Ref2VA` greys out while
+nothing is switched on, and choosing it in that state stops the node before any
+weights move rather than handing the writer an empty reference block.
+
+**`duration` is a slider, in tenths of a second.** How far it reaches is the
+node's own `max_duration` property — right-click the node, Properties Panel —
+and it is 30 seconds until you change it. A widget's range is fixed when the node
+is declared and one number cannot suit every graph, so the server accepts up to
+ten minutes while the slider spans whatever you actually work with.
+
+**Two model widgets, because there are two jobs.** `caption_model` reads the
+references and `writer_model` writes the prompt from MiniMax's guide; `clip`
+works here exactly as it does on the caption nodes, and is used for the
+references when connected. On T2VA no captioner is touched at all.
+
+**What each task expects of the strip:**
+
+| Task | Pictures | Everything else on the strip |
+|---|---|---|
+| T2VA | none | ignored entirely, and the node says so rather than describing them |
+| I2VA | exactly one — the first frame | goes in as reference material |
+| L2VA | exactly one — the final frame | goes in as reference material |
+| FL2VA | exactly two — first, then last | goes in as reference material |
+| Ref2VA | any number | at least one reference of some kind is required |
+
+A mismatch is refused before anything is downloaded or loaded, and the message
+names the strip rather than the sockets, because the strip is where the fix is:
+an image that is in the way gets switched off or given a different label, not
+unplugged.
+
+**The outputs are the union of both writers'** — the three T2VA fields, the six
+Ref2VA fields, and the reference block itself. A task that does not write a field
+leaves it empty, because a node's outputs cannot change with the value of one of
+its widgets.
+
+> **One difference from Multi Reference Caption.** That node writes the block in
+> the guide's own order — subjects, pictures, videos, audio — whatever the wiring
+> says. This one writes it in strip order, because the strip is the whole point.
+> An untouched strip is in slot order.
+
+> **If the interface script does not load**, the strip, the task switch and the
+> ratio picker fall back to the plain widgets they are built on — one text field
+> and two dropdowns — and the node still runs. Those three are HTML and work in
+> both of ComfyUI's renderers. The checkboxes on the input rows are drawn on the
+> canvas, which *Modern Node Design (Nodes 2.0)* does not run; there the number
+> on each square is the way to switch a reference off. The same is true of the
+> checkboxes on Multi Reference Caption.
+>
+> The three drawn controls are also kept off the right-side **Parameters**
+> panel, which has no way to draw a control like this and would have to take it
+> off the node to try. The node is where they live. Everything else about the
+> node -- the prompt, the models, the duration slider -- is in the panel as
+> usual.
+
+> **This node needs a recent ComfyUI**, for the same reason Multi Reference
+> Caption does: its growing inputs are `io.Autogrow` from the v3 node API. On an
+> older install these two go missing and the rest of the pack registers as
+> before.
+
 ### MiniMax-H3 Reference Caption
 
 The writer nodes read text, not pixels. This is where the text comes from:
@@ -500,7 +610,7 @@ you want to describe by hand or ask a different question about.
 
 ### Captioning with a model ComfyUI already has loaded
 
-Both caption nodes have a `clip` input. Connect a multimodal text encoder from
+Both caption nodes and the Universal Writer have a `clip` input. Connect a multimodal text encoder from
 `CLIPLoader` and every asset is described by *that* model instead of by the GGUF
 in `model` — which then stays exactly where ComfyUI's allocator put it.
 
