@@ -771,7 +771,11 @@ class MiniMaxH3RewriterOptions:
                             "GGUF only, and only when llama-cpp-python is absent: which official "
                             "llama.cpp build to fetch. 'auto' takes CUDA on Windows with a "
                             "supported NVIDIA card (511 MB, about twice as fast) and Vulkan "
-                            "otherwise. Pick 'vulkan' to keep the download at 34 MB."
+                            "otherwise. Pick 'vulkan' to keep the download at 34 MB.\n\n"
+                            "Nothing is fetched at all when llama.cpp is already here: a build "
+                            f"on PATH, or one named in {llamacpp.BIN_ENV}, is run as it is. "
+                            "That is the way to a CUDA llama.cpp on Linux, where upstream "
+                            "publishes no CUDA build."
                         ),
                     },
                 ),

@@ -22,6 +22,11 @@ else. Vulkan is 32 MB against 511 MB, works on AMD and Intel too, and is the
 only build upstream ships for Linux with any GPU acceleration at all, at roughly
 half the tokens per second. Anyone who would rather keep the download small can
 ask for it by name.
+
+None of which applies when the machine already has an llama.cpp:
+``MINIMAX_H3_LLAMA_BIN`` names one outright, PATH is read when it does not,
+and whatever is found is run as it is. That is the only road to a CUDA
+llama.cpp on Linux, since no CUDA archive is published for it.
 """
 
 from __future__ import annotations
@@ -42,6 +47,15 @@ DOWNLOAD_URL = f"https://github.com/{REPO}/releases/download/{RELEASE}"
 
 BACKENDS = ("auto", "vulkan", "cuda", "cpu")
 DEFAULT_BACKEND = "vulkan"
+
+#: An llama.cpp this machine already has, named outright.
+#:
+#: Either the executable or the directory the binaries live in. Set it when
+#: the wanted build is not the first one on PATH, or when there is no PATH
+#: entry at all -- a container that runs ComfyUI as a service usually has
+#: none. The captioner is looked for beside whatever this names, because
+#: every build puts llama-mtmd-cli next to llama-completion.
+BIN_ENV = "MINIMAX_H3_LLAMA_BIN"
 
 #: (sys.platform, backend) -> archive names within the release.
 #:
@@ -67,7 +81,8 @@ ASSETS: dict[tuple[str, str], tuple[str, ...]] = {
 UNAVAILABLE = {
     ("linux", "cuda"): (
         "upstream publishes no CUDA build of llama.cpp for Linux; the Vulkan build "
-        "runs on NVIDIA cards too"
+        "runs on NVIDIA cards too, and one you compiled yourself is run as it is -- "
+        f"put its bin folder on PATH, or name it in {BIN_ENV}"
     ),
     ("darwin", "cuda"): "macOS has no CUDA; the macOS build uses Metal",
     ("darwin", "vulkan"): "upstream publishes no Vulkan build for macOS",
@@ -177,14 +192,76 @@ def find_binary(directory: str, names: tuple[str, ...] = BINARIES) -> str:
 
 
 def installed(backend: str) -> str:
-    """Path to ``llama-cli`` for this backend, or "" if it is not unpacked."""
+    """Path to the completion binary for this backend, or "" if not unpacked."""
     directory = install_dir(backend)
     return find_binary(directory) if os.path.isdir(directory) else ""
 
 
+def _named_binary(names: tuple[str, ...]) -> str:
+    """The binary ``BIN_ENV`` points at, or "" when the variable is unset.
+
+    A variable that is set but points nowhere useful raises rather than falls
+    through: naming a build is an instruction, and quietly downloading a
+    different one instead would hide a typo behind half a gigabyte.
+    """
+    value = (os.environ.get(BIN_ENV) or "").strip().strip('"')
+    if not value:
+        return ""
+    if EXE and not os.path.exists(value) and os.path.isfile(value + EXE):
+        value += EXE
+
+    if os.path.isfile(value):
+        if os.path.basename(value) in names:
+            return value
+        beside = find_binary(os.path.dirname(os.path.abspath(value)), names)
+        if beside:
+            return beside
+        raise RuntimeError(
+            f"{BIN_ENV} is set to '{value}', and none of {', '.join(names)} is that "
+            f"file or sits beside it."
+        )
+    if os.path.isdir(value):
+        found = find_binary(value, names)
+        if found:
+            return found
+        raise RuntimeError(
+            f"{BIN_ENV} is set to '{value}', which holds none of {', '.join(names)}."
+        )
+    raise RuntimeError(f"{BIN_ENV} is set to '{value}', which does not exist.")
+
+
+def _path_binary(names: tuple[str, ...]) -> str:
+    """The first of ``names`` on PATH, or "": an llama.cpp built on this machine."""
+    for name in names:
+        found = shutil.which(name)
+        if found:
+            return os.path.abspath(found)
+    return ""
+
+
+_ANNOUNCED: set[str] = set()
+
+
+def _announce(binary: str, source: str) -> str:
+    if binary not in _ANNOUNCED:
+        _ANNOUNCED.add(binary)
+        log.info("[minimax_h3_rewriter.llamacpp] llama.cpp %s: %s", source, binary)
+    return binary
+
+
+def external(names: tuple[str, ...] = BINARIES) -> str:
+    """An llama.cpp that is already here: named in the environment, or on PATH."""
+    return _named_binary(names) or _path_binary(names)
+
+
 def available() -> bool:
-    """True when some runtime is already on disk, for any backend."""
-    return any(installed(backend) for _platform, backend in ASSETS if _platform == sys.platform)
+    """True when a runtime is reachable: unpacked here, or already on the machine."""
+    if any(installed(backend) for _platform, backend in ASSETS if _platform == sys.platform):
+        return True
+    try:
+        return bool(external())
+    except RuntimeError:
+        return False
 
 
 def asset_size(name: str) -> int:
@@ -258,25 +335,8 @@ def download_size(backend: str) -> int:
     return sum(asset_sizes(assets(backend)).values())
 
 
-def ensure_mtmd(backend: str, auto_download: bool, progress=None) -> str:
-    """Return the path to ``llama-mtmd-cli``, fetching the release if allowed.
-
-    Same archive, same install directory: a captioner run on a machine that has
-    already rewritten a prompt downloads nothing.
-    """
-    ensure(backend, auto_download, progress)
-    directory = install_dir(resolve_backend(backend))
-    binary = find_binary(directory, MTMD_BINARIES)
-    if not binary:
-        raise RuntimeError(
-            f"'{MTMD_BINARIES[0]}' is not in '{directory}'. Release {RELEASE} should carry it "
-            f"beside {BINARY}; delete that folder to fetch the archive again."
-        )
-    return binary
-
-
-def ensure(backend: str, auto_download: bool, progress=None) -> str:
-    """Return the path to ``llama-cli``, fetching the release if allowed."""
+def _packaged(backend: str, auto_download: bool, progress=None) -> str:
+    """The pack's own runtime: the unpacked one, or a fresh download of it."""
     backend = resolve_backend(backend)
     existing = installed(backend)
     if existing:
@@ -368,4 +428,73 @@ def ensure(backend: str, auto_download: bool, progress=None) -> str:
 
     binary = find_binary(directory)
     log.info("[minimax_h3_rewriter.llamacpp] %s runtime ready at %s", backend, binary)
+    return binary
+
+
+def ensure(backend: str, auto_download: bool, progress=None) -> str:
+    """Return the path to the completion binary, fetching the release if needed.
+
+    Four places, in this order: what ``BIN_ENV`` names, because naming a build
+    is an instruction; then what this pack has already unpacked, which is the
+    pinned, known-good one; then PATH, so an llama.cpp compiled on this machine
+    is used rather than a second copy downloaded beside it; then the download.
+
+    That third step is the only road to a CUDA llama.cpp on Linux, where
+    upstream publishes no CUDA archive at all. It is also why ``llama_backend``
+    stops mattering once a build is found: it picks which archive to fetch, not
+    what an existing binary was compiled against.
+    """
+    named = _named_binary(BINARIES)
+    if named:
+        return _announce(named, f"named in {BIN_ENV}")
+
+    backend = resolve_backend(backend)
+    existing = installed(backend)
+    if existing:
+        return existing
+
+    on_path = _path_binary(BINARIES)
+    if on_path:
+        return _announce(on_path, "found on PATH")
+
+    return _packaged(backend, auto_download, progress)
+
+
+def ensure_mtmd(backend: str, auto_download: bool, progress=None) -> str:
+    """Return the path to ``llama-mtmd-cli``, fetching the release if needed.
+
+    The same four places in the same order, since the captioner is built beside
+    the completion binary and ships in the same archive: a captioner run on a
+    machine that has already rewritten a prompt downloads nothing.
+
+    The exception is a build that has one and not the other, which a distribution
+    package often is. That is no reason to go without: the archive carries both,
+    so it is fetched for this job even though the rewriter runs from PATH.
+    """
+    named = _named_binary(MTMD_BINARIES)
+    if named:
+        return _announce(named, f"named in {BIN_ENV}")
+
+    directory = install_dir(resolve_backend(backend))
+    unpacked = find_binary(directory, MTMD_BINARIES) if os.path.isdir(directory) else ""
+    if unpacked:
+        return unpacked
+
+    on_path = _path_binary(MTMD_BINARIES)
+    if not on_path:
+        companion = _path_binary(BINARIES)
+        if companion:
+            on_path = find_binary(os.path.dirname(companion), MTMD_BINARIES)
+    if on_path:
+        return _announce(on_path, "found on PATH")
+
+    _packaged(backend, auto_download, progress)
+    binary = find_binary(directory, MTMD_BINARIES)
+    if not binary:
+        raise RuntimeError(
+            f"'{MTMD_BINARIES[0]}' is not in '{directory}', not on PATH and not where "
+            f"{BIN_ENV} points. Release {RELEASE} should carry it beside {BINARY}; delete "
+            f"that folder to fetch the archive again, or build that target in your own "
+            f"llama.cpp."
+        )
     return binary

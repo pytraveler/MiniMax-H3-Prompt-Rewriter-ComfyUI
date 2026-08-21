@@ -1086,10 +1086,11 @@ from the official weights.
 
 Pick a `[gguf]` entry from the model list and the rewriter runs under llama.cpp
 instead of Transformers. **No pip install is involved.** If `llama-cpp-python`
-happens to be in ComfyUI's environment the node uses it; if it is not, the node
-fetches the official llama.cpp binaries (~34 MB) into
-`ComfyUI/user/minimax_h3_rewriter/runtime/` and runs `llama-cli` as a
-subprocess. Same download switch as the weights: `auto_download`.
+happens to be in ComfyUI's environment the node uses it; if it is not, it runs an
+llama.cpp the machine already has, and failing that fetches the official binaries
+(~34 MB) into `ComfyUI/user/minimax_h3_rewriter/runtime/` and runs
+`llama-completion` as a subprocess. Same download switch as the weights:
+`auto_download`.
 
 The subprocess reloads the model on every run, which costs nothing in practice —
 the node's default is `keep_model_loaded = False`, because the card is needed
@@ -1117,8 +1118,25 @@ when the binaries are in use:
 | `llama_backend` | Download | Notes |
 |---|---|---|
 | `auto` → `vulkan` | 34 MB | NVIDIA, AMD and Intel alike; about half the CUDA throughput |
-| `cuda` | 511 MB | ~2× faster on NVIDIA; **Windows only** — upstream publishes no Linux CUDA build |
+| `cuda` | 511 MB | ~2× faster on NVIDIA; **Windows only** — upstream publishes no Linux CUDA build, so on Linux you compile one yourself and the node runs it |
 | `cpu` | 17 MB | no GPU at all |
+
+**An llama.cpp you already have is run as it is.** Before fetching anything the
+node looks in three places, in order: the path in `MINIMAX_H3_LLAMA_BIN`, then
+its own `runtime/` folder, then `PATH`. A build you compiled yourself therefore
+needs no setting at all — put its `build/bin` on `PATH`, or name it outright:
+
+```sh
+export MINIMAX_H3_LLAMA_BIN=/opt/llama.cpp/build/bin   # the folder, or the binary in it
+```
+
+`llama_backend` then stops mattering: it picks which archive to download, not
+what an existing binary was compiled against. This is the road to a CUDA
+llama.cpp on Linux — build it once with `-DGGML_CUDA=ON`, name it here, and
+`device = cuda:0` does what it says. The caption nodes look for
+`llama-mtmd-cli` beside it; a build without that target sends the node back to
+the archive for that one job. A variable pointing at nothing is an error rather
+than a quiet download, so a typo says so instead of costing half a gigabyte.
 
 > **Why not the `llama-cpp-python` CUDA wheels.** Both current ones fail on
 > ordinary consumer hardware, in two unrelated ways:

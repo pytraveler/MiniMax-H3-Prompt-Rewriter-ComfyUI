@@ -6,6 +6,38 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.16.0 - 2026-08-21
+
+### Added
+
+- **An llama.cpp the machine already has is run as it is, and nothing is
+  downloaded.** Before fetching the official binaries the node now looks in three
+  places, in order: the path in `MINIMAX_H3_LLAMA_BIN` — the executable itself or
+  the folder holding it — then its own `runtime/` folder, then `PATH`.
+
+  This is what a build you compiled yourself was missing. `llama_backend` names
+  an archive to fetch from upstream, and upstream publishes no CUDA archive for
+  Linux at all, so `llama_backend = cuda` there was a dead end whatever the
+  machine had on it — a CUDA llama.cpp sitting on `PATH` included, because
+  nothing ever looked at `PATH`. Now it is found; once it is, `llama_backend`
+  stops mattering, since it chooses a download rather than what an existing
+  binary was compiled against; and `device = cuda:0` does what it says.
+
+  The caption nodes take `llama-mtmd-cli` from the same place, because every
+  build puts it beside the completion binary. A build carrying one and not the
+  other — a distribution package, usually — sends the node back to the archive
+  for that one job instead of refusing it.
+
+  A variable pointing at nothing raises rather than falling through to a
+  download: naming a build is an instruction, and a typo should not cost half a
+  gigabyte of archive.
+
+### Changed
+
+- The `llama_backend` tooltip and both READMEs say where the runtime is looked
+  for, and the refusal for `llama_backend = cuda` on Linux now ends with what to
+  do about it rather than only with what upstream does not publish.
+
 ## 0.15.0 - 2026-08-21
 
 ### Added
