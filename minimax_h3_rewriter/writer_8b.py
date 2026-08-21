@@ -11,45 +11,75 @@ are different (IMAGE rather than a block of text), the architecture is
 different, and the adapter is different; merging them would produce a node where
 most of the widgets are inert for most settings of the first one.
 
-**Two engines, and the task picks which.** T2VA has no pictures in it, so it
-takes the ordinary text path -- no projector loaded, no subprocess, and
-``keep_model_loaded`` works. The other three carry frames and go through
-``llama-mtmd-cli``, which is a fresh process per run and therefore cannot keep
-anything resident.
+**Three engines, and two questions pick between them.** First the shape of the
+base model. A folder of safetensors runs in this process through Transformers
+and PEFT, which is what the adapter was published for, and every task stays
+resident there because nothing exits between runs.
+
+A GGUF base then asks the second question, which is the task. T2VA has no
+pictures in it and takes the ordinary text path -- no projector loaded, no
+subprocess, and ``keep_model_loaded`` works. The other three carry frames and go
+through ``llama-mtmd-cli``, a fresh process per run that therefore cannot keep
+anything resident, and says so rather than ignoring the switch.
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
-from . import catalog, discovery, media, mtmd_engine
-from .catalog import FORMAT_GGUF
+from . import catalog, discovery, engine, media, mtmd_engine
+from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
 from .constants import (
     DURATION_MAX,
     DURATION_MIN,
     OUTPUT_FIELDS,
+    QUANTIZATIONS,
     RESOLUTIONS,
 )
 from .fields import split_fields
 from .guide_prompt import BASE_MODES
 from .nodes import (
+    BASE_SPEC,
     BYPASS_TOOLTIP,
     CATEGORY,
     DEFAULT_OPTIONS,
     LOCAL_PREFIX,
     OPTIONS_TYPE,
-    CaptionerChoice,
     _announce,
     _bypassed,
     _ensure_pair,
+    _ensure_present,
     _gguf_text,
     _refuse_problem,
     _resolve_adapter,
+    _verify_base_model,
 )
 from .progress import NodeProgress
 from .prompt_template_8b import build_messages, expected_image_count, normalize_task
 
 log = logging.getLogger(__name__)
+
+BASE_REPO_8B = "Qwen/Qwen3-VL-8B-Instruct"
+
+BASE_SPEC_8B = dict(BASE_SPEC, default_repo=BASE_REPO_8B, label="Base model")
+
+
+@dataclass
+class BaseChoice:
+    """A base model for the 8B adapter, in whichever shape it was found in.
+
+    GGUF is two files that have to come from the same conversion; safetensors is
+    a folder. Both are in one list because which of them you have is a fact
+    about your disk, not about the task -- and the adapter is published in both.
+    """
+
+    reference: str
+    fmt: str = FORMAT_GGUF
+    file: str = ""
+    mmproj: str = ""
+    local: bool = False
+
 
 MEDIA_MARKER = "<__media__>"
 
@@ -133,26 +163,32 @@ def frames_for(task: str, first_frame, last_frame) -> list[tuple[str, object]]:
     return frames
 
 
-_MODEL_MAP: dict[str, CaptionerChoice] = {}
+_MODEL_MAP: dict[str, BaseChoice] = {}
 
 
-def _build_model_map() -> dict[str, CaptionerChoice]:
-    """The 8B base models: a list of its own, and only ``qwen3vl`` from disk.
+def _build_model_map() -> dict[str, BaseChoice]:
+    """The 8B base models, in both shapes the adapter is published for.
 
-    A base here is two files, exactly as a captioner is, and for the same
-    reason -- the projector comes out of the same conversion as the model. What
-    differs is the architecture filter: any multimodal pair will caption, but
-    only a Qwen3-VL one can carry this LoRA.
+    A GGUF base here is two files, exactly as a captioner is and for the same
+    reason -- the projector comes out of the same conversion as the model. A
+    safetensors base is a folder, and the shape the adapter was actually trained
+    in. Either way the architecture filter is the point: any multimodal pair
+    will caption, but only a Qwen3-VL of this size can carry this LoRA.
     """
-    mapping: dict[str, CaptionerChoice] = {}
+    mapping: dict[str, BaseChoice] = {}
     try:
         for entry in catalog.models_8b():
+            if not entry.is_gguf:
+                mapping[entry.label] = BaseChoice(
+                    reference=entry.repo, fmt=FORMAT_TRANSFORMERS
+                )
+                continue
             if not entry.mmproj:
                 log.warning(
                     "[minimax_h3_rewriter.writer_8b] '%s' has no 'mmproj', skipping", entry.name
                 )
                 continue
-            mapping[entry.label] = CaptionerChoice(
+            mapping[entry.label] = BaseChoice(
                 reference=entry.repo, file=entry.file, mmproj=entry.mmproj
             )
     except Exception:
@@ -161,11 +197,18 @@ def _build_model_map() -> dict[str, CaptionerChoice]:
         for label, model_path, mmproj_path in discovery.scan_captioner_gguf(
             arch=discovery.GGUF_ARCH_8B
         ):
-            mapping[f"{LOCAL_PREFIX}{label}"] = CaptionerChoice(
+            mapping[f"{LOCAL_PREFIX}{label}"] = BaseChoice(
                 reference=model_path, mmproj=mmproj_path, local=True
             )
     except Exception:
         log.warning("[minimax_h3_rewriter.writer_8b] gguf scan failed", exc_info=True)
+    try:
+        for label, directory in discovery.scan_local(discovery.SHAPE_8B):
+            mapping[f"{LOCAL_PREFIX}{label}"] = BaseChoice(
+                reference=directory, fmt=FORMAT_TRANSFORMERS, local=True
+            )
+    except Exception:
+        log.warning("[minimax_h3_rewriter.writer_8b] local scan failed", exc_info=True)
 
     _MODEL_MAP.clear()
     _MODEL_MAP.update(mapping)
@@ -177,7 +220,7 @@ def model_choices() -> list[str]:
     return _announce(choices or ["(no Qwen3-VL model found - see the model list)"])
 
 
-def _resolve_model_choice(choice: str) -> CaptionerChoice:
+def _resolve_model_choice(choice: str) -> BaseChoice:
     _refuse_problem(choice)
     found = _MODEL_MAP.get(choice)
     if found is None:
@@ -199,8 +242,10 @@ class MiniMaxH3PromptWriter8B:
         "structured audio-video description. Unlike the 27B rewriter this one is multimodal: "
         "connect the first and/or last frame and the model looks at them itself, so no caption "
         "of them is needed and it writes the alignment line from what is in the picture. About "
-        "9 GB of VRAM at Q4_K_M. Weights are fetched on first use; nothing has to be installed, "
-        "because the official llama.cpp binaries are fetched too."
+        "9 GB of VRAM at Q4_K_M. The base model comes in two shapes and the node takes either: "
+        "GGUF needs nothing installed, because the official llama.cpp binaries are fetched too, "
+        "and safetensors is the shape the adapter was published in and keeps the model resident "
+        "for every task. Weights are fetched on first use."
     )
 
     @classmethod
@@ -219,10 +264,12 @@ class MiniMaxH3PromptWriter8B:
                     model_choices(),
                     {
                         "tooltip": (
-                            "A Qwen3-VL base model and its projector. Entries prefixed 'on disk:' "
-                            "are pairs already in your ComfyUI model folders; the rest are "
-                            "fetched on first use. Only Qwen3-VL-8B fits the adapter - a "
-                            "different size loads and then runs without the rewriter."
+                            "A Qwen3-VL-8B base. A GGUF entry is two files from one conversion, "
+                            "the model and its projector; a safetensors entry is the official "
+                            "folder the adapter was trained on. Entries prefixed 'on disk:' are "
+                            "already in your ComfyUI model folders; the rest are fetched on "
+                            "first use. Only the 8B fits the adapter - another size is refused "
+                            "by name and number before anything is downloaded."
                         ),
                     },
                 ),
@@ -251,6 +298,18 @@ class MiniMaxH3PromptWriter8B:
                         "tooltip": "Target clip length in seconds; drives shot count and pacing.",
                     },
                 ),
+                "quantization": (
+                    list(QUANTIZATIONS),
+                    {
+                        "default": "nf4",
+                        "tooltip": (
+                            "How to load the safetensors build: nf4 needs about 8 GB of VRAM, "
+                            "int8 about 13 GB, bfloat16 about 20 GB. Ignored for GGUF models, "
+                            "which carry their own quantization, and for checkpoints that are "
+                            "already quantized."
+                        ),
+                    },
+                ),
                 "greedy": (
                     "BOOLEAN",
                     {
@@ -272,9 +331,10 @@ class MiniMaxH3PromptWriter8B:
                     {
                         "default": False,
                         "tooltip": (
-                            "Keep the model in VRAM after the rewrite. Only T2VA can honour it: "
-                            "the tasks with frames run in a subprocess, which takes the model "
-                            "with it when it exits."
+                            "Keep the model in VRAM after the rewrite. A safetensors base "
+                            "honours it on every task, being loaded in this process. A GGUF "
+                            "base can only honour it on T2VA: the tasks with frames run in a "
+                            "subprocess, which takes the model with it when it exits."
                         ),
                     },
                 ),
@@ -300,6 +360,7 @@ class MiniMaxH3PromptWriter8B:
         task,
         resolution,
         duration,
+        quantization,
         greedy,
         seed,
         keep_model_loaded,
@@ -324,62 +385,132 @@ class MiniMaxH3PromptWriter8B:
 
         progress = NodeProgress(unique_id)
         choice = _resolve_model_choice(model)
-        if choice.local:
-            model_path, mmproj_path = choice.reference, choice.mmproj
-        else:
-            model_path, mmproj_path = _ensure_pair(
-                choice.reference, choice.file, choice.mmproj, "Base model",
-                settings["auto_download"], progress,
-            )
-        log.info("[minimax_h3_rewriter.writer_8b] base model: %s", model_path)
 
-        adapter_path = None
-        if settings["use_lora"]:
-            problem = discovery.gguf_problem_8b(model_path)
-            if problem:
-                raise RuntimeError(
-                    "This GGUF cannot run the 8B prompt-rewriter LoRA.\n  - "
-                    + problem
-                    + "\nTurn 'use_lora' off to run it as a plain model anyway."
+        if choice.fmt == FORMAT_TRANSFORMERS:
+            text = self._with_transformers(
+                choice, frames, prompt, wanted, resolution, int(duration),
+                quantization, settings, seed, greedy, keep_model_loaded, progress,
+            )
+        else:
+            if choice.local:
+                model_path, mmproj_path = choice.reference, choice.mmproj
+            else:
+                model_path, mmproj_path = _ensure_pair(
+                    choice.reference, choice.file, choice.mmproj, "Base model",
+                    settings["auto_download"], progress,
                 )
-            adapter_path = _resolve_adapter(
-                FORMAT_GGUF, settings["adapter"], settings["auto_download"], progress,
-                catalog.ADAPTERS_8B,
-            )
+            log.info("[minimax_h3_rewriter.writer_8b] base model: %s", model_path)
 
-        system, user = render(build_messages(prompt, wanted, resolution, int(duration)))
+            adapter_path = None
+            if settings["use_lora"]:
+                problem = discovery.gguf_problem_8b(model_path)
+                if problem:
+                    raise RuntimeError(
+                        "This GGUF cannot run the 8B prompt-rewriter LoRA.\n  - "
+                        + problem
+                        + "\nTurn 'use_lora' off to run it as a plain model anyway."
+                    )
+                adapter_path = _resolve_adapter(
+                    FORMAT_GGUF, settings["adapter"], settings["auto_download"], progress,
+                    catalog.ADAPTERS_8B,
+                )
 
-        if frames:
-            text = self._with_frames(
-                frames, model_path, mmproj_path, adapter_path, system, user,
-                settings, seed, greedy, keep_model_loaded, progress,
-            )
-        else:
-            text = _gguf_text(
-                settings,
-                model_path=model_path,
-                adapter_path=adapter_path,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-                gpu_layers=int(settings["gpu_layers"]),
-                n_ctx=int(settings["n_ctx"]),
-                keep_loaded=keep_model_loaded,
-                device=settings["device"],
-                progress=progress,
-                seed=int(seed),
-                greedy=greedy,
-                max_new_tokens=int(settings["max_new_tokens"]),
-                temperature=float(settings["temperature"]),
-                top_p=float(settings["top_p"]),
-                top_k=int(settings["top_k"]),
-                repetition_penalty=float(settings["repetition_penalty"]),
-            )
+            system, user = render(build_messages(prompt, wanted, resolution, int(duration)))
+
+            if frames:
+                text = self._with_frames(
+                    frames, model_path, mmproj_path, adapter_path, system, user,
+                    settings, seed, greedy, keep_model_loaded, progress,
+                )
+            else:
+                text = _gguf_text(
+                    settings,
+                    model_path=model_path,
+                    adapter_path=adapter_path,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                    gpu_layers=int(settings["gpu_layers"]),
+                    n_ctx=int(settings["n_ctx"]),
+                    keep_loaded=keep_model_loaded,
+                    device=settings["device"],
+                    progress=progress,
+                    seed=int(seed),
+                    greedy=greedy,
+                    max_new_tokens=int(settings["max_new_tokens"]),
+                    temperature=float(settings["temperature"]),
+                    top_p=float(settings["top_p"]),
+                    top_k=int(settings["top_k"]),
+                    repetition_penalty=float(settings["repetition_penalty"]),
+                )
 
         fields = split_fields(text)
         progress.text(text[-2000:] if text else "(empty rewrite)", force=True)
         return (text,) + tuple(fields[name] for name in OUTPUT_FIELDS)
+
+    @staticmethod
+    def _with_transformers(
+        choice: BaseChoice,
+        frames: list[tuple[str, object]],
+        prompt: str,
+        task: str,
+        resolution: str,
+        duration: int,
+        quantization: str,
+        settings: dict,
+        seed: int,
+        greedy: bool,
+        keep_loaded: bool,
+        progress: NodeProgress,
+    ) -> str:
+        """The safetensors route: one process, the pictures handed over in memory.
+
+        This is the shape the adapter was published in, and the messages
+        ``build_messages`` returns are already the shape a Transformers processor
+        takes -- the GGUF route is the one that has to flatten them. It is also
+        the only route where ``keep_model_loaded`` means anything for a task with
+        frames: there is no subprocess to take the weights with it when it exits.
+        """
+        _verify_base_model(choice.reference, progress, discovery.SHAPE_8B, BASE_REPO_8B)
+        base_dir = _ensure_present(
+            choice.reference, BASE_SPEC_8B, settings["auto_download"], progress
+        )
+        log.info("[minimax_h3_rewriter.writer_8b] base model: %s", base_dir)
+
+        adapter_dir = None
+        if settings["use_lora"]:
+            adapter_dir = _resolve_adapter(
+                FORMAT_TRANSFORMERS, settings["adapter"], settings["auto_download"], progress,
+                catalog.ADAPTERS_8B,
+            )
+
+        images = []
+        for name, value in frames:
+            picture = media.pil_frames(value, 1)
+            if not picture:
+                raise ValueError(f"'{name}' is an empty IMAGE batch, so there is no frame to read.")
+            images.append(picture[0])
+
+        return engine.rewrite(
+            base_dir=base_dir,
+            adapter_dir=adapter_dir,
+            quantization=quantization,
+            attn_implementation=settings["attn_implementation"],
+            keep_loaded=keep_loaded,
+            device=settings["device"],
+            progress=progress,
+            trust_remote_code=bool(settings.get("trust_remote_code", False)),
+            images=images or None,
+            messages=build_messages(prompt, task, resolution, duration),
+            seed=int(seed),
+            greedy=greedy,
+            max_new_tokens=int(settings["max_new_tokens"]),
+            temperature=float(settings["temperature"]),
+            top_p=float(settings["top_p"]),
+            top_k=int(settings["top_k"]),
+            repetition_penalty=float(settings["repetition_penalty"]),
+        )
 
     @staticmethod
     def _with_frames(

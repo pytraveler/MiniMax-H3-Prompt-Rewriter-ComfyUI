@@ -284,17 +284,28 @@ def _resolve_captioner_choice(choice: str) -> CaptionerChoice:
     )
 
 
-def _verify_base_model(reference: str, progress: NodeProgress) -> None:
-    """Refuse a wrong or unloadable base model before any weights move."""
+def _verify_base_model(
+    reference: str,
+    progress: NodeProgress,
+    shape: discovery.Shape = discovery.SHAPE_27B,
+    default_repo: str = BASE_MODEL_REPO,
+) -> None:
+    """Refuse a wrong or unloadable base model before any weights move.
+
+    ``shape`` is which adapter is about to be applied. The two are cut to
+    different checkpoints, and a check that always answered for the 27B would
+    wave through a Qwen3-VL of the wrong size and then fail long afterwards,
+    with the download already paid for.
+    """
     if os.path.isdir(reference):
-        report = discovery.inspect_local(reference)
+        report = discovery.inspect_local(reference, shape)
     else:
-        repo_id, local_dir = resolve_source(reference, BASE_MODEL_REPO)
+        repo_id, local_dir = resolve_source(reference, default_repo)
         if os.path.isdir(local_dir) and discovery.read_local_config(local_dir):
-            report = discovery.inspect_local(local_dir)
+            report = discovery.inspect_local(local_dir, shape)
         elif repo_id:
             progress.text(f"Checking {repo_id}", force=True)
-            report = discovery.inspect_repo(repo_id)
+            report = discovery.inspect_repo(repo_id, shape=shape)
             if not report.details:
                 return
         else:
@@ -594,7 +605,19 @@ def _locate_adapter(
     section: str = catalog.ADAPTERS_27B,
 ) -> str:
     if fmt == FORMAT_TRANSFORMERS:
-        return _ensure_present(value or ADAPTER_REPO, ADAPTER_SPEC, auto_download, progress)
+        wanted = catalog.adapter(FORMAT_TRANSFORMERS, section)
+        default = wanted.repo or ADAPTER_REPO
+        if not value or (value == ADAPTER_REPO and section != catalog.ADAPTERS_27B):
+            value = default
+        if value.lower().endswith(".gguf"):
+            raise RuntimeError(
+                f"'{os.path.basename(value)}' is a GGUF adapter and this base model is a folder "
+                f"of safetensors. Set 'adapter' back to its first entry to take whichever build "
+                f"matches the model, or pick a GGUF base model to go with it."
+            )
+        return _ensure_present(
+            value, dict(ADAPTER_SPEC, default_repo=default), auto_download, progress
+        )
 
     spec = catalog.adapter(FORMAT_GGUF, section)
 

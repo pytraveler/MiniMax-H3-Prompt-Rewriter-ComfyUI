@@ -20,7 +20,7 @@ from .progress import NodeProgress
 
 log = logging.getLogger(__name__)
 
-_STATE: dict = {"key": None, "tokenizer": None, "model": None}
+_STATE: dict = {"key": None, "tokenizer": None, "model": None, "processor": None}
 _LOCK = threading.RLock()
 
 PREVIEW_TAIL = 280
@@ -131,6 +131,31 @@ def _model_class(directory: str = ""):
         if candidate is not None:
             return candidate
     raise RuntimeError("No suitable Transformers auto model class is available.")
+
+
+def _load_processor(directory: str, remote_code: bool):
+    """The checkpoint's own processor, if it has one; ``None`` for text-only.
+
+    A multimodal checkpoint needs one to turn pictures into the tensors the
+    model reads, and it is also what renders the chat template with the image
+    placeholders in the right places -- the tokenizer alone would drop them.
+    Nothing here is fatal: a text-only checkpoint has no processor and does not
+    need one, and a checkpoint whose processor cannot be built is simply run
+    through the text path.
+    """
+    from .discovery import read_local_config
+
+    config = read_local_config(directory) or {}
+    if str(config.get("model_type") or "").endswith("_text"):
+        return None
+
+    try:
+        from transformers import AutoProcessor
+
+        return AutoProcessor.from_pretrained(directory, trust_remote_code=remote_code)
+    except Exception:
+        log.debug("[minimax_h3_rewriter._load_processor] no processor for %s", directory, exc_info=True)
+        return None
 
 
 def _shard_progress_hook(progress: NodeProgress, title: str, scale: float):
@@ -272,7 +297,10 @@ def load(
             model = PeftModel.from_pretrained(model, adapter_dir, is_trainable=False)
 
         model.eval()
-        _STATE.update(key=key, tokenizer=tokenizer, model=model)
+        _STATE.update(
+            key=key, tokenizer=tokenizer, model=model,
+            processor=_load_processor(base_dir, remote_code),
+        )
 
         if progress is not None:
             progress.ratio(1.0, "Model ready")
@@ -284,8 +312,18 @@ def unload() -> None:
         if _STATE["model"] is None and _STATE["tokenizer"] is None:
             _STATE["key"] = None
             return
-        _STATE.update(key=None, tokenizer=None, model=None)
+        _STATE.update(key=None, tokenizer=None, model=None, processor=None)
     _empty_cache()
+
+
+def processor():
+    """The image/text processor of the loaded checkpoint, or ``None``.
+
+    Cached beside the model rather than fetched per call, because it carries the
+    image preprocessing configuration and the chat template, and both are read
+    on every generation.
+    """
+    return _STATE["processor"]
 
 
 def is_loaded() -> bool:
@@ -299,13 +337,18 @@ def _input_device(model):
     return next(model.parameters()).device
 
 
-def _render_prompt(tokenizer, messages: list[dict[str, str]]) -> str:
+def _apply_template(owner, messages: list[dict]) -> str:
+    """Render a chat template, whether or not it takes the thinking switch."""
     try:
-        return tokenizer.apply_chat_template(
+        return owner.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
         )
     except TypeError:
-        return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        return owner.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+
+
+def _render_prompt(tokenizer, messages: list[dict[str, str]]) -> str:
+    return _apply_template(tokenizer, messages)
 
 
 def _interrupt_criteria():
@@ -335,11 +378,18 @@ def _was_interrupted() -> bool:
         return False
 
 
-def generate(
-    tokenizer,
+def _to_device(inputs, model):
+    """Move a tokenizer or processor result onto the model's input device."""
+    device = _input_device(model)
+    if hasattr(inputs, "to"):
+        return inputs.to(device)
+    return {name: tensor.to(device) for name, tensor in inputs.items()}
+
+
+def _run(
     model,
-    messages: list[dict[str, str]],
-    seed: int,
+    inputs,
+    tokenizer,
     greedy: bool,
     max_new_tokens: int,
     temperature: float,
@@ -348,21 +398,25 @@ def generate(
     repetition_penalty: float,
     progress: NodeProgress | None = None,
 ) -> str:
-    from transformers import StoppingCriteriaList, TextIteratorStreamer, set_seed
+    """Generate once from prepared inputs and stream the answer back.
+
+    Split out from :func:`generate` because the only thing a multimodal run does
+    differently is build ``inputs`` -- the sampling, the interrupt handling and
+    the streaming are the same, and were not worth having twice.
+    """
+    from transformers import StoppingCriteriaList, TextIteratorStreamer
 
     torch = _torch()
-    set_seed(normalize_seed(seed))
 
-    rendered = _render_prompt(tokenizer, messages)
-    inputs = tokenizer(rendered, return_tensors="pt", add_special_tokens=False)
-    device = _input_device(model)
-    inputs = {name: tensor.to(device) for name, tensor in inputs.items()}
+    pad_token_id = tokenizer.pad_token_id
+    if pad_token_id is None:
+        pad_token_id = tokenizer.eos_token_id
 
     generation_kwargs = {
         "max_new_tokens": max_new_tokens,
         "do_sample": not greedy,
         "repetition_penalty": repetition_penalty,
-        "pad_token_id": tokenizer.pad_token_id,
+        "pad_token_id": pad_token_id,
         "eos_token_id": tokenizer.eos_token_id,
     }
     if not greedy:
@@ -420,6 +474,65 @@ def generate(
     return "".join(pieces).strip()
 
 
+def generate(
+    tokenizer,
+    model,
+    messages: list[dict[str, str]],
+    seed: int,
+    greedy: bool,
+    max_new_tokens: int,
+    temperature: float,
+    top_p: float,
+    top_k: int,
+    repetition_penalty: float,
+    progress: NodeProgress | None = None,
+) -> str:
+    from transformers import set_seed
+
+    set_seed(normalize_seed(seed))
+    rendered = _render_prompt(tokenizer, messages)
+    inputs = tokenizer(rendered, return_tensors="pt", add_special_tokens=False)
+    return _run(
+        model, _to_device(inputs, model), tokenizer,
+        greedy, max_new_tokens, temperature, top_p, top_k, repetition_penalty, progress,
+    )
+
+
+def generate_with_images(
+    processor,
+    model,
+    messages: list[dict],
+    images: list,
+    seed: int,
+    greedy: bool,
+    max_new_tokens: int,
+    temperature: float,
+    top_p: float,
+    top_k: int,
+    repetition_penalty: float,
+    progress: NodeProgress | None = None,
+) -> str:
+    """The same generation, with the reference frames spliced into the turn.
+
+    The processor renders the chat template *and* consumes the pictures, which
+    is why both go through it rather than through the tokenizer: the template
+    puts an image placeholder exactly where ``build_messages`` put one, so the
+    line naming a picture stays attached to the picture it names.
+    """
+    from transformers import set_seed
+
+    set_seed(normalize_seed(seed))
+    try:
+        rendered = _apply_template(processor, messages)
+    except ValueError:
+        rendered = _apply_template(processor.tokenizer, messages)
+    inputs = processor(text=[rendered], images=list(images), return_tensors="pt")
+    return _run(
+        model, _to_device(inputs, model), processor.tokenizer,
+        greedy, max_new_tokens, temperature, top_p, top_k, repetition_penalty, progress,
+    )
+
+
 def rewrite(
     base_dir: str,
     adapter_dir: str | None,
@@ -429,6 +542,7 @@ def rewrite(
     device: str = devices.AUTO,
     progress: NodeProgress | None = None,
     trust_remote_code: bool = False,
+    images: list | None = None,
     **generation,
 ) -> str:
     """Load (or reuse) the rewriter, generate once, and optionally release VRAM.
@@ -441,6 +555,17 @@ def rewrite(
         trust_remote_code=trust_remote_code,
     )
     try:
+        if images:
+            reader = processor()
+            if reader is None:
+                raise RuntimeError(
+                    f"'{base_dir}' has no processor, so it cannot be shown a picture. This is a "
+                    f"text-only checkpoint -- pick the full multimodal build, or a task that "
+                    f"needs no reference frame."
+                )
+            return generate_with_images(
+                reader, model, images=list(images), progress=progress, **generation
+            )
         return generate(tokenizer, model, progress=progress, **generation)
     finally:
         del tokenizer, model

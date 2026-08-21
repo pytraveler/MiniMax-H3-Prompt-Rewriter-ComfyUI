@@ -1,5 +1,5 @@
 {
-  "seed_version": "0.13.0",
+  "seed_version": "0.14.1",
   "_comment": [
     "Base models offered by the MiniMax-H3 Prompt Rewriter node.",
     "",
@@ -15,6 +15,12 @@
     "anything genuinely new is not, and arrives. Delete a name from 'seed_offered'",
     "and that entry will be offered again on the next start. The previous copy of",
     "this file is kept beside it as models.json.bak whenever a merge happens.",
+    "",
+    "The two 'adapters' sections are merged the same way, one format at a time,",
+    "and recorded in 'seed_offered' under the section name. So a format published",
+    "later - the safetensors build of the 8B adapter, say - arrives in your copy",
+    "as a line you can point somewhere else, and one you delete on purpose stays",
+    "deleted.",
     "",
     "Fields:",
     "  name        label shown in the dropdown; keep it stable or saved workflows lose their choice",
@@ -44,7 +50,7 @@
     "of them. Separate lists because the two take different architectures - an entry",
     "from one will not load in the other's node, and offering it there would only",
     "produce a tensor-shape error after a multi-gigabyte download. Same fields, and",
-    "the base needs an 'mmproj' for the same reason a captioner does.",
+    "the base needs an 'mmproj' for the same reason a captioner does - while a 'transformers' base is one folder and needs none.",
     "",
     "'writers' is a separate list, for the guided writer nodes. Those carry the H3",
     "format in the system prompt instead of in a LoRA, so any instruction-following",
@@ -82,6 +88,10 @@
     }
   },
   "adapters_8b": {
+    "transformers": {
+      "repo": "lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA-8B",
+      "download_gb": 2.79
+    },
     "gguf": {
       "repo": "pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-8B-GGUF",
       "file": "MiniMax-H3-Prompt-Rewriter-LoRA-8B-F16.gguf",
@@ -223,6 +233,13 @@
     }
   ],
   "models_8b": [
+    {
+      "name": "Qwen3-VL-8B-Instruct (official, bf16)",
+      "repo": "Qwen/Qwen3-VL-8B-Instruct",
+      "format": "transformers",
+      "download_gb": 17.5,
+      "vram": "~8 GB as nf4 / ~13 GB as int8 / ~20 GB as bf16"
+    },
     {
       "name": "Qwen3-VL-8B-Instruct GGUF Q4_K_M",
       "repo": "Qwen/Qwen3-VL-8B-Instruct-GGUF",

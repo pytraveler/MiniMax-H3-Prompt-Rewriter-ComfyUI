@@ -194,6 +194,43 @@ def _names(entries) -> list[str]:
     return [str(raw["name"]) for raw in entries if isinstance(raw, dict) and raw.get("name")]
 
 
+def _merge_adapters(merged: dict, seed: dict, offered: dict, changes: list[str]) -> None:
+    """Fold new adapter entries in, one format at a time.
+
+    An adapter section is a dict, not a list, so the set algebra that keeps the
+    lists current never reached it: a section or a format published after
+    somebody's copy was made simply never appeared in their file. Reading still
+    worked -- ``adapter`` falls back to the packaged value for anything
+    unconfigured -- but there was no line for them to point at a conversion of
+    their own, which is the whole reason the file is theirs to edit.
+
+    Tracked in ``seed_offered`` under the section name, the same way and for the
+    same reason as the lists: a format somebody deleted on purpose stays
+    deleted, and only something genuinely new arrives.
+    """
+    for section in ADAPTER_SECTIONS:
+        available = seed.get(section)
+        if not isinstance(available, dict) or not available:
+            continue
+
+        current = merged.get(section)
+        current = dict(current) if isinstance(current, dict) else {}
+        seen = set(offered.get(section) or [])
+        fresh = [
+            fmt for fmt, entry in available.items()
+            if isinstance(entry, dict) and fmt not in current and fmt not in seen
+        ]
+        if fresh:
+            for fmt in fresh:
+                current[fmt] = json.loads(json.dumps(available[fmt]))
+            merged[section] = current
+            changes.append(f"{section}: added {', '.join(fresh)}")
+        elif not isinstance(merged.get(section), dict) and current:
+            merged[section] = current
+
+        offered[section] = sorted(seen | set(available))
+
+
 def merge(live: dict, seed: dict) -> tuple[dict, list[str]]:
     """Fold new seed entries into a live list. Returns ``(merged, what changed)``.
 
@@ -227,6 +264,8 @@ def merge(live: dict, seed: dict) -> tuple[dict, list[str]]:
                 changes.append(f"{section}: added {', '.join(_names(fresh))}")
 
         offered[section] = sorted(set(offered.get(section) or []) | set(_names(available)))
+
+    _merge_adapters(merged, seed, offered, changes)
 
     if offered == (live.get(OFFERED_KEY) or {}) and not changes:
         return merged, changes

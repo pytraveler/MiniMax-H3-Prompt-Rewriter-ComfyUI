@@ -141,11 +141,17 @@ interchangeable downstream.
 **Inputs**
 
 - `prompt`, `resolution`, `duration`, `greedy`, `seed` — as above.
-- `model` — a Qwen3-VL base and its projector, which are two files from the same
-  conversion. Entries prefixed `on disk:` are pairs already in your model
-  folders. **Only the 8B fits the adapter**; a Qwen3-VL of another size loads and
-  then runs as a plain model with no rewriter, and the node says so before
-  downloading anything.
+- `model` — a Qwen3-VL-8B base, in either shape the adapter is published for.
+  A **GGUF** entry is two files from the same conversion, the model and its
+  projector. A **safetensors** entry is the official
+  [Qwen3-VL-8B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct)
+  folder, which is what the adapter was trained on and what it is published as.
+  Entries prefixed `on disk:` are already in your model folders.
+  **Only the 8B fits the adapter**; a Qwen3-VL of another size is refused by name
+  and number before anything is downloaded.
+- `quantization` — how to load a **safetensors** base: `nf4` needs about 8 GB of
+  VRAM, `int8` about 13, `bfloat16` about 20. Ignored for GGUF, which carries its
+  own.
 - `task` — `T2VA`, `I2VA`, `FL2VA`, `L2VA`. The model's own name for these is
   T2AV, I2AV, FL2AV and L2AV; they are the same four tasks.
 - `first_frame` / `last_frame` — optional IMAGE inputs. `I2VA` reads
@@ -153,9 +159,11 @@ interchangeable downstream.
   neither. Connect the wrong one and the node says which is missing before
   anything loads — which end of the clip a picture belongs to is part of what
   the model is told.
-- `keep_model_loaded` — **only `T2VA` can honour it.** The three tasks with
-  frames run through `llama-mtmd-cli`, a fresh process each time, which takes
-  the model with it when it exits.
+- `keep_model_loaded` — on a **safetensors** base every task honours it: the
+  model is loaded in ComfyUI's own process and stays there. On a **GGUF** base
+  only `T2VA` can, because the three tasks with frames run through
+  `llama-mtmd-cli`, a fresh process each time that takes the model with it when
+  it exits. The node says which it did rather than ignoring the switch.
 - `options` — the same options node as everything else. Its `adapter` dropdown
   lists both LoRAs; the first entry picks whichever one matches the base model
   you chose, so it needs no attention.
@@ -166,6 +174,14 @@ interchangeable downstream.
 |---|---|---|
 | Q4_K_M base + projector + Q8_0 adapter | 4.7 + 0.7 + 0.7 GB | ~9 GB |
 | Q8_0 base + projector + F16 adapter | 8.1 + 0.7 + 1.3 GB | ~13 GB |
+| safetensors base + adapter, `nf4` | 17.5 + 2.8 GB | ~8 GB |
+| safetensors base + adapter, `bfloat16` | 17.5 + 2.8 GB | ~20 GB |
+
+The GGUF route is much the smaller download and needs nothing installed. The
+safetensors route is the shape the adapter was published in, keeps the model
+resident for every task rather than only for `T2VA`, and is the one to reach for
+if you already have the checkpoint — but it needs `transformers` and `peft`,
+which the pack lists as dependencies.
 
 **What to expect of it.** All four tasks produce the trained shape: `T2VA` starts
 straight in on the three fields, and the other three open with the alignment

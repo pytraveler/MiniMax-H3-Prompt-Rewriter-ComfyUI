@@ -3,9 +3,11 @@ import { api } from "../../scripts/api.js";
 
 const MODEL_LIST_NODES = [
     "MiniMaxH3PromptRewriter",
+    "MiniMaxH3PromptWriter8B",
     "MiniMaxH3GuidedWriter",
     "MiniMaxH3GuidedWriterRef",
     "MiniMaxH3ReferenceCaption",
+    "MiniMaxH3MultiReferenceCaption",
     "MiniMaxH3UniversalWriter",
 ];
 const GUIDE_NODES = [

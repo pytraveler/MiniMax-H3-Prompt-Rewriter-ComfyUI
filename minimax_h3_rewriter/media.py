@@ -69,16 +69,12 @@ def frame_indices(count: int, limit: int) -> list[int]:
     return sorted({int(round(index * step)) for index in range(limit)})
 
 
-def image_files(
-    image,
-    workspace: Workspace,
-    max_frames: int = DEFAULT_MAX_FRAMES,
-    prefix: str = "frame",
-) -> list[str]:
-    """Write an IMAGE batch out as PNGs. Returns the paths, in order.
+def pil_frames(image, max_frames: int = DEFAULT_MAX_FRAMES) -> list:
+    """The frames of an IMAGE batch as PIL images, thinned to ``max_frames``.
 
-    ``prefix`` keeps two calls on one workspace from writing over each other,
-    which is what the 8B rewriter does with its first and last reference frame.
+    A subprocess engine needs these on disk and a Transformers processor needs
+    them in memory, so the conversion from ComfyUI's float tensor lives here and
+    only the last step differs.
     """
     from PIL import Image
 
@@ -90,13 +86,30 @@ def image_files(
     if array.ndim != 4:
         raise ValueError(f"expected an IMAGE tensor of shape (batch, height, width, channels), got {array.shape}")
 
-    paths = []
-    for position, index in enumerate(frame_indices(array.shape[0], max_frames)):
+    frames = []
+    for index in frame_indices(array.shape[0], max_frames):
         frame = numpy.clip(array[index] * 255.0 + 0.5, 0, 255).astype(numpy.uint8)
         if frame.shape[-1] == 1:
             frame = frame[..., 0]
+        frames.append(Image.fromarray(frame))
+    return frames
+
+
+def image_files(
+    image,
+    workspace: Workspace,
+    max_frames: int = DEFAULT_MAX_FRAMES,
+    prefix: str = "frame",
+) -> list[str]:
+    """Write an IMAGE batch out as PNGs. Returns the paths, in order.
+
+    ``prefix`` keeps two calls on one workspace from writing over each other,
+    which is what the 8B rewriter does with its first and last reference frame.
+    """
+    paths = []
+    for position, frame in enumerate(pil_frames(image, max_frames)):
         path = workspace.file(f"{prefix}_{position:03d}.png")
-        Image.fromarray(frame).save(path, format="PNG")
+        frame.save(path, format="PNG")
         paths.append(path)
     return paths
 

@@ -6,6 +6,62 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.14.1 - 2026-08-21
+
+### Added
+
+- **The 8B rewriter runs the safetensors build as well as the GGUF one.** The
+  adapter is published as `adapter_model.safetensors` on
+  `lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA-8B`, trained on the official
+  `Qwen/Qwen3-VL-8B-Instruct` folder, and until now the node could only reach
+  the GGUF conversion of both. Now the base model list offers either shape and
+  the node picks the engine from it.
+
+  What the route buys is residency. A GGUF base with frames runs through
+  `llama-mtmd-cli`, a fresh process each time, so `keep_model_loaded` could only
+  ever work for T2VA; safetensors loads in ComfyUI's own process through
+  Transformers and PEFT and stays there for every task. What it costs is the
+  download: 17.5 GB of base and 2.8 GB of adapter against 4.7 + 0.7 + 0.7.
+
+- **`quantization` on the 8B rewriter**, the same widget the 27B has and for the
+  same reason: `nf4` needs about 8 GB of VRAM, `int8` about 13, `bfloat16` about
+  20. Ignored for a GGUF base, which carries its own.
+
+- **The "Open model list" button on two nodes that were missing it** - the 8B
+  rewriter and Multi Reference Caption. Both pick their model from `models.json`
+  like every other node, so both had every reason to offer the button and no
+  reason not to.
+
+### Changed
+
+- **The base-model check knows which adapter is about to be applied.** It
+  compared four numbers from `config.json` against constants that always
+  described Qwen3.6-27B, so it could only ever answer for the 27B; the four now
+  travel together as a `Shape` and the caller says which one it means. A
+  Qwen3-VL-4B is refused for the 8B adapter by name and number -
+  `hidden_size is 2560, the adapter needs 4096` - rather than after the
+  download. Nothing changes for the 27B, which passes its own shape.
+
+- The transformers engine splits generation into a step that prepares inputs and
+  a step that runs them, so the multimodal path could be added without a second
+  copy of the sampling, streaming and interrupt handling. A checkpoint's
+  processor is loaded and cached beside its model, and a text-only checkpoint
+  simply has none.
+
+- **The adapter sections reach your `models.json` at last.** `adapters` and
+  `adapters_8b` are dicts, and the merge that keeps a live list current is set
+  algebra over named entries in a *list*, so it had never walked them: no
+  adapter entry has ever been written into anybody's copy. Reading still worked,
+  because an unconfigured entry falls back to the packaged value, but there was
+  no line to point at a conversion of your own - which is the whole reason the
+  file is yours to edit. They are now merged one format at a time and recorded
+  in `seed_offered` under the section name, so a format published later arrives
+  and one you delete on purpose stays deleted.
+
+- A chat template found on the tokenizer rather than on the processor is used
+  rather than refused. Qwen3-VL-4B is one such checkpoint, and its tokenizer's
+  template writes the same image placeholders.
+
 ## 0.14.0 - 2026-08-21
 
 ### Added

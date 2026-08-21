@@ -32,6 +32,28 @@ HIDDEN_SIZE = 5120
 NUM_LAYERS = 64
 VOCAB_SIZE = 248320
 
+
+@dataclass(frozen=True)
+class Shape:
+    """The checkpoint an adapter's LoRA layers were cut to fit.
+
+    Two adapters, two shapes. Everything that judges a candidate base model does
+    it by comparing four numbers with the ones the adapter expects, so the four
+    travel together rather than being read off module constants -- which is what
+    made the check answer for the 27B no matter who was asking.
+    """
+
+    name: str
+    model_types: tuple[str, ...]
+    hidden_size: int
+    num_layers: int
+    vocab_size: int
+
+
+SHAPE_27B = Shape("Qwen3.6-27B", MODEL_TYPES, HIDDEN_SIZE, NUM_LAYERS, VOCAB_SIZE)
+
+SHAPE_8B = Shape("Qwen3-VL-8B-Instruct", ("qwen3_vl", "qwen3_vl_text"), 4096, 36, 151936)
+
 SCAN_FOLDERS = ("LLM", "transformers", "diffusers")
 GGUF_FOLDERS = ("LLM", "unet_gguf", "transformers")
 CONFIG_NAME = "config.json"
@@ -155,8 +177,8 @@ def _installed(import_name: str) -> bool:
         return False
 
 
-def evaluate(config: dict | None, source: str) -> ModelReport:
-    """Judge a candidate from its ``config.json`` alone."""
+def evaluate(config: dict | None, source: str, shape: Shape = SHAPE_27B) -> ModelReport:
+    """Judge a candidate from its ``config.json`` alone, against one adapter's shape."""
     report = ModelReport(source=source)
     if not config:
         report.problems.append("config.json is missing or unreadable")
@@ -171,25 +193,25 @@ def evaluate(config: dict | None, source: str) -> ModelReport:
     }
 
     expected = {
-        "hidden_size": HIDDEN_SIZE,
-        "num_hidden_layers": NUM_LAYERS,
-        "vocab_size": VOCAB_SIZE,
+        "hidden_size": shape.hidden_size,
+        "num_hidden_layers": shape.num_layers,
+        "vocab_size": shape.vocab_size,
     }
     mismatched = [
         f"{key} is {report.details.get(key)!r}, the adapter needs {value!r}"
         for key, value in expected.items()
         if report.details.get(key) != value
     ]
-    if report.details.get("model_type") not in MODEL_TYPES:
+    if report.details.get("model_type") not in shape.model_types:
         mismatched.insert(
             0,
             f"model_type is {report.details.get('model_type')!r}, "
-            f"the adapter needs one of {' or '.join(MODEL_TYPES)}",
+            f"the adapter needs one of {' or '.join(shape.model_types)}",
         )
     report.architecture_ok = not mismatched
     if mismatched:
         report.problems.append(
-            "this is not Qwen3.6-27B, so the adapter's LoRA layers do not exist in it"
+            f"this is not {shape.name}, so the adapter's LoRA layers do not exist in it"
         )
         report.problems.extend(mismatched)
         return report
@@ -258,12 +280,12 @@ def fetch_remote_config(repo_id: str, revision: str = "main") -> dict | None:
         return None
 
 
-def inspect_local(directory: str) -> ModelReport:
-    return evaluate(read_local_config(directory), directory)
+def inspect_local(directory: str, shape: Shape = SHAPE_27B) -> ModelReport:
+    return evaluate(read_local_config(directory), directory, shape)
 
 
-def inspect_repo(repo_id: str, revision: str = "main") -> ModelReport:
-    return evaluate(fetch_remote_config(repo_id, revision), repo_id)
+def inspect_repo(repo_id: str, revision: str = "main", shape: Shape = SHAPE_27B) -> ModelReport:
+    return evaluate(fetch_remote_config(repo_id, revision), repo_id, shape)
 
 
 def _hf_cache_roots() -> list[str]:
@@ -322,7 +344,7 @@ def _snapshot_dirs(cache_root: str) -> list[str]:
     return found
 
 
-def scan_local() -> list[tuple[str, str]]:
+def scan_local(shape: Shape = SHAPE_27B) -> list[tuple[str, str]]:
     """Return ``(label, directory)`` for every local checkpoint that fits.
 
     Both the ComfyUI model folders and the Hugging Face cache are searched, so a
@@ -344,7 +366,7 @@ def scan_local() -> list[tuple[str, str]]:
         config = read_local_config(directory)
         if not config:
             return
-        report = evaluate(config, directory)
+        report = evaluate(config, directory, shape)
         if not report.architecture_ok or not base_model_is_complete(directory):
             return
         label = name
