@@ -341,9 +341,19 @@ def _safe_extract(archive: str, destination: str) -> None:
             handle.extractall(destination)
         return
 
+    def link_target_inside(member: tarfile.TarInfo) -> bool:
+        # SONAME symlinks (libllama.so.0 -> libllama.so.0.0.0) ship in every
+        # official release; only a target that escapes destination is unsafe.
+        if os.path.isabs(member.linkname):
+            return False
+        target = os.path.normpath(os.path.join(os.path.dirname(member.name), member.linkname))
+        return inside(target)
+
     with tarfile.open(archive) as handle:
         for member in handle.getmembers():
-            if member.issym() or member.islnk() or not inside(member.name):
+            if not inside(member.name):
+                raise RuntimeError(f"refusing archive member outside the target: {member.name!r}")
+            if (member.issym() or member.islnk()) and not link_target_inside(member):
                 raise RuntimeError(f"refusing archive member outside the target: {member.name!r}")
         handle.extractall(destination)
 
