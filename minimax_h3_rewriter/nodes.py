@@ -823,6 +823,92 @@ def _bypassed(unique_id, text: str, names: tuple[str, ...]) -> tuple[str, ...]:
     return ((text or "").strip(),) + ("",) * len(names)
 
 
+def rewrite_t2va(
+    model: str,
+    prompt: str,
+    resolution: str,
+    duration: int,
+    quantization: str,
+    greedy: bool,
+    seed: int,
+    keep_loaded: bool,
+    settings: dict,
+    progress: NodeProgress,
+) -> str:
+    """Run the 27B T2VA adapter and return the rewrite, whichever shape the base is.
+
+    A function rather than a method because two nodes run it: the rewriter this
+    file has always exposed, and the universal rewriter's 27B tab. The engine
+    plumbing -- which format, which adapter, which of the two GGUF runtimes -- is
+    the same either way, and the second copy of it would be the one that stopped
+    getting fixed.
+    """
+    choice = _resolve_model_choice(model)
+
+    decoding = {
+        "messages": build_messages(prompt, resolution, int(duration)),
+        "seed": int(seed),
+        "greedy": greedy,
+        "max_new_tokens": int(settings["max_new_tokens"]),
+        "temperature": float(settings["temperature"]),
+        "top_p": float(settings["top_p"]),
+        "top_k": int(settings["top_k"]),
+        "repetition_penalty": float(settings["repetition_penalty"]),
+    }
+
+    if choice.fmt == FORMAT_GGUF:
+        if choice.local:
+            model_path = choice.reference
+        else:
+            model_path = _ensure_file(
+                choice.reference, choice.file, "Base model", settings["auto_download"], progress
+            )
+        log.info("[minimax_h3_rewriter.rewrite] base model: %s", model_path)
+        adapter_path = None
+        if settings["use_lora"]:
+            problem = discovery.gguf_problem(model_path)
+            if problem:
+                raise RuntimeError(
+                    "This GGUF cannot run the prompt-rewriter LoRA.\n  - "
+                    + problem
+                    + "\nTurn 'use_lora' off to run it as a plain model anyway."
+                )
+            adapter_path = _resolve_adapter(
+                FORMAT_GGUF, settings["adapter"], settings["auto_download"], progress
+            )
+        common = dict(
+            model_path=model_path,
+            adapter_path=adapter_path,
+            gpu_layers=int(settings["gpu_layers"]),
+            n_ctx=int(settings["n_ctx"]),
+            keep_loaded=keep_loaded,
+            device=settings["device"],
+            progress=progress,
+            **decoding,
+        )
+        return _gguf_text(settings, **common)
+
+    _verify_base_model(choice.reference, progress)
+    base_dir = _ensure_present(choice.reference, BASE_SPEC, settings["auto_download"], progress)
+    log.info("[minimax_h3_rewriter.rewrite] base model: %s", base_dir)
+    adapter_dir = None
+    if settings["use_lora"]:
+        adapter_dir = _resolve_adapter(
+            FORMAT_TRANSFORMERS, settings["adapter"], settings["auto_download"], progress
+        )
+    return engine.rewrite(
+        base_dir=base_dir,
+        adapter_dir=adapter_dir,
+        quantization=quantization,
+        attn_implementation=settings["attn_implementation"],
+        keep_loaded=keep_loaded,
+        device=settings["device"],
+        progress=progress,
+        trust_remote_code=bool(settings.get("trust_remote_code", False)),
+        **decoding,
+    )
+
+
 class MiniMaxH3PromptRewriter:
     """Rewrite a short prompt into a structured MiniMax-H3 T2VA description."""
 
@@ -947,70 +1033,10 @@ class MiniMaxH3PromptRewriter:
             settings.update(options)
 
         progress = NodeProgress(unique_id)
-        choice = _resolve_model_choice(model)
-
-        decoding = {
-            "messages": build_messages(prompt, resolution, int(duration)),
-            "seed": int(seed),
-            "greedy": greedy,
-            "max_new_tokens": int(settings["max_new_tokens"]),
-            "temperature": float(settings["temperature"]),
-            "top_p": float(settings["top_p"]),
-            "top_k": int(settings["top_k"]),
-            "repetition_penalty": float(settings["repetition_penalty"]),
-        }
-
-        if choice.fmt == FORMAT_GGUF:
-            if choice.local:
-                model_path = choice.reference
-            else:
-                model_path = _ensure_file(
-                    choice.reference, choice.file, "Base model", settings["auto_download"], progress
-                )
-            log.info("[minimax_h3_rewriter.rewrite] base model: %s", model_path)
-            adapter_path = None
-            if settings["use_lora"]:
-                problem = discovery.gguf_problem(model_path)
-                if problem:
-                    raise RuntimeError(
-                        "This GGUF cannot run the prompt-rewriter LoRA.\n  - "
-                        + problem
-                        + "\nTurn 'use_lora' off to run it as a plain model anyway."
-                    )
-                adapter_path = _resolve_adapter(
-                    FORMAT_GGUF, settings["adapter"], settings["auto_download"], progress
-                )
-            common = dict(
-                model_path=model_path,
-                adapter_path=adapter_path,
-                gpu_layers=int(settings["gpu_layers"]),
-                n_ctx=int(settings["n_ctx"]),
-                keep_loaded=keep_model_loaded,
-                device=settings["device"],
-                progress=progress,
-                **decoding,
-            )
-            text = _gguf_text(settings, **common)
-        else:
-            _verify_base_model(choice.reference, progress)
-            base_dir = _ensure_present(choice.reference, BASE_SPEC, settings["auto_download"], progress)
-            log.info("[minimax_h3_rewriter.rewrite] base model: %s", base_dir)
-            adapter_dir = None
-            if settings["use_lora"]:
-                adapter_dir = _resolve_adapter(
-                    FORMAT_TRANSFORMERS, settings["adapter"], settings["auto_download"], progress
-                )
-            text = engine.rewrite(
-                base_dir=base_dir,
-                adapter_dir=adapter_dir,
-                quantization=quantization,
-                attn_implementation=settings["attn_implementation"],
-                keep_loaded=keep_model_loaded,
-                device=settings["device"],
-                progress=progress,
-                trust_remote_code=bool(settings.get("trust_remote_code", False)),
-                **decoding,
-            )
+        text = rewrite_t2va(
+            model, prompt, resolution, duration, quantization,
+            greedy, seed, keep_model_loaded, settings, progress,
+        )
 
         fields = split_fields(text)
         progress.text(text[-2000:] if text else "(empty rewrite)", force=True)

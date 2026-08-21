@@ -35,6 +35,8 @@ function isConnected(node, index) {
 export function hideWidget(widget) {
     if (!widget) return;
     widget.hidden = true;
+    widget.options = widget.options || {};
+    widget.options.hidden = true;
     widget.computeSize = () => [0, -4];
 }
 

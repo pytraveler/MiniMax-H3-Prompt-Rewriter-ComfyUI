@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 for _module_name, _label in (
     ("multi_caption", "Multi Reference Caption"),
     ("universal", "Universal Writer"),
+    ("universal_rewriter", "Universal Rewriter"),
 ):
     try:
         _module = importlib.import_module(f".minimax_h3_rewriter.{_module_name}", __name__)

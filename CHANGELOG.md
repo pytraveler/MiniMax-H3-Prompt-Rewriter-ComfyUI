@@ -6,6 +6,63 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.15.0 - 2026-08-21
+
+### Added
+
+- **"MiniMax-H3 Universal Rewriter" - both prompt-rewriter LoRAs in one node,
+  with a tab choosing which one runs.** The two existing rewriter nodes are
+  unchanged and still registered.
+
+  What the tab owns is `model` and `quantization`, one pair per adapter, and
+  nothing else. The prompt, the task, the aspect ratio, the duration, the seed
+  and both frame inputs are shared, because they mean the same thing to both -
+  so trying the other adapter is one click rather than a second node kept in
+  step by hand. The widget the other tab uses is hidden rather than reset, and
+  survives a save and load, so it is still set to whatever you last chose.
+
+  The task switch is shared too, and the 27B tab does not touch it: it shows
+  T2VA lit with the three frame tasks greyed out, and clicking does nothing, so
+  the value the 8B tab had is still there when you switch back. Run the 27B tab
+  with frames connected and the node says on itself that it is not reading them,
+  and where to put them instead.
+
+  Two IMAGE inputs, `first_frame` and `last_frame`, each with a checkbox on its
+  own row, and a switched-off row counts as unplugged.
+
+  There is no captioner on the 27B tab, and that was tested rather than assumed.
+  A description folded into the prompt does reach the adapter and survives its
+  trained shape - but the picture is absorbed into the scene rather than pinned
+  to 0.00 seconds, which is what the LoRA's own page says: T2VA finished, FL2VA
+  not. A widget for it would have promised the frame task the 27B cannot do.
+
+- The two frame rows' checkboxes, the tab strip, the task switch and the
+  aspect-ratio picker are drawn by the same code the Universal Writer uses,
+  which moved into `web/js/mmx_controls.js` rather than being copied.
+
+### Changed
+
+- **The Universal Writer's task switch greys out every task the strip cannot
+  supply, not only Ref2VA.** It counts the squares badged `pic`, which is the
+  count the node already refuses on: nothing connected lights `T2VA` alone, one
+  picture lights `I2VA` and `L2VA`, two light `FL2VA`, and three grey all of
+  them - three is as impossible for `I2VA` as none is. The greyed button carries
+  the sentence the run would have raised, so the fix reads the same before and
+  after. Badges are counted rather than sockets, so turning a picture into a
+  subject lights the task it was blocking.
+
+- Each rewriter's engine plumbing is now a function rather than a method, and
+  the node calls it. Which format the base model is in, which adapter goes with
+  it, which of the three engines runs: one copy, called from two nodes.
+
+### Fixed
+
+- A widget hidden by this pack's own scripts is now hidden in **both** node
+  renderers. The classic canvas reads `widget.hidden` and the Nodes 2.0 renderer
+  reads `options.hidden`, and only the first was being set - so the checkbox map
+  on Multi Reference Caption was drawn as a text field under *Modern Node
+  Design*, which is exactly the widget the checkboxes exist to replace.
+
 ## 0.14.1 - 2026-08-21
 
 ### Added

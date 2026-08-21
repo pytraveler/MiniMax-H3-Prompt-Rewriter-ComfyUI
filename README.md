@@ -37,6 +37,8 @@ There are three ways to get that output, and the pack ships all of them:
 | Reference frames | described to it in words | **it looks at them** | described to it in words |
 | Quality | the reference | the same trained contract, at a third of the download; wobblier on the alignment line | close, and it runs on hardware the LoRA cannot touch |
 
+The first two columns are also available as one node — [Universal Rewriter](#minimax-h3-universal-rewriter) — where a tab swaps the adapter and everything else stays where it is.
+
 Two of the three read text only. [Reference Caption](#minimax-h3-reference-caption)
 turns an image, an audio clip or a video into the text they need — 3 to 5 seconds
 per asset on a 3.4 GB model. When a whole shot's worth of references is waiting,
@@ -195,6 +197,92 @@ sometimes formatted to three decimals instead of two, and on `FL2VA` the final
 picture is occasionally credited to `Shot 1` rather than the last shot. The
 27B does not do this. Nothing downstream parses that line, so it costs
 correctness nowhere — but it is worth a glance before pasting.
+
+### MiniMax-H3 Universal Rewriter
+
+Both prompt-rewriter LoRAs in one node, with a tab at the top choosing which one
+runs. [Prompt Rewriter](#minimax-h3-prompt-rewriter) and
+[Prompt Rewriter 8B](#minimax-h3-prompt-rewriter-8b-sees-frames) are unchanged
+and still there — nothing you have already built stops working.
+
+The two adapters are not two settings of one thing. The 27B is text: Qwen3.6-27B,
+one task, and a reference frame reaches it only as a sentence somebody wrote. The
+8B is multimodal: Qwen3-VL-8B, four tasks, and the picture itself. Different
+base, different size, different download.
+
+Which is exactly why choosing between them by hand is tedious. The prompt is the
+same prompt, the aspect ratio is the same aspect ratio, the duration is the same
+duration — so trying the other adapter meant retyping all of it into a second
+node and then keeping the two in step.
+
+![The Universal Rewriter on its 27B tab: two tabs across the top with "27B LoRA / text only" lit and "8B LoRA / sees frames" dark, a task strip with T2VA lit and I2VA, FL2VA and L2VA greyed out, six aspect-ratio rectangles drawn to proportion with 16:9 chosen, a duration slider at 8, the prompt, and below them model_27b pointing at an on-disk Qwen3.6-27B GGUF with quantization_27b set to nf4](docs/node_universal_rewriter_27b.png)
+
+![The same node one click later, on its 8B tab: "8B LoRA / sees frames" lit and "27B LoRA" dark, all four tasks available with FL2VA chosen, the same 16:9, the same duration of 8 and the same prompt, and below them model_8b pointing at an on-disk Qwen3-VL-8B-Instruct with quantization_8b set to int8](docs/node_universal_rewriter_8b.png)
+
+*The same node, one click apart. Nothing above the model rows moved — the ratio,
+the duration, the prompt are one set of values. Below them each tab is holding
+its own: a 27B GGUF at `nf4` on one, a Qwen3-VL-8B at `int8` on the other, both
+still where they were left. The task strip is the other difference — the 27B tab
+lights `T2VA` alone, while on the 8B tab all four are available, because both
+frame inputs are connected and switched on.*
+
+**So the tab carries what differs, and nothing else:**
+
+| Belongs to the tab | Shared between them |
+|---|---|
+| `model_27b` / `model_8b` | `prompt`, `task`, `resolution`, `duration` |
+| `quantization_27b` / `quantization_8b` | `greedy`, `seed`, `keep_model_loaded`, `bypass`, `options`, both frames |
+
+The widget the other tab uses is hidden rather than reset, so it is still set to
+whatever you last chose when you switch back — including across a save and load.
+
+> **No captioner on the 27B tab, deliberately.** Folding a description of a
+> frame into the prompt does reach that adapter, and it is not wasted — the props,
+> surfaces and light in it turn up in the shots, in the trained shape, with
+> nothing leaking into the answer. But the picture is absorbed into the scene
+> rather than pinned to 0.00 seconds, which is exactly what the
+> [LoRA's own page](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA)
+> says: T2VA is finished there and FL2VA is not. A widget for it on this node
+> would have looked like the frame task the 27B cannot do. When you want it,
+> [Reference Caption](#minimax-h3-reference-caption) writes the description and
+> it goes in `prompt` like any other text; when the picture has to *be* a frame,
+> the 8B tab is the one that was trained for it.
+
+**The task switch is shared, and the 27B tab does not touch it.** On that tab it
+shows `T2VA` lit with the three frame tasks greyed out, because that is the
+honest picture of a text-only model, and clicking does nothing at all — the value
+the 8B tab had is still there when you switch back. On the 8B tab a frame task
+greys out until the frame it is written from is actually connected and switched
+on, the same way `Ref2VA` does on the Universal Writer.
+
+**Two IMAGE inputs, with a checkbox on each row.** `first_frame` and `last_frame`
+are the same two the 8B node has, and a switched-off row counts as unplugged —
+which is how a picture gets parked without dragging the wire off. Run the 27B tab
+with frames connected and the node says on itself that it is not reading them,
+and where to put them instead, rather than leaving you to wonder.
+
+**`duration` is a slider, and its range is 4–15 seconds.** Not a property you can
+raise, unlike the Universal Writer's: that node writes from a prose guide, while
+these two are LoRAs, and 4–15 is the range they were trained on. A number outside
+it is a worse prompt rather than a longer video — MiniMax-H3 gets the length from
+its own settings, not from this line.
+
+**There is no "Open guide folder" button**, because neither adapter reads a
+guide: the format is in the system prompt they were trained with. The model list
+button is there, and it opens the same `models.json` — `models` for the 27B tab,
+`models_8b` for the 8B one.
+
+> **If the interface script does not load**, the tab strip, the task switch and
+> the ratio picker fall back to the plain dropdowns they are built on, and every
+> widget is visible at once instead of a tab's worth at a time. The node runs
+> exactly the same either way. Those three controls are HTML and work in both of
+> ComfyUI's renderers; the checkboxes on the two frame rows are drawn on the
+> canvas, which *Modern Node Design (Nodes 2.0)* does not run, so there a frame
+> is left out by unplugging it.
+
+> **This node needs a recent ComfyUI**, being written against the v3 node API,
+> exactly as the Universal Writer is. On an older install it goes missing and the
+> rest of the pack registers as before.
 
 ### MiniMax-H3 Rewriter Options
 
@@ -442,9 +530,15 @@ Multi Reference Caption makes structurally — a subject is not a frame — is m
 here on the square instead.
 
 **The task switch and the aspect-ratio picker are the same idea**: the choice is
-the picture rather than a line of text in a dropdown. `Ref2VA` greys out while
-nothing is switched on, and choosing it in that state stops the node before any
-weights move rather than handing the writer an empty reference block.
+the picture rather than a line of text in a dropdown. And the task switch reads
+the strip: a task greys out while the strip cannot supply what it is written
+from, so with nothing connected only `T2VA` is lit, one picture lights `I2VA` and
+`L2VA`, and two light `FL2VA`. Three pictures grey all three, because three is as
+impossible for `I2VA` as none — it is the same count the node refuses on, moved
+from the run to the sight of it, and the greyed button carries the same sentence as a tooltip. Badges
+are counted, not sockets: turn a picture into a subject and the task it was
+blocking lights up. A task already chosen and no longer possible turns red rather
+than quietly failing later.
 
 **`duration` is a slider, in tenths of a second.** How far it reaches is the
 node's own `max_duration` property — right-click the node, Properties Panel —

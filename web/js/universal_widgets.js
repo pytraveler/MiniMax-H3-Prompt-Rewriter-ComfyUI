@@ -1,5 +1,18 @@
 import { app } from "../../scripts/app.js";
 import { addSlotSwitches } from "./slot_switches.js";
+import {
+    MARGIN,
+    installBaseStyle,
+    installStyle,
+    onRefresh,
+    renderRatios,
+    renderSegments,
+    replaceWithDom,
+    repaintOn,
+    setWidgetValue,
+    widgetNamed,
+    widgetValues,
+} from "./mmx_controls.js";
 
 
 const NODE = "MiniMaxH3UniversalWriter";
@@ -11,6 +24,9 @@ const DURATION = "duration";
 
 const PREFIX = "ref_";
 const REF_TASK = "Ref2VA";
+const TEXT_TASK = "T2VA";
+
+const PICTURES_FOR_TASK = { I2VA: 1, FL2VA: 2, L2VA: 1 };
 
 const DURATION_PROPERTY = "max_duration";
 const DURATION_PROPERTY_DEFAULT = 30;
@@ -40,16 +56,8 @@ const HINT_PLAIN = "drag to reorder - click a square below its label to switch i
 
 const TASKS_H = 26;
 const RATIOS_H = 38;
-const RATIO_BOX_W = 28;
-const RATIO_BOX_H = 22;
 
 const DRAG_SLOP = 6;
-
-const MARGIN = 6;
-
-function boxed(content) {
-    return content + 2 * MARGIN;
-}
 
 const STYLE_ID = "minimax-h3-universal-style";
 const STATE = "__minimaxH3Universal";
@@ -83,52 +91,9 @@ const STYLE = `
 .mmx-chip.mmx-off { opacity: 0.35; }
 .mmx-chip.mmx-dragging { cursor: grabbing; transform: scale(1.1);
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55); }
-.mmx-note { font-size: 11px; line-height: ${CHIP_H}px;
-    color: var(--descrip-text, #999); font-family: system-ui, sans-serif; }
-
-.mmx-tasks { display: flex; width: 100%; height: 100%; overflow: hidden;
-    border: 1px solid var(--border-color, #4e4e4e); border-radius: 6px;
-    font-family: system-ui, sans-serif; }
-.mmx-task { flex: 1 1 0; min-width: 0; display: flex; align-items: center;
-    justify-content: center; font-size: 10px; letter-spacing: 0.02em;
-    cursor: pointer; user-select: none; touch-action: none;
-    color: var(--input-text, #ddd); background: var(--comfy-menu-bg, #353535);
-    border-left: 1px solid var(--border-color, #4e4e4e); }
-.mmx-task:first-child { border-left: 0; }
-.mmx-task.mmx-on { background: #3B7DD8; color: #fff; font-weight: 600; }
-.mmx-task.mmx-unavailable { opacity: 0.4; cursor: not-allowed; }
-.mmx-task.mmx-on.mmx-unavailable { background: #8A3B3B; opacity: 1; }
-
-.mmx-ratios { display: flex; gap: ${CHIP_GAP}px; width: 100%; height: 100%;
-    overflow: hidden; font-family: system-ui, sans-serif; }
-.mmx-ratio { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 3px; cursor: pointer;
-    user-select: none; touch-action: none; border-radius: 5px;
-    border: 1px solid transparent; }
-.mmx-ratio.mmx-on { border-color: #3B7DD8; background: rgba(59, 125, 216, 0.16); }
-/* Without flex: 0 0 auto these are shrunk to fit and every ratio draws the
-   same rectangle, which is the one thing the control exists to show. */
-.mmx-box { flex: 0 0 auto; box-sizing: border-box;
-    border: 1.5px solid var(--descrip-text, #999); border-radius: 2px; }
-.mmx-ratio.mmx-on .mmx-box { border-color: #7FB2F5;
-    background: rgba(127, 178, 245, 0.28); }
-.mmx-ratio-label { flex: 0 0 auto; font-size: 9px; line-height: 11px;
-    color: var(--descrip-text, #999); }
-.mmx-ratio.mmx-on .mmx-ratio-label { color: var(--input-text, #ddd); }
+.mmx-strip .mmx-note { line-height: ${CHIP_H}px; }
 `;
 
-function installStyle() {
-    if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement("style");
-    style.id = STYLE_ID;
-    style.textContent = STYLE;
-    document.head.appendChild(style);
-}
-
-
-function widgetNamed(node, name) {
-    return node.widgets?.find((w) => w.name === name);
-}
 
 function readLayout(node) {
     let parsed = {};
@@ -164,7 +129,7 @@ function writeLayout(node, layout) {
 
     const widget = widgetNamed(node, LAYOUT);
     if (widget) widget.value = JSON.stringify(kept);
-    refresh(node);
+    redraw(node);
 }
 
 
@@ -228,41 +193,27 @@ function anyEnabled(node) {
     return arranged(node).some((entry) => entry.on);
 }
 
-
-function replaceWithDom(node, name, type, element, height) {
-    const index = node.widgets?.findIndex((w) => w.name === name) ?? -1;
-    if (index < 0) return null;
-
-    const original = node.widgets[index];
-    const held = { value: original.value };
-
-    const widget = node.addDOMWidget(name, type, element, {
-        hideOnZoom: false,
-        margin: MARGIN,
-        hideInPanel: true,
-        getValue: () => held.value,
-        setValue: (next) => {
-            held.value = next;
-            refresh(node);
-        },
-        getMinHeight: () => boxed(height()),
-        getMaxHeight: () => boxed(height()),
-    });
-    widget.tooltip = original.tooltip;
-    widget.options.values = original.options?.values ?? [];
-
-    const appended = node.widgets.indexOf(widget);
-    if (appended >= 0) node.widgets.splice(appended, 1);
-    node.widgets.splice(index, 1, widget);
-    return widget;
+function pictureCount(node) {
+    return arranged(node).filter((entry) => entry.on && entry.role === IMAGE_ROLES[0]).length;
 }
 
-function setWidgetValue(node, name, value) {
-    const widget = widgetNamed(node, name);
-    if (!widget || widget.value === value) return;
-    widget.value = value;
-    widget.callback?.(value, app.canvas, node);
-    refresh(node);
+function whyShut(node, task) {
+    if (task === TEXT_TASK) return "";
+    if (task === REF_TASK) {
+        return anyEnabled(node)
+            ? ""
+            : "Ref2VA is written from at least one reference, and the strip is empty. " +
+              "Connect an image, a clip or a sound and switch its square on.";
+    }
+    const wanted = PICTURES_FOR_TASK[task] ?? 0;
+    const have = pictureCount(node);
+    if (have === wanted) return "";
+    const short = `${task} is written from ${wanted} picture(s), and the strip has ${have}.`;
+    return have > wanted
+        ? `${short} Switch the extra squares off, or click a badge to call one a subject ` +
+          `or a clip -- those are not counted here.`
+        : `${short} Connect the missing image, switch its square back on, or click a badge ` +
+          `to turn a subject back into a picture.`;
 }
 
 
@@ -352,6 +303,8 @@ function beginGesture(node, chip, role, entry, event) {
         else toggleSlot(node, entry.name);
     };
 
+    // Bound to the window, with no pointer capture: moving the chip in the DOM
+    // is what a live reorder does, and that releases capture mid-gesture.
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", finish);
     window.addEventListener("pointercancel", finish);
@@ -421,72 +374,21 @@ function renderStrip(node) {
 function renderTasks(node) {
     const holder = node[STATE]?.tasks;
     if (!holder) return;
-    const widget = widgetNamed(node, TASK);
-    const options = widget?.options?.values ?? [];
-    const chosen = widget?.value;
-    const available = anyEnabled(node);
+    const chosen = widgetNamed(node, TASK)?.value;
 
-    holder.replaceChildren();
-    for (const name of options) {
-        const button = document.createElement("div");
-        const unavailable = name === REF_TASK && !available;
-        button.className =
-            "mmx-task" +
-            (name === chosen ? " mmx-on" : "") +
-            (unavailable ? " mmx-unavailable" : "");
-        button.textContent = name;
-        button.title = unavailable
-            ? "Ref2VA needs at least one reference switched on in the strip above."
-            : name;
-        if (!unavailable) {
-            button.addEventListener("pointerdown", (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setWidgetValue(node, TASK, name);
-            });
-        }
-        holder.appendChild(button);
-    }
-}
-
-
-function ratioBox(ratio) {
-    const [width, height] = ratio.split(":").map(Number);
-    const box = document.createElement("div");
-    box.className = "mmx-box";
-    if (!width || !height) return box;
-    const scale = Math.min(RATIO_BOX_W / width, RATIO_BOX_H / height);
-    box.style.width = `${Math.max(6, Math.round(width * scale))}px`;
-    box.style.height = `${Math.max(6, Math.round(height * scale))}px`;
-    return box;
-}
-
-function renderRatios(node) {
-    const holder = node[STATE]?.ratios;
-    if (!holder) return;
-    const widget = widgetNamed(node, RESOLUTION);
-    const options = widget?.options?.values ?? [];
-    const chosen = widget?.value;
-
-    holder.replaceChildren();
-    for (const ratio of options) {
-        const item = document.createElement("div");
-        item.className = "mmx-ratio" + (ratio === chosen ? " mmx-on" : "");
-        item.title = `Compose for ${ratio}`;
-        item.appendChild(ratioBox(ratio));
-
-        const label = document.createElement("span");
-        label.className = "mmx-ratio-label";
-        label.textContent = ratio;
-        item.appendChild(label);
-
-        item.addEventListener("pointerdown", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setWidgetValue(node, RESOLUTION, ratio);
-        });
-        holder.appendChild(item);
-    }
+    renderSegments(
+        holder,
+        widgetValues(node, TASK).map((name) => {
+            const why = whyShut(node, name);
+            return {
+                label: name,
+                on: name === chosen,
+                shut: !!why,
+                title: why || name,
+                pick: () => setWidgetValue(node, TASK, name),
+            };
+        })
+    );
 }
 
 
@@ -503,17 +405,18 @@ function applyDurationCeiling(node) {
 }
 
 
-function refresh(node) {
+function redraw(node) {
     if (!node[STATE]) return;
     renderStrip(node);
     renderTasks(node);
-    renderRatios(node);
+    renderRatios(node, node[STATE].ratios, RESOLUTION);
     applyDurationCeiling(node);
     node.setDirtyCanvas?.(true, true);
 }
 
 function build(node) {
-    installStyle();
+    installBaseStyle();
+    installStyle(STYLE_ID, STYLE);
 
     const references = document.createElement("div");
     references.className = "mmx-refs";
@@ -525,11 +428,12 @@ function build(node) {
     references.appendChild(hint);
 
     const tasks = document.createElement("div");
-    tasks.className = "mmx-tasks";
+    tasks.className = "mmx-seg-row";
     const ratios = document.createElement("div");
     ratios.className = "mmx-ratios";
 
     node[STATE] = { strip, hint, tasks, ratios, chipCount: 0, dragging: false };
+    onRefresh(node, () => redraw(node));
 
     replaceWithDom(node, LAYOUT, "minimaxh3_references", references, () => stripHeight(node));
     replaceWithDom(node, TASK, "minimaxh3_task", tasks, () => TASKS_H);
@@ -538,30 +442,11 @@ function build(node) {
     if (node.properties?.[DURATION_PROPERTY] === undefined) {
         node.addProperty?.(DURATION_PROPERTY, DURATION_PROPERTY_DEFAULT, "number");
     }
-    refresh(node);
+    redraw(node);
 }
 
 function addControls(nodeType) {
-    const onNodeCreated = nodeType.prototype.onNodeCreated;
-    nodeType.prototype.onNodeCreated = function () {
-        const result = onNodeCreated?.apply(this, arguments);
-        build(this);
-        return result;
-    };
-
-    const onConfigure = nodeType.prototype.onConfigure;
-    nodeType.prototype.onConfigure = function () {
-        const result = onConfigure?.apply(this, arguments);
-        refresh(this);
-        return result;
-    };
-
-    const onConnectionsChange = nodeType.prototype.onConnectionsChange;
-    nodeType.prototype.onConnectionsChange = function () {
-        const result = onConnectionsChange?.apply(this, arguments);
-        refresh(this);
-        return result;
-    };
+    repaintOn(nodeType, build);
 
     const onPropertyChanged = nodeType.prototype.onPropertyChanged;
     nodeType.prototype.onPropertyChanged = function (name) {
@@ -570,13 +455,6 @@ function addControls(nodeType) {
             applyDurationCeiling(this);
             this.setDirtyCanvas?.(true, true);
         }
-        return result;
-    };
-
-    const onResize = nodeType.prototype.onResize;
-    nodeType.prototype.onResize = function () {
-        const result = onResize?.apply(this, arguments);
-        this.setDirtyCanvas?.(true, true);
         return result;
     };
 

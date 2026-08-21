@@ -234,6 +234,191 @@ def _resolve_model_choice(choice: str) -> BaseChoice:
     )
 
 
+def _with_transformers(
+    choice: BaseChoice,
+    frames: list[tuple[str, object]],
+    prompt: str,
+    task: str,
+    resolution: str,
+    duration: int,
+    quantization: str,
+    settings: dict,
+    seed: int,
+    greedy: bool,
+    keep_loaded: bool,
+    progress: NodeProgress,
+) -> str:
+    """The safetensors route: one process, the pictures handed over in memory.
+
+    This is the shape the adapter was published in, and the messages
+    ``build_messages`` returns are already the shape a Transformers processor
+    takes -- the GGUF route is the one that has to flatten them. It is also
+    the only route where ``keep_model_loaded`` means anything for a task with
+    frames: there is no subprocess to take the weights with it when it exits.
+    """
+    _verify_base_model(choice.reference, progress, discovery.SHAPE_8B, BASE_REPO_8B)
+    base_dir = _ensure_present(
+        choice.reference, BASE_SPEC_8B, settings["auto_download"], progress
+    )
+    log.info("[minimax_h3_rewriter.writer_8b] base model: %s", base_dir)
+
+    adapter_dir = None
+    if settings["use_lora"]:
+        adapter_dir = _resolve_adapter(
+            FORMAT_TRANSFORMERS, settings["adapter"], settings["auto_download"], progress,
+            catalog.ADAPTERS_8B,
+        )
+
+    images = []
+    for name, value in frames:
+        picture = media.pil_frames(value, 1)
+        if not picture:
+            raise ValueError(f"'{name}' is an empty IMAGE batch, so there is no frame to read.")
+        images.append(picture[0])
+
+    return engine.rewrite(
+        base_dir=base_dir,
+        adapter_dir=adapter_dir,
+        quantization=quantization,
+        attn_implementation=settings["attn_implementation"],
+        keep_loaded=keep_loaded,
+        device=settings["device"],
+        progress=progress,
+        trust_remote_code=bool(settings.get("trust_remote_code", False)),
+        images=images or None,
+        messages=build_messages(prompt, task, resolution, duration),
+        seed=int(seed),
+        greedy=greedy,
+        max_new_tokens=int(settings["max_new_tokens"]),
+        temperature=float(settings["temperature"]),
+        top_p=float(settings["top_p"]),
+        top_k=int(settings["top_k"]),
+        repetition_penalty=float(settings["repetition_penalty"]),
+    )
+
+def _with_frames(
+    frames, model_path, mmproj_path, adapter_path, system, user,
+    settings, seed, greedy, keep_loaded, progress,
+) -> str:
+    """Run the multimodal path: one picture per marker, in order."""
+    if keep_loaded:
+        log.info(
+            "[minimax_h3_rewriter.writer_8b] keep_model_loaded has no effect on a task with "
+            "reference frames: those run through llama-mtmd-cli, and the model leaves with "
+            "the subprocess"
+        )
+    with media.Workspace() as workspace:
+        attachments = [
+            ("image", media.image_files(tensor, workspace, max_frames=1, prefix=name)[0])
+            for name, tensor in frames
+        ]
+        return mtmd_engine.describe(
+            model_path=model_path,
+            mmproj_path=mmproj_path,
+            instruction=user,
+            system_prompt=system,
+            attachments=attachments,
+            adapter_path=adapter_path,
+            gpu_layers=int(settings["gpu_layers"]),
+            n_ctx=int(settings["n_ctx"]),
+            seed=int(seed),
+            greedy=greedy,
+            max_new_tokens=int(settings["max_new_tokens"]),
+            temperature=float(settings["temperature"]),
+            top_p=float(settings["top_p"]),
+            top_k=int(settings["top_k"]),
+            device=settings["device"],
+            backend=settings["llama_backend"],
+            auto_download=settings["auto_download"],
+            progress=progress,
+        )
+
+
+def rewrite_8b(
+    model: str,
+    prompt: str,
+    task: str,
+    resolution: str,
+    duration: int,
+    quantization: str,
+    greedy: bool,
+    seed: int,
+    keep_loaded: bool,
+    settings: dict,
+    progress: NodeProgress,
+    first_frame=None,
+    last_frame=None,
+) -> str:
+    """Run the 8B adapter and return the rewrite, on whichever of the three engines fits.
+
+    A function rather than a method for the same reason as ``rewrite_t2va``: the
+    universal rewriter's 8B tab runs exactly this, and the choice between the
+    three engines is not something worth having two copies of.
+    """
+    wanted = normalize_task(task)
+    frames = frames_for(wanted, first_frame, last_frame)
+    choice = _resolve_model_choice(model)
+
+    if choice.fmt == FORMAT_TRANSFORMERS:
+        return _with_transformers(
+            choice, frames, prompt, wanted, resolution, int(duration),
+            quantization, settings, seed, greedy, keep_loaded, progress,
+        )
+
+    if choice.local:
+        model_path, mmproj_path = choice.reference, choice.mmproj
+    else:
+        model_path, mmproj_path = _ensure_pair(
+            choice.reference, choice.file, choice.mmproj, "Base model",
+            settings["auto_download"], progress,
+        )
+    log.info("[minimax_h3_rewriter.writer_8b] base model: %s", model_path)
+
+    adapter_path = None
+    if settings["use_lora"]:
+        problem = discovery.gguf_problem_8b(model_path)
+        if problem:
+            raise RuntimeError(
+                "This GGUF cannot run the 8B prompt-rewriter LoRA.\n  - "
+                + problem
+                + "\nTurn 'use_lora' off to run it as a plain model anyway."
+            )
+        adapter_path = _resolve_adapter(
+            FORMAT_GGUF, settings["adapter"], settings["auto_download"], progress,
+            catalog.ADAPTERS_8B,
+        )
+
+    system, user = render(build_messages(prompt, wanted, resolution, int(duration)))
+
+    if frames:
+        return _with_frames(
+            frames, model_path, mmproj_path, adapter_path, system, user,
+            settings, seed, greedy, keep_loaded, progress,
+        )
+
+    return _gguf_text(
+        settings,
+        model_path=model_path,
+        adapter_path=adapter_path,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        gpu_layers=int(settings["gpu_layers"]),
+        n_ctx=int(settings["n_ctx"]),
+        keep_loaded=keep_loaded,
+        device=settings["device"],
+        progress=progress,
+        seed=int(seed),
+        greedy=greedy,
+        max_new_tokens=int(settings["max_new_tokens"]),
+        temperature=float(settings["temperature"]),
+        top_p=float(settings["top_p"]),
+        top_k=int(settings["top_k"]),
+        repetition_penalty=float(settings["repetition_penalty"]),
+    )
+
+
 class MiniMaxH3PromptWriter8B:
     """Rewrite a prompt with the 8B LoRA, which reads the reference frames."""
 
@@ -376,179 +561,20 @@ class MiniMaxH3PromptWriter8B:
         if not (prompt or "").strip():
             raise ValueError("prompt must not be empty")
 
-        wanted = normalize_task(task)
-        frames = frames_for(wanted, first_frame, last_frame)
-
         settings = dict(DEFAULT_OPTIONS)
         if options:
             settings.update(options)
 
         progress = NodeProgress(unique_id)
-        choice = _resolve_model_choice(model)
-
-        if choice.fmt == FORMAT_TRANSFORMERS:
-            text = self._with_transformers(
-                choice, frames, prompt, wanted, resolution, int(duration),
-                quantization, settings, seed, greedy, keep_model_loaded, progress,
-            )
-        else:
-            if choice.local:
-                model_path, mmproj_path = choice.reference, choice.mmproj
-            else:
-                model_path, mmproj_path = _ensure_pair(
-                    choice.reference, choice.file, choice.mmproj, "Base model",
-                    settings["auto_download"], progress,
-                )
-            log.info("[minimax_h3_rewriter.writer_8b] base model: %s", model_path)
-
-            adapter_path = None
-            if settings["use_lora"]:
-                problem = discovery.gguf_problem_8b(model_path)
-                if problem:
-                    raise RuntimeError(
-                        "This GGUF cannot run the 8B prompt-rewriter LoRA.\n  - "
-                        + problem
-                        + "\nTurn 'use_lora' off to run it as a plain model anyway."
-                    )
-                adapter_path = _resolve_adapter(
-                    FORMAT_GGUF, settings["adapter"], settings["auto_download"], progress,
-                    catalog.ADAPTERS_8B,
-                )
-
-            system, user = render(build_messages(prompt, wanted, resolution, int(duration)))
-
-            if frames:
-                text = self._with_frames(
-                    frames, model_path, mmproj_path, adapter_path, system, user,
-                    settings, seed, greedy, keep_model_loaded, progress,
-                )
-            else:
-                text = _gguf_text(
-                    settings,
-                    model_path=model_path,
-                    adapter_path=adapter_path,
-                    messages=[
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user},
-                    ],
-                    gpu_layers=int(settings["gpu_layers"]),
-                    n_ctx=int(settings["n_ctx"]),
-                    keep_loaded=keep_model_loaded,
-                    device=settings["device"],
-                    progress=progress,
-                    seed=int(seed),
-                    greedy=greedy,
-                    max_new_tokens=int(settings["max_new_tokens"]),
-                    temperature=float(settings["temperature"]),
-                    top_p=float(settings["top_p"]),
-                    top_k=int(settings["top_k"]),
-                    repetition_penalty=float(settings["repetition_penalty"]),
-                )
+        text = rewrite_8b(
+            model, prompt, task, resolution, duration, quantization,
+            greedy, seed, keep_model_loaded, settings, progress,
+            first_frame, last_frame,
+        )
 
         fields = split_fields(text)
         progress.text(text[-2000:] if text else "(empty rewrite)", force=True)
         return (text,) + tuple(fields[name] for name in OUTPUT_FIELDS)
-
-    @staticmethod
-    def _with_transformers(
-        choice: BaseChoice,
-        frames: list[tuple[str, object]],
-        prompt: str,
-        task: str,
-        resolution: str,
-        duration: int,
-        quantization: str,
-        settings: dict,
-        seed: int,
-        greedy: bool,
-        keep_loaded: bool,
-        progress: NodeProgress,
-    ) -> str:
-        """The safetensors route: one process, the pictures handed over in memory.
-
-        This is the shape the adapter was published in, and the messages
-        ``build_messages`` returns are already the shape a Transformers processor
-        takes -- the GGUF route is the one that has to flatten them. It is also
-        the only route where ``keep_model_loaded`` means anything for a task with
-        frames: there is no subprocess to take the weights with it when it exits.
-        """
-        _verify_base_model(choice.reference, progress, discovery.SHAPE_8B, BASE_REPO_8B)
-        base_dir = _ensure_present(
-            choice.reference, BASE_SPEC_8B, settings["auto_download"], progress
-        )
-        log.info("[minimax_h3_rewriter.writer_8b] base model: %s", base_dir)
-
-        adapter_dir = None
-        if settings["use_lora"]:
-            adapter_dir = _resolve_adapter(
-                FORMAT_TRANSFORMERS, settings["adapter"], settings["auto_download"], progress,
-                catalog.ADAPTERS_8B,
-            )
-
-        images = []
-        for name, value in frames:
-            picture = media.pil_frames(value, 1)
-            if not picture:
-                raise ValueError(f"'{name}' is an empty IMAGE batch, so there is no frame to read.")
-            images.append(picture[0])
-
-        return engine.rewrite(
-            base_dir=base_dir,
-            adapter_dir=adapter_dir,
-            quantization=quantization,
-            attn_implementation=settings["attn_implementation"],
-            keep_loaded=keep_loaded,
-            device=settings["device"],
-            progress=progress,
-            trust_remote_code=bool(settings.get("trust_remote_code", False)),
-            images=images or None,
-            messages=build_messages(prompt, task, resolution, duration),
-            seed=int(seed),
-            greedy=greedy,
-            max_new_tokens=int(settings["max_new_tokens"]),
-            temperature=float(settings["temperature"]),
-            top_p=float(settings["top_p"]),
-            top_k=int(settings["top_k"]),
-            repetition_penalty=float(settings["repetition_penalty"]),
-        )
-
-    @staticmethod
-    def _with_frames(
-        frames, model_path, mmproj_path, adapter_path, system, user,
-        settings, seed, greedy, keep_loaded, progress,
-    ) -> str:
-        """Run the multimodal path: one picture per marker, in order."""
-        if keep_loaded:
-            log.info(
-                "[minimax_h3_rewriter.writer_8b] keep_model_loaded has no effect on a task with "
-                "reference frames: those run through llama-mtmd-cli, and the model leaves with "
-                "the subprocess"
-            )
-        with media.Workspace() as workspace:
-            attachments = [
-                ("image", media.image_files(tensor, workspace, max_frames=1, prefix=name)[0])
-                for name, tensor in frames
-            ]
-            return mtmd_engine.describe(
-                model_path=model_path,
-                mmproj_path=mmproj_path,
-                instruction=user,
-                system_prompt=system,
-                attachments=attachments,
-                adapter_path=adapter_path,
-                gpu_layers=int(settings["gpu_layers"]),
-                n_ctx=int(settings["n_ctx"]),
-                seed=int(seed),
-                greedy=greedy,
-                max_new_tokens=int(settings["max_new_tokens"]),
-                temperature=float(settings["temperature"]),
-                top_p=float(settings["top_p"]),
-                top_k=int(settings["top_k"]),
-                device=settings["device"],
-                backend=settings["llama_backend"],
-                auto_download=settings["auto_download"],
-                progress=progress,
-            )
 
 
 NODE_CLASS_MAPPINGS = {
