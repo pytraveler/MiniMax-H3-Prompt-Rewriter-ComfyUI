@@ -32,7 +32,7 @@ import os
 import sys
 import threading
 
-from . import chat_template, devices
+from . import chat_template, devices, gguf_meta, llamacpp
 from .constants import install_command, normalize_seed
 from .progress import NodeProgress
 
@@ -204,6 +204,116 @@ def _release_adapters(llama) -> None:
         log.debug("[minimax_h3_rewriter.gguf.unload] adapter release failed", exc_info=True)
 
 
+ARCH_KEY = "general.architecture"
+ARCH_CONTROL = "llama"
+
+
+def _library_path(llama_cpp) -> str:
+    """The llama.cpp shared library this build loaded, or "" if it cannot be found."""
+    try:
+        lib = getattr(llama_cpp.llama_cpp, "_lib", None)
+    except Exception:
+        return ""
+    name = getattr(lib, "_name", "")
+    return name if isinstance(name, str) and os.path.isfile(name) else ""
+
+
+def _library_strings(library: str, names: tuple[str, ...]) -> dict[str, bool] | None:
+    """Which of ``names`` occur as NUL-terminated strings in ``library``.
+
+    Read in blocks with the seam carried over, so a name split across two reads
+    is still found. None means the file could not be read at all.
+    """
+    needles = {name: name.encode("ascii", "ignore") + b"\x00" for name in names}
+    found = {name: False for name in names}
+    seam = max(len(needle) for needle in needles.values())
+    try:
+        with open(library, "rb") as handle:
+            tail = b""
+            while True:
+                block = handle.read(1 << 20)
+                if not block:
+                    break
+                window = tail + block
+                for name, needle in needles.items():
+                    found[name] = found[name] or needle in window
+                if all(found.values()):
+                    break
+                tail = window[-seam:]
+    except OSError:
+        return None
+    return found
+
+
+def _knows_architecture(library: str, arch: str) -> bool | None:
+    """Whether this llama.cpp has a loader for ``arch``. None when unanswerable.
+
+    llama.cpp keeps every architecture it supports in one table of names, and a
+    compiled table of names is a run of NUL-terminated strings inside the
+    binary -- so the question is settled by searching for the name. It has to be
+    settled that way: the C API publishes neither the table nor the build it was
+    compiled from, and the Python package version answers nothing either, since
+    forks number themselves and any version can be built against any llama.cpp.
+
+    The trailing NUL is what stops 'qwen3' matching inside 'qwen35'. A binary
+    without even 'llama' in it has been stripped or packed, and a miss there
+    would accuse the wrong thing -- hence None rather than False.
+    """
+    found = _library_strings(library, tuple({arch, ARCH_CONTROL}))
+    if found is None or not found[ARCH_CONTROL]:
+        return None
+    return found[arch]
+
+
+def _load_failure(llama_cpp, model_path: str) -> RuntimeError:
+    """Give llama.cpp's silent refusal a reason the reader can act on.
+
+    ``Llama()`` raises one message -- "Failed to load model from file" and the
+    path -- for a truncated download, a quantisation the build cannot read, and,
+    much the commonest, a model whose architecture is newer than the llama.cpp
+    compiled into the installed wheel. llama.cpp does explain itself, but to the
+    C-level stderr this backend suppresses along with the rest of the loader's
+    chatter, so nothing of the explanation reaches ComfyUI. The file's own header
+    and the library's own strings put it back: a name the model needs, and
+    whether this build has it.
+    """
+    arch = ""
+    try:
+        arch = str(gguf_meta.read_keys(model_path, (ARCH_KEY,)).get(ARCH_KEY, "") or "")
+    except Exception:
+        log.debug(
+            "[minimax_h3_rewriter.gguf.load] no architecture read from %s",
+            model_path,
+            exc_info=True,
+        )
+
+    library = _library_path(llama_cpp)
+    known = _knows_architecture(library, arch) if library and arch else None
+    name = os.path.basename(model_path)
+
+    if known is False:
+        version = getattr(llama_cpp, "__version__", "unknown")
+        return RuntimeError(
+            f"llama.cpp cannot load {name}: this build has no loader for its "
+            f"architecture, '{arch}'. The model is newer than the llama.cpp compiled "
+            f"into the installed llama-cpp-python ({version}), which is why other GGUF "
+            "models on the same machine still run.\n"
+            "Two ways out. Set 'gguf_runtime' to 'llama.cpp' on the options node: that "
+            f"runs the official {llamacpp.RELEASE} binaries, fetched on first use, with "
+            "nothing to install. Or replace the wheel with a current build from "
+            f"{RELEASES_URL} and restart ComfyUI."
+        )
+
+    detail = f" Its architecture is '{arch}'." if arch else ""
+    return RuntimeError(
+        f"llama.cpp refused to load {name}.{detail} It does not report why through "
+        "llama-cpp-python; the usual causes are a partial or corrupted download, a "
+        "quantisation this build cannot read, and a file too large for the memory "
+        "left. Setting 'gguf_runtime' to 'llama.cpp' runs the same file through the "
+        "official binaries, which print the loader's own message."
+    )
+
+
 def load(
     model_path: str,
     adapter_path: str | None,
@@ -266,7 +376,12 @@ def load(
             # failures: the constructor raises when the adapter will not load.
             kwargs["lora_path"] = adapter_path
 
-        llama = llama_cpp.Llama(**kwargs)
+        try:
+            llama = llama_cpp.Llama(**kwargs)
+        except ValueError as error:
+            if "Failed to load model" not in str(error):
+                raise
+            raise _load_failure(llama_cpp, model_path) from error
         _STATE.update(key=key, llama=llama, lora=None)
         if api == LORA_MODERN:
             try:

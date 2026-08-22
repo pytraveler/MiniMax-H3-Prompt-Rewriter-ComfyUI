@@ -6,6 +6,32 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.16.3 - 2026-08-22
+
+### Changed
+
+- **A GGUF that will not load now says why.** llama-cpp-python raises one
+  message for every load failure - `Failed to load model from file:` and the
+  path - and llama.cpp's own explanation goes to the C-level stderr this backend
+  suppresses, so the commonest failure of all arrived with no reason attached:
+  a model whose architecture is newer than the llama.cpp compiled into the
+  installed wheel. Qwen3-VL needs a build from 2025-10-30 onwards and Qwen3.5
+  one from 2026-02-10, while llama-cpp-python 0.3.16 carries llama.cpp from
+  2025-08-14 - so plain Qwen3 loads there and every newer family fails
+  identically, which reads as the node being broken.
+
+  The refusal now names the architecture, read out of the file's own header, and
+  says whether this build has a loader for it, read out of the architecture
+  table compiled into the library. It has to be read that way: the C API
+  publishes neither that table nor the build it came from, and the package
+  version answers nothing either, since forks number themselves and any version
+  can be built against any llama.cpp. A stripped or packed library, where the
+  search would prove nothing, falls back to the general message rather than
+  accusing the wrong thing.
+
+  Reported by [@808charlie](https://github.com/808charlie) in
+  [#4](https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/issues/4).
+
 ## 0.16.2 - 2026-08-22
 
 ### Fixed
