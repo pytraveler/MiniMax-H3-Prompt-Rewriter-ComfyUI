@@ -342,19 +342,34 @@ def _safe_extract(archive: str, destination: str) -> None:
         return
 
     def link_target_inside(member: tarfile.TarInfo) -> bool:
-        # SONAME symlinks (libllama.so.0 -> libllama.so.0.0.0) ship in every
-        # official release; only a target that escapes destination is unsafe.
+        """Whether a link points somewhere the extraction is allowed to reach.
+
+        SONAME symlinks -- libllama.so.0 -> libllama.so.0.0.10310 -- ship in
+        every Linux and macOS release, and the binaries link against the link
+        rather than the file behind it, so refusing links outright refuses the
+        archive. Only a target that leaves the destination is the zip-slip risk.
+
+        The two kinds resolve from different places, and it matters. tarfile
+        writes a symlink's linkname verbatim, so it is read relative to the
+        link's own directory; a hardlink's is joined onto the extraction root
+        instead. Using one base for both counts the link's own depth twice and
+        waves through 'build/bin/x -> ../../secret', two levels above the
+        destination, as though it were 'secret' inside it.
+        """
         if os.path.isabs(member.linkname):
             return False
-        target = os.path.normpath(os.path.join(os.path.dirname(member.name), member.linkname))
-        return inside(target)
+        base = os.path.dirname(member.name) if member.issym() else ""
+        return inside(os.path.normpath(os.path.join(base, member.linkname)))
 
     with tarfile.open(archive) as handle:
         for member in handle.getmembers():
             if not inside(member.name):
                 raise RuntimeError(f"refusing archive member outside the target: {member.name!r}")
             if (member.issym() or member.islnk()) and not link_target_inside(member):
-                raise RuntimeError(f"refusing archive member outside the target: {member.name!r}")
+                raise RuntimeError(
+                    f"refusing archive link pointing outside the target: "
+                    f"{member.name!r} -> {member.linkname!r}"
+                )
         handle.extractall(destination)
 
     # tar releases unpack into build/bin/; leave the layout alone, find_binary

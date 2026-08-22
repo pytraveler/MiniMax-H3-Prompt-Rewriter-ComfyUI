@@ -6,6 +6,36 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.16.2 - 2026-08-22
+
+### Fixed
+
+- **The llama.cpp runtime unpacks on Linux and macOS.** The guard around tar
+  extraction refused every symlink outright, and the official Linux and macOS
+  archives ship their shared libraries as SONAME symlinks -
+  `libllama.so.0 -> libllama.so.0.0.10310`, ten of them in each Linux build and
+  eighteen in the macOS one - so the very first download died on
+  `refusing archive member outside the target: 'llama-b10310/libllama.so.0'`
+  and no machine outside Windows ever got a runtime at all. Windows was never
+  affected: its archives are zip, and that branch has a check of its own.
+
+  Those links are not decoration. `ldd llama-completion` resolves
+  `libllama.so.0`, `libggml.so.0` and `libggml-base.so.0` - the links
+  themselves - so keeping the files and dropping the links would have unpacked
+  a runtime the loader still refuses to start.
+
+  A link is now refused only when its target really does leave the destination,
+  which is the zip-slip risk the guard is there for. The two kinds are resolved
+  from the places `tarfile` resolves them from: a symlink's target relative to
+  the link's own directory, a hardlink's relative to the extraction root. One
+  base for both would count the link's own depth twice and wave through
+  `build/bin/x -> ../../secret`, two levels above the destination, as though it
+  were `secret` inside it. An absolute target is refused outright.
+
+  Reported and fixed by [@ViolinKaine](https://github.com/ViolinKaine) in
+  [#3](https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/pull/3),
+  against release b10310 on Linux.
+
 ## 0.16.1 - 2026-08-22
 
 ### Added
