@@ -6,6 +6,16 @@ for [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) comes out — enti
 
 [Русская версия](README_RU.md) · [Changelog](CHANGELOG.md)
 
+<p align="center">
+  <a href="https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI?display_name=tag"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI"></a>
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
+  <a href="https://registry.comfy.org/publishers/darkil/nodes/minimax-h3-prompt-rewriter"><img alt="ComfyUI Registry" src="https://img.shields.io/badge/ComfyUI-Registry-1B98E0"></a>
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA"><img alt="Hugging Face" src="https://img.shields.io/badge/Hugging%20Face-LoRA-FFD21E?logo=huggingface&logoColor=black"></a>
+  <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-GGUF"><img alt="GGUF adapter, 27B" src="https://img.shields.io/badge/GGUF-27B-FFD21E?logo=huggingface&logoColor=black"></a>
+  <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-8B-GGUF"><img alt="GGUF adapter, 8B" src="https://img.shields.io/badge/GGUF-8B-FFD21E?logo=huggingface&logoColor=black"></a>
+</p>
+
 ![The rewriter node in ComfyUI: a short prompt on the left, the structured shot-by-shot description, soundscape and music fields on the right](docs/node_preview.png)
 
 The prompt may be in any language the base model reads; the rewrite comes back in
@@ -1203,7 +1213,9 @@ the CUDA figure.
 > [writer nodes](#minimax-h3-prompt-writer-t2vai2vafl2val2va) do on purpose, with
 > the full guide in the prompt instead of seven lines.
 
-The GGUF route uses a **converted** adapter, not the PEFT one. It is fetched
+The GGUF route uses a **converted** adapter, not the PEFT one — F16 and Q8_0 of
+[the 27B LoRA](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-GGUF) and of
+[the 8B one](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-8B-GGUF). It is fetched
 without asking; to use one of your own, drop the `.gguf` into `models/LLM` and
 pick it from the options node's `adapter` list, or set `adapters.gguf.repo` in
 the model list. The prompt is built from the GGUF's own chat template with

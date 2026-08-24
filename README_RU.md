@@ -6,6 +6,16 @@
 
 [English version](README.md) · [История изменений](CHANGELOG_RU.md)
 
+<p align="center">
+  <a href="https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI?display_name=tag"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI"></a>
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
+  <a href="https://registry.comfy.org/publishers/darkil/nodes/minimax-h3-prompt-rewriter"><img alt="ComfyUI Registry" src="https://img.shields.io/badge/ComfyUI-Registry-1B98E0"></a>
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA"><img alt="Hugging Face" src="https://img.shields.io/badge/Hugging%20Face-LoRA-FFD21E?logo=huggingface&logoColor=black"></a>
+  <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-GGUF"><img alt="GGUF adapter, 27B" src="https://img.shields.io/badge/GGUF-27B-FFD21E?logo=huggingface&logoColor=black"></a>
+  <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-8B-GGUF"><img alt="GGUF adapter, 8B" src="https://img.shields.io/badge/GGUF-8B-FFD21E?logo=huggingface&logoColor=black"></a>
+</p>
+
 ![Нода ререйтера в ComfyUI: короткий промпт слева, справа — структурированное покадровое описание, звуковой ландшафт и музыка](docs/node_preview.png)
 
 Промпт можно писать на любом языке, который понимает базовая модель, — результат
@@ -1195,7 +1205,9 @@ NVIDIA, CUDA даёт около **50 ток/с** с адаптером прот
 > это [ноды писателя](#minimax-h3-prompt-writer-t2vai2vafl2val2va) делают
 > намеренно, только с полным руководством в промте вместо семи строк.
 
-На пути GGUF используется **конвертированный** адаптер, а не PEFT-версия. Он
+На пути GGUF используется **конвертированный** адаптер, а не PEFT-версия: F16 и
+Q8_0 [для 27B](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-GGUF) и
+[для 8B](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-8B-GGUF). Он
 скачивается сам; чтобы взять свой, положите `.gguf` в `models/LLM` и выберите его
 в списке `adapter` ноды настроек либо пропишите `adapters.gguf.repo` в файле
 списка моделей. Промпт собирается по чат-шаблону из
