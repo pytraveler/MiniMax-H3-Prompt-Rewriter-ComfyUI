@@ -6,6 +6,43 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.16.4 - 2026-08-24
+
+### Changed
+
+- **An installed `llama-cpp-python` no longer looks like something that should
+  have spared a caption run its download.** It cannot: a reference asset goes
+  through `llama-mtmd-cli`, a program, and the wheel is a set of shared
+  libraries loaded by ctypes with no executables in it at all - a CUDA one
+  compiled from source included, since that build produces `libllama.so` and its
+  neighbours and no CLI targets. So a machine with a perfectly good wheel still
+  fetches the release archive to caption an image, and the only account of it
+  was 32 MB going past.
+
+  The captioner now says so before the download rather than after, in the log,
+  and again in the refusal when there is no download to be had. `gguf_runtime`
+  is a writer setting; the caption nodes have no wheel path at all.
+
+- **`llama_backend = cuda` on Linux says what a build of your own is, and what
+  is not one.** The refusal already said that upstream publishes no Linux CUDA
+  archive and that a build you compiled is run as it is. What it left out is
+  that `llama-cpp-python` is not such a build, whatever it was compiled with -
+  the reasonable next thought for anyone who has just built the wheel with
+  `-DGGML_CUDA=on` and expected the caption nodes to follow. It now names the
+  two cmake targets that produce the missing programs, and `llama_bin.txt`
+  beside `MINIMAX_H3_LLAMA_BIN` and `PATH`. On a caption run it carries the
+  search report too, and that report names `llama-mtmd-cli` rather than the
+  completion binary nobody was looking for.
+
+- **A runtime download that cannot reach GitHub prints the way to do it by
+  hand.** The asset URLs, the folder to unpack them into, and the one thing that
+  goes wrong quietly when a file manager does the unpacking: the shared
+  libraries are symlinks and have to stay symlinks. A stack of identical
+  connection errors is not advice on a machine that is deliberately offline.
+
+  Reported by [@808charlie](https://github.com/808charlie) in
+  [#7](https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/issues/7).
+
 ## 0.16.3 - 2026-08-22
 
 ### Changed

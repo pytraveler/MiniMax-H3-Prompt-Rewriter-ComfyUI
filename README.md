@@ -604,7 +604,11 @@ describes it into one labelled line of `reference_assets`.
 Measured on a 3.4 GB Qwen2.5-Omni-3B: **3 s for a frame, 2 s for an audio clip,
 5 s for a video.** It runs through the same llama.cpp binaries as everything else
 — `llama-mtmd-cli` ships in the archive the rewriter already fetches, so a
-machine that has run one rewrite downloads no runtime at all.
+machine that has run one rewrite downloads no runtime at all. An installed
+`llama-cpp-python` does not spare it: multimodal input goes through
+`llama-mtmd-cli`, a program, and the wheel is a set of shared libraries with no
+executables in it. `gguf_runtime` is therefore a writer setting — the caption
+nodes run the binaries whatever it says.
 
 **Chain them by wiring** `reference_assets` into the next node's `previous`. Each
 label is numbered *within its own category*, which is the guide's own rule
