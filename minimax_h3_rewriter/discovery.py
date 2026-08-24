@@ -393,7 +393,52 @@ def scan_local(shape: Shape = SHAPE_27B) -> list[tuple[str, str]]:
     return found
 
 
+ARCH_KEYS = (
+    "block_count",
+    "embedding_length",
+    "context_length",
+    "attention.head_count",
+    "attention.head_count_kv",
+    "attention.key_length",
+    "attention.value_length",
+)
+
+KV_ELEMENT_BYTES = 2
+
 _GGUF_HEADER_CACHE: dict[tuple[str, int, int], dict] = {}
+
+
+def _header_int(value) -> int | None:
+    """One integer out of a header value that is sometimes a per-layer array."""
+    if isinstance(value, (list, tuple)):
+        value = max(value) if value else None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _kv_per_token(value, arch: str, blocks: int | None, width: int | None) -> int | None:
+    """Bytes one token costs in the KV cache, or ``None`` from a header too thin.
+
+    ``key_length`` and ``value_length`` are optional and often absent; the head
+    dimension is then ``embedding_length / head_count``, which is the same
+    fallback llama.cpp makes. ``head_count_kv`` missing means the model has no
+    grouped-query attention and every head keeps its own cache.
+    """
+    if not arch or not blocks:
+        return None
+    heads = _header_int(value(f"{arch}.attention.head_count"))
+    kv_heads = _header_int(value(f"{arch}.attention.head_count_kv")) or heads
+    if not kv_heads:
+        return None
+    key_length = _header_int(value(f"{arch}.attention.key_length"))
+    if key_length is None and heads and width:
+        key_length = width // heads
+    value_length = _header_int(value(f"{arch}.attention.value_length")) or key_length
+    if not key_length or not value_length:
+        return None
+    return blocks * kv_heads * (key_length + value_length) * KV_ELEMENT_BYTES
 
 
 def gguf_header(path: str) -> dict:
@@ -407,7 +452,10 @@ def gguf_header(path: str) -> dict:
     Cached per file identity, so a folder of large quants costs no more than a
     stat each after the first pass.
     """
-    empty = {"arch": "", "kind": "", "blocks": None, "width": None, "vision": False, "audio": False}
+    empty = {
+        "arch": "", "kind": "", "blocks": None, "width": None,
+        "vision": False, "audio": False, "context": None, "kv_per_token": None,
+    }
     try:
         stat = os.stat(path)
     except OSError:
@@ -423,7 +471,7 @@ def gguf_header(path: str) -> dict:
 
         def also(found: dict) -> tuple[str, ...]:
             arch = found.get("general.architecture")
-            return (f"{arch}.block_count", f"{arch}.embedding_length") if arch else ()
+            return tuple(f"{arch}.{name}" for name in ARCH_KEYS) if arch else ()
 
         value = gguf_meta.keys(path, HEADER_KEYS, probe=also, verify=True).get
 
@@ -438,6 +486,10 @@ def gguf_header(path: str) -> dict:
             width = value(f"{header['arch']}.embedding_length")
             header["blocks"] = int(blocks) if blocks is not None else None
             header["width"] = int(width) if width is not None else None
+            header["context"] = _header_int(value(f"{header['arch']}.context_length"))
+            header["kv_per_token"] = _kv_per_token(
+                value, header["arch"], header["blocks"], header["width"]
+            )
     except Exception:
         log.debug("[minimax_h3_rewriter.gguf_header] %s unreadable", path, exc_info=True)
 
@@ -653,9 +705,10 @@ def scan_captioner_gguf(arch: str | None = None) -> list[tuple[str, str, str]]:
             elif header["kind"] == "model":
                 models.append(path)
 
-    for _directory, (models, projectors) in sorted(by_directory.items()):
+    for directory, (models, projectors) in sorted(by_directory.items()):
         if not projectors:
             continue
+        unpaired: list[str] = []
         for model in sorted(models):
             # After counting the models, not before: how many there are is what
             # decides whether a lone projector in the folder can be trusted.
@@ -663,10 +716,7 @@ def scan_captioner_gguf(arch: str | None = None) -> list[tuple[str, str, str]]:
                 continue
             projector = _pair_mmproj(model, projectors, len(models))
             if not projector:
-                log.info(
-                    "[minimax_h3_rewriter.scan_captioner_gguf] no obvious projector for %s among %s",
-                    model, [os.path.basename(p) for p in projectors],
-                )
+                unpaired.append(os.path.basename(model))
                 continue
             header = gguf_header(projector)
             modalities = ", ".join(
@@ -678,5 +728,11 @@ def scan_captioner_gguf(arch: str | None = None) -> list[tuple[str, str, str]]:
                 size = 0.0
             label = f"{os.path.basename(model)} [+mmproj, {modalities}, {size:.1f} GB]"
             found.append((label, model, projector))
+        if unpaired:
+            log.debug(
+                "[minimax_h3_rewriter.scan_captioner_gguf] %s: %d model(s) with no projector "
+                "of their own among %s: %s",
+                directory, len(unpaired), [os.path.basename(p) for p in projectors], unpaired,
+            )
 
     return found

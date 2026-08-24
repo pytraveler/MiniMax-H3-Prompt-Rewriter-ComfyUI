@@ -6,6 +6,50 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.16.5 - 2026-08-24
+
+### Fixed
+
+- **A captioner no longer reserves the whole context the model was trained on.**
+  `--ctx-size 0` reads as "let llama.cpp decide" and means "the context this
+  model was trained for", and the packaged captioners hid the difference:
+  Qwen2.5-Omni asks for 32k and fits anywhere. Qwen3-VL asks for 262144 tokens,
+  and its cache is 36 layers of 8 KV heads at 128 dimensions, K and V, in f16 -
+  144 KiB a token, so 36 GiB of KV cache allocated before a single pixel has
+  been read. On a 32 GB card the run died at `failed to allocate buffer for kv
+  cache`, having never looked at the picture, and llama.cpp's own auto-fit could
+  not rescue it because the node pins `--n-gpu-layers`.
+
+  0 now means "what this run needs, and never more than the card can hold". The
+  context length and the shape of the cache are read from the GGUF header the
+  model scan already parses, and sized against the number of references and the
+  memory of the device the run is bound for. A number typed into `context_size`
+  is still honoured exactly as typed, and a header too thin to size against
+  falls back to letting llama.cpp decide, as before.
+
+  Reported by [@808charlie](https://github.com/808charlie) in
+  [#7](https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/issues/7).
+
+### Changed
+
+- **A failed caption says which way it failed.** The note about projector
+  formats was printed on every non-zero exit from `llama-mtmd-cli`, so an
+  out-of-memory came back dressed as a model mtmd cannot read - and sent the
+  reader to study the model while the child had already said `cudaMalloc
+  failed`. An allocation that did not fit and a context too small for the frames
+  now each get their own answer, naming the widget that moves them, and the
+  projector note is left for the exits that are actually about the projector.
+
+- **The captioner scan stops narrating.** A model sharing a folder with an
+  mmproj it could not be paired with printed a line naming every projector in
+  that folder, at INFO. A flat `models/LLM` holding a dozen unrelated quants and
+  five projectors therefore announced twelve models by five names each - four
+  times over, once for every node that offers a captioner dropdown, every time
+  ComfyUI asked for the node definitions. One line per folder now, at DEBUG.
+
+  Reported by [@808charlie](https://github.com/808charlie) in
+  [#7](https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/issues/7).
+
 ## 0.16.4 - 2026-08-24
 
 ### Changed

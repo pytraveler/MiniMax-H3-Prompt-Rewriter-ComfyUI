@@ -70,6 +70,28 @@ def describe(index: int) -> str:
         return ""
 
 
+def vram_bytes(spec: str = AUTO) -> int:
+    """Total memory of the card a run is bound for, or 0 when it cannot be read.
+
+    Total rather than free, deliberately. What is free at the moment of asking
+    is mostly a statement about the diffusion model that is about to be evicted
+    anyway, so it would size a context differently depending on what happened to
+    be loaded when the node ran -- and the same graph would then fail only on
+    the second pass. The headroom that covers the difference is the caller's.
+    """
+    if is_cpu(spec):
+        return 0
+    ordinal = index(spec) or 0
+    try:
+        torch = _torch()
+        if not torch.cuda.is_available():
+            return 0
+        return int(torch.cuda.get_device_properties(ordinal).total_memory)
+    except Exception:
+        log.debug("[minimax_h3_rewriter.devices.vram_bytes] %s unreadable", spec, exc_info=True)
+        return 0
+
+
 def choices() -> list[str]:
     """The values offered by the options node, in a stable spelling."""
     return [AUTO] + [f"{PREFIX}{index}" for index in range(count())] + [CPU]

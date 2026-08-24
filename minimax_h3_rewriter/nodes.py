@@ -1723,10 +1723,11 @@ class MiniMaxH3ReferenceCaption:
                         "max": 131072,
                         "step": 1024,
                         "tooltip": (
-                            "0 uses the model's own context, which is what its projector was "
-                            "sized against — one large frame is already twenty-odd media chunks. "
-                            "Set a number only to cut the KV cache on a small card; too small a "
-                            "value fails the run outright rather than truncating."
+                            "0 sizes the context from the references and the card: llama.cpp "
+                            "reserves the whole KV cache up front, and a model trained for 256k "
+                            "would ask for tens of GB of it before looking at anything. Set a "
+                            "number to say it yourself; too small a value fails the run outright "
+                            "rather than truncating."
                         ),
                     },
                 ),

@@ -224,3 +224,6 @@ uv.exe
 dev-junction.ps1
 dev-junction.bat
 comfyui-path.txt
+# Seeded when the package is imported outside ComfyUI, where folder_paths is
+# absent and the user directory falls back into the package itself
+minimax_h3_rewriter/_user/

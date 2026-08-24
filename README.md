@@ -658,10 +658,14 @@ Other inputs:
   two seconds at 25 fps is 56 images through the vision tower, and thirty seconds
   is 750. This is what makes the cost of describing a clip independent of its
   length.
-- `context_size` — `0` means the model's own, which is what its projector was
-  sized against; one 1024×1024 frame is already twenty-odd media chunks. Lower it
-  only to cut the KV cache, and know that too small a value fails the run instead
-  of truncating it.
+- `context_size` — `0` sizes the context from the references and from the card,
+  which is not the same as the model's own: llama.cpp reserves the whole KV cache
+  before it reads a pixel, and a model trained for 262144 tokens asks tens of
+  gigabytes for it — Qwen3-VL-8B asks 36 GB, on a card that would have captioned
+  the picture in three seconds. One 1024×1024 frame is already twenty-odd media
+  chunks, so the count of references is half of the answer and the memory of the
+  device is the other half. Type a number to say it yourself; too small a value
+  fails the run instead of truncating it.
 
 > **Not every multimodal GGUF works here**, and the ones that do not fail loudly.
 > llama.cpp's `mtmd` has to understand the projector format: Gemma 4's aborts the

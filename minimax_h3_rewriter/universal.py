@@ -423,9 +423,10 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                     step=1024,
                     optional=True,
                     tooltip=(
-                        "Context for the captioner. 0 uses the model's own, which is what its "
-                        "projector was sized against. Set a number only to cut the KV cache on "
-                        "a small card. The writer sizes its own context from the guide."
+                        "Context for the captioner. 0 sizes it from the references and the card, "
+                        "rather than from a model header that can say 256k and cost tens of GB of "
+                        "KV cache. Set a number to say it yourself. The writer sizes its own "
+                        "context from the guide."
                     ),
                 ),
                 io.Boolean.Input(

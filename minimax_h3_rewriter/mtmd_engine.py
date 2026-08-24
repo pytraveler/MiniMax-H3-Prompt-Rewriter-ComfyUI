@@ -19,6 +19,10 @@ Two differences from ``cli_engine`` are worth knowing:
 - **The prompt goes on the command line**, not through ``--file``. There is no
   shell in the way -- the command is a list -- so quotes and newlines in an
   instruction need no escaping, and ``-f`` is not honoured alongside media.
+- **The context is sized here**, rather than left to the binary. ``--ctx-size 0``
+  asks for the context the model was trained on, and llama.cpp reserves the
+  whole KV cache before it reads a pixel: on a 256k model that is tens of GB and
+  a card that had room for the job. See ``fit_context``.
 
 Which models actually work here is a much shorter list than the set of
 multimodal GGUFs on the Hub: the projector format has to be one ``mtmd``
@@ -30,7 +34,7 @@ from __future__ import annotations
 import logging
 import os
 
-from . import devices, llamacpp, media, runner
+from . import devices, discovery, llamacpp, media, runner
 from .constants import normalize_seed
 from .progress import NodeProgress
 
@@ -46,6 +50,119 @@ DEFAULT_MAX_TOKENS = 256
 FLAG_FOR_KIND = {"image": "--image", "audio": "--audio"}
 
 CONTEXT_FROM_MODEL = 0
+
+TOKENS_PER_ATTACHMENT = 4096
+
+CONTEXT_FLOOR = 8192
+
+VRAM_HEADROOM = 2 * 1024 ** 3
+
+OUT_OF_MEMORY = (
+    "failed to allocate buffer for kv cache",
+    "cudamalloc failed",
+    "out of memory",
+    "alloc_tensor_range",
+    "failed to allocate",
+)
+
+CONTEXT_EXCEEDED = (
+    "too long",
+    "exceed",
+    "n_batch",
+)
+
+
+def _size_of(path: str) -> int:
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
+def fit_context(
+    model_path: str,
+    mmproj_path: str = "",
+    attachments: int = 1,
+    device: str = devices.AUTO,
+    requested: int = CONTEXT_FROM_MODEL,
+) -> int:
+    """The ``--ctx-size`` to ask for when the node was left to decide.
+
+    ``--ctx-size 0`` means "the context this model was trained for", which reads
+    as the safe answer and is not one. Qwen3-VL was trained for 262144 tokens,
+    and its cache is 36 layers of 8 KV heads at 128 dimensions, K and V, in f16:
+    144 KiB a token, so 36 GiB of KV cache reserved up front before a single
+    pixel has been read. The run dies at ``failed to allocate buffer for kv
+    cache`` on a card that would have captioned the picture in three seconds.
+
+    Qwen2.5-Omni never hit it because it asks for 32k, which is the only reason
+    the packaged captioners were fine -- and why the failure looked like the
+    model's fault rather than this default's.
+
+    So a size asked for by hand is honoured as asked, and 0 now means "what this
+    run needs, and never more than the card can hold". A header too thin to size
+    against falls back to the old behaviour rather than to a guess: the decision
+    is llama.cpp's again, and it says so in its own words.
+    """
+    if requested > 0:
+        return int(requested)
+
+    header = discovery.gguf_header(model_path)
+    trained = header.get("context") or 0
+    per_token = header.get("kv_per_token") or 0
+    if not trained:
+        return CONTEXT_FROM_MODEL
+
+    wanted = max(CONTEXT_FLOOR, TOKENS_PER_ATTACHMENT * max(int(attachments), 1))
+
+    room = devices.vram_bytes(device)
+    if room and per_token:
+        spare = room - _size_of(model_path) - _size_of(mmproj_path) - VRAM_HEADROOM
+        affordable = int(spare // per_token) // 1024 * 1024
+        wanted = max(CONTEXT_FLOOR, min(wanted, affordable))
+
+    wanted = min(wanted, trained)
+
+    if wanted >= trained:
+        return CONTEXT_FROM_MODEL
+
+    cache = f", {wanted * per_token / 1024 ** 3:.1f} GiB of KV cache" if per_token else ""
+    log.info(
+        "[minimax_h3_rewriter.mtmd_engine.fit_context] %s: context %d rather than the "
+        "model's %d%s",
+        os.path.basename(model_path), wanted, trained, cache,
+    )
+    return wanted
+
+
+def _failure_hint(message: str, n_ctx: int) -> str:
+    """What to try next, told apart by what the child actually said.
+
+    The projector note below used to be printed on every non-zero exit, which is
+    how a plain out-of-memory came back dressed as a model llama.cpp cannot
+    read. llama.cpp is specific about that one; so is this.
+    """
+    lowered = message.lower()
+    if any(marker in lowered for marker in OUT_OF_MEMORY):
+        size = f"{n_ctx} tokens" if n_ctx else "the model's own, which can be 256k"
+        return (
+            f"That is the card running out of room, not a model this cannot read: the "
+            f"context asked for was {size}, and llama.cpp reserves the whole KV cache "
+            f"before it looks at anything. Lower 'context_size' on the node -- 8192 holds a "
+            f"picture or two -- or send the run to another card with 'device'."
+        )
+    if any(marker in lowered for marker in CONTEXT_EXCEEDED):
+        size = f"{n_ctx} tokens" if n_ctx else "the model's own"
+        return (
+            f"That is the other direction: the pictures did not fit the context, which was "
+            f"{size}. Raise 'context_size' on the node, or lower 'max_frames' -- mtmd charges "
+            f"a frame by its resolution, so a long clip at full size is expensive."
+        )
+    return (
+        "Not every multimodal GGUF works here: llama.cpp's mtmd has to understand the "
+        "projector format, and several current models abort while loading it. Pick an entry "
+        "from the captioner list, which names the ones this pack has been run against."
+    )
 
 
 def build_command(
@@ -210,6 +327,7 @@ def describe(
             ]
         if note:
             instruction = f"{note}\n\n{instruction}"
+        n_ctx = fit_context(model_path, mmproj_path, len(attachments), device, n_ctx)
         command = build_command(
             binary, model_path, mmproj_path, instruction, attachments,
             gpu_layers, n_ctx, seed, greedy, max_new_tokens, temperature, top_p, top_k, device,
@@ -236,12 +354,7 @@ def describe(
         try:
             text, stderr_text = runner.run(command, binary, report)
         except runner.ChildFailed as error:
-            raise RuntimeError(
-                f"{error}\n\nNot every multimodal GGUF works here: llama.cpp's mtmd has to "
-                f"understand the projector format, and several current models abort while "
-                f"loading it. Pick an entry from the captioner list, which names the ones this "
-                f"pack has been run against."
-            ) from error
+            raise RuntimeError(f"{error}\n\n{_failure_hint(str(error), n_ctx)}") from error
 
     if progress is not None:
         progress.finish(f"Done · {len(text)} chars{runner.speed(stderr_text)}")
