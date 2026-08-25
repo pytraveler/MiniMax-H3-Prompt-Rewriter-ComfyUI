@@ -6,6 +6,88 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.16.6 - 2026-08-25
+
+### Added
+
+- **Each reference can be asked its own question.** Under every square on the
+  strip there is now a narrow band in the same colour: dark while the reference
+  is asked its role's usual question, lit once it is asked something else. Click
+  it to write that question, right-click to take it back, hover to read it. It
+  is per reference rather than per node because one node describes a picture, a
+  clip and a sound at once, and a single box would have had to ask all three the
+  same thing.
+
+  **Two modes, and the band says which.** `+ instr` adds the line to the role's
+  question; `= instr`, on a solid band, asks it *instead*. Both are needed and
+  neither can be the only one: "never mention the window" is a rule, and asked
+  on its own it leaves nothing wanting a description - the model answers the
+  rule, with "No". "Always answer 'blah blah blah'" is a whole question, and
+  leaving the role's question in front of it makes a small model settle the
+  contradiction by describing anyway. A replacement drops the length preset too,
+  since whoever writes the question owns the shape of its answer.
+
+  The text rides in a hidden JSON widget, so it travels with the workflow and
+  through the API like every other setting. A bare string there is read as an
+  addition, which is the safe half for anything hand-written.
+
+  Requested by [@808charlie](https://github.com/808charlie) in
+  [#8](https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/issues/8).
+
+- **`system_prompt` on the writers**, which is what aims them at something other
+  than MiniMax-H3. The assembled guide is replaced wholesale by what you write
+  there, and the guide is then not even fetched - so a system prompt written for
+  LTX, Krea or Wan turns these into writers for those, offline, with no document
+  downloaded to be ignored. The shortest way in is the
+  `MiniMax-H3 Guide Prompt (any LLM)` node, which hands you the stock prompt on
+  an output: take it, edit it, connect it back.
+
+  The task message is never replaced - it carries the prompt, the aspect ratio
+  and the duration, which any guide needs. And the answer is still split into
+  the H3 sections, so a guide that replies with a paragraph fills
+  `rewritten_prompt` and leaves the section outputs empty.
+
+  Requested by [@808charlie](https://github.com/808charlie) in
+  [#8](https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/issues/8).
+
+### Fixed
+
+- **A captioner's reasoning no longer ends up in the reference block.** The CLIP
+  captioner has always cut the `<think>` block out of an answer; the GGUF one
+  never did, so an empty `<think> </think>` opened every caption and a thinking
+  model wrote its whole deliberation into `reference_assets` - from where it
+  travelled on into the writer's prompt. Both paths cut it now.
+
+  The cut alone is not enough, and cannot be: the writers render the chat
+  template themselves and pass `enable_thinking=False`, while a caption cannot,
+  because `llama-mtmd-cli` applies the template itself - that is what puts the
+  media tokens in the right place - and publishes no switch for the thought
+  channel. Reasoning is therefore still charged against `--predict`, which is
+  how a thinking model produces a page of deliberation and half a sentence of
+  caption. So every caption question now ends with a line asking for the
+  description alone, which is the only instrument this path has.
+
+  Reported by [@808charlie](https://github.com/808charlie) in
+  [#8](https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/issues/8).
+
+### Changed
+
+- **Multi Reference Caption draws the same strip as the Universal Writer.** Its
+  switches were drawn straight onto the canvas, which the Nodes 2.0 renderer
+  does not draw at all; the squares are HTML, which both renderers do. So they
+  are one mechanism now, and the node that had checkboxes has coloured squares
+  instead: click one to silence its reference, read the label to see what it
+  will be called and in what order. Dragging is not among them - this node
+  writes the block in the guide's own order and the group an asset is plugged
+  into decides its label.
+
+- **New widgets go at the end of a node, always.** ComfyUI restores a saved
+  node's widget values by position, so a widget added anywhere else hands every
+  widget below it its neighbour's value: a workflow saved before the upgrade
+  came back with `max_frames` holding what `context_size` had. Nothing shipped
+  in that state, but it is worth writing down, because the obvious place to put
+  a new setting is next to the one it belongs with.
+
 ## 0.16.5 - 2026-08-24
 
 ### Fixed

@@ -52,6 +52,31 @@ def normalize_seed(seed) -> int:
     return int(seed) % SEED_MODULUS
 
 
+THINK_OPEN = "<think>"
+THINK_CLOSE = "</think>"
+
+NO_REASONING = "Do not think out loud: give the answer only, with no reasoning and no preamble."
+
+
+def answer_only(text: str) -> str:
+    """The answer without the model's reasoning in front of it.
+
+    Asking for no reasoning is not the same as getting none. Gemma-4's own
+    decoder rewrites its thought channel into ``<think>``/``</think>``, and an
+    E4B build here writes a full analysis into it even though the prompt primes
+    that channel closed -- ComfyUI's own 'Generate Text' node shows the same
+    thing on the same checkpoint, so it is the model, not the wiring. A caption
+    is one line of a reference block, so the reasoning is cut rather than
+    shipped: everything up to the last close tag goes, and an unclosed block --
+    which is what a truncated answer leaves behind -- goes with it.
+    """
+    if THINK_CLOSE in text:
+        text = text.rsplit(THINK_CLOSE, 1)[-1]
+    elif THINK_OPEN in text:
+        text = text.split(THINK_OPEN, 1)[0]
+    return text.strip()
+
+
 def install_command(package: str) -> str:
     """The pip line for *this* interpreter, ready to paste into a terminal.
 

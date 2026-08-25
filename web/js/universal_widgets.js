@@ -1,6 +1,17 @@
 import { app } from "../../scripts/app.js";
 import { addSlotSwitches } from "./slot_switches.js";
 import {
+    CHIP_GAP,
+    CHIP_H,
+    CHIP_W,
+    chipElement,
+    installStripStyle,
+    instructionBand,
+    readInstructions,
+    stripHeight as stripHeightFor,
+    writeInstruction,
+} from "./reference_strip.js";
+import {
     MARGIN,
     installBaseStyle,
     installStyle,
@@ -10,6 +21,7 @@ import {
     replaceWithDom,
     repaintOn,
     setWidgetValue,
+    showWidget,
     widgetNamed,
     widgetValues,
 } from "./mmx_controls.js";
@@ -18,6 +30,7 @@ import {
 const NODE = "MiniMaxH3UniversalWriter";
 
 const LAYOUT = "reference_layout";
+const INSTRUCTIONS = "reference_instructions";
 const TASK = "task";
 const RESOLUTION = "resolution";
 const DURATION = "duration";
@@ -35,24 +48,12 @@ const DURATION_CEILING = 600;
 
 const IMAGE_ROLES = ["Picture", "Subject", "Video"];
 
-const SHORT = { Picture: "pic", Subject: "subj", Video: "vid", Audio: "aud" };
-const COLOUR = {
-    Picture: "#3B7DD8",
-    Subject: "#C98A2E",
-    Video: "#3F9E5A",
-    Audio: "#8A54C8",
-};
-
-const CHIP_W = 52;
-const CHIP_H = 58;
-const CHIP_ROLE_H = 18;
-const CHIP_SLOT_H = 16;
-const CHIP_GAP = 4;
-
 const HINT_H = 12;
 const HINT_GAP = 3;
-const HINT_IMAGES = "drag to reorder - click the label to change it - click below to switch off";
-const HINT_PLAIN = "drag to reorder - click a square below its label to switch it off";
+const HINT_IMAGES =
+    "drag to reorder - click the label to change it - click below to switch off - 'instr' asks, right-click clears";
+const HINT_PLAIN =
+    "drag to reorder - click a square below its label to switch it off - 'instr' asks, right-click clears";
 
 const TASKS_H = 26;
 const RATIOS_H = 38;
@@ -66,32 +67,9 @@ const STYLE = `
 .mmx-refs { display: flex; flex-direction: column; gap: ${HINT_GAP}px;
     width: 100%; height: 100%; overflow: hidden;
     font-family: system-ui, sans-serif; }
-.mmx-strip { flex: 1 1 auto; display: flex; flex-wrap: wrap;
-    align-content: flex-start; gap: ${CHIP_GAP}px; overflow: hidden; }
 .mmx-hint { flex: 0 0 ${HINT_H}px; font-size: 9px; line-height: ${HINT_H}px;
     color: var(--descrip-text, #999); white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; }
-.mmx-chip { flex: 0 0 auto; width: ${CHIP_W}px; height: ${CHIP_H}px;
-    border-radius: 5px; display: flex; flex-direction: column; overflow: hidden;
-    cursor: grab; user-select: none; touch-action: none;
-    border: 1px solid rgba(0, 0, 0, 0.45);
-    transition: opacity 0.12s, transform 0.12s, box-shadow 0.12s; }
-.mmx-chip-role { flex: 0 0 ${CHIP_ROLE_H}px; font-size: 11px;
-    line-height: ${CHIP_ROLE_H}px; text-align: center; letter-spacing: 0.03em;
-    color: #fff; background: rgba(0, 0, 0, 0.3); }
-.mmx-chip-num { flex: 1 1 auto; font-size: 15px;
-    line-height: ${CHIP_H - CHIP_ROLE_H - CHIP_SLOT_H}px; text-align: center;
-    font-weight: 600; color: #fff; }
-/* The number says where a square sits in the block, so it renumbers the moment
-   anything moves -- which would make a reorder of two squares of the same kind
-   invisible. The slot it is plugged into is what stays with it. */
-.mmx-chip-slot { flex: 0 0 ${CHIP_SLOT_H}px; font-size: 9px;
-    line-height: ${CHIP_SLOT_H}px; text-align: center; letter-spacing: 0.02em;
-    color: rgba(255, 255, 255, 0.75); background: rgba(0, 0, 0, 0.22); }
-.mmx-chip.mmx-off { opacity: 0.35; }
-.mmx-chip.mmx-dragging { cursor: grabbing; transform: scale(1.1);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55); }
-.mmx-strip .mmx-note { line-height: ${CHIP_H}px; }
 `;
 
 
@@ -218,13 +196,13 @@ function whyShut(node, task) {
 
 
 function stripHeight(node) {
-    const count = node[STATE]?.chipCount ?? 0;
-    const usable = Math.max(node.size?.[0] ?? 300, 120) - 2 * MARGIN;
-    const perRow = Math.max(1, Math.floor((usable + CHIP_GAP) / (CHIP_W + CHIP_GAP)));
-    const rows = Math.max(1, Math.ceil(count / perRow));
-    const hint = count ? HINT_H + HINT_GAP : 0;
-    return rows * CHIP_H + (rows - 1) * CHIP_GAP + hint;
+    return stripHeightFor(node, node[STATE]?.chipCount ?? 0, HINT_H, HINT_GAP, MARGIN);
 }
+
+const instructions = (node) => ({
+    read: (slot) => readInstructions(node, INSTRUCTIONS)[slot] || null,
+    write: (slot, text, add) => writeInstruction(node, INSTRUCTIONS, slot, text, add),
+});
 
 function placeDragged(strip, chip, x, y) {
     let before = null;
@@ -311,25 +289,8 @@ function beginGesture(node, chip, role, entry, event) {
 }
 
 function buildChip(node, entry) {
-    const chip = document.createElement("div");
-    chip.className = entry.on ? "mmx-chip" : "mmx-chip mmx-off";
-    chip.dataset.slot = entry.name;
-    chip.style.background = COLOUR[entry.role];
-
-    const role = document.createElement("span");
-    role.className = "mmx-chip-role";
-    role.textContent = SHORT[entry.role];
-    chip.appendChild(role);
-
-    const number = document.createElement("span");
-    number.className = "mmx-chip-num";
-    number.textContent = entry.on ? String(entry.number) : "--";
-    chip.appendChild(number);
-
-    const slot = document.createElement("span");
-    slot.className = "mmx-chip-slot";
-    slot.textContent = entry.name;
-    chip.appendChild(slot);
+    const { chip, role } = chipElement(entry);
+    chip.appendChild(instructionBand(entry.name, entry.role, instructions(node)));
 
     const relabel =
         entry.kind === "image"
@@ -416,7 +377,9 @@ function redraw(node) {
 
 function build(node) {
     installBaseStyle();
+    installStripStyle();
     installStyle(STYLE_ID, STYLE);
+    showWidget(node, INSTRUCTIONS, false);
 
     const references = document.createElement("div");
     references.className = "mmx-refs";

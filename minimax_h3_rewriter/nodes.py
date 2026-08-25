@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -33,6 +34,7 @@ from .constants import (
     DURATION_MAX,
     DURATION_MIN,
     GGUF_RUNTIMES,
+    NO_REASONING,
     OUTPUT_FIELDS,
     QUANTIZATIONS,
     REF_OUTPUT_FIELDS,
@@ -815,6 +817,20 @@ BYPASS_TOOLTIP = (
     "leaves the nodes downstream with nothing. The section outputs come back empty."
 )
 
+SYSTEM_PROMPT_TOOLTIP = (
+    "Replace the whole assembled guide with your own system prompt, and the guide is not "
+    "even fetched. This is what aims these nodes at something other than MiniMax-H3: the "
+    "H3 format lives in that text and nowhere else, so a guide written for LTX, Krea or "
+    "Wan makes this a writer for those. 'MiniMax-H3 Guide Prompt (any LLM)' hands you the "
+    "stock one on its 'system_prompt' output - the shortest way in is to take it, edit it "
+    "and connect it back here.\n\n"
+    "Left empty, nothing changes. The task message is never replaced: it carries the "
+    "prompt, the aspect ratio and the duration, which any guide needs.\n\n"
+    "One consequence to expect. This node splits the answer into the H3 sections, so a "
+    "guide that replies with a paragraph fills 'rewritten_prompt' and leaves the section "
+    "outputs empty. That is worth knowing rather than worth avoiding."
+)
+
 BYPASS_CAPTION_TOOLTIP = (
     "Pass 'previous' through unchanged and run no model at all, which drops this "
     "asset from the chain without unwiring it. Numbering stays correct: each node "
@@ -1074,8 +1090,15 @@ def _guided_text(
     keep_model_loaded: bool,
     settings: dict,
     progress: NodeProgress,
+    system_prompt: str = "",
 ) -> str:
-    """Run one guided rewrite and return the model's raw answer."""
+    """Run one guided rewrite and return the model's raw answer.
+
+    ``system_prompt`` stands in for the whole assembled guide, and when it is
+    given the guide is never fetched: a writer aimed at another model has no use
+    for MiniMax's document, and an offline machine should not be made to
+    download one to ignore it.
+    """
     choice = _resolve_writer_choice(model)
     if choice.local:
         model_path = choice.reference
@@ -1090,11 +1113,12 @@ def _guided_text(
             f"on its own. Pick a base model from the list."
         )
 
-    guide = guides.text(
+    given = (system_prompt or "").strip()
+    guide = "" if given else guides.text(
         guide_prompt.GUIDE_FOR_MODE[mode], settings["auto_download"], progress
     )
     messages = guide_prompt.build_messages(
-        guide, mode, prompt, resolution, duration, references
+        guide, mode, prompt, resolution, duration, references, system=given
     )
 
     max_new_tokens = int(settings["max_new_tokens"])
@@ -1268,6 +1292,10 @@ class MiniMaxH3GuidedWriter:
                 ),
                 "options": (OPTIONS_TYPE,),
                 "bypass": ("BOOLEAN", {"default": False, "tooltip": BYPASS_TOOLTIP}),
+                "system_prompt": (
+                    "STRING",
+                    {"multiline": True, "default": "", "tooltip": SYSTEM_PROMPT_TOOLTIP},
+                ),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
         }
@@ -1288,6 +1316,7 @@ class MiniMaxH3GuidedWriter:
         seed,
         keep_model_loaded,
         reference_material="",
+        system_prompt="",
         options=None,
         bypass=False,
         unique_id=None,
@@ -1302,7 +1331,7 @@ class MiniMaxH3GuidedWriter:
 
         text = _guided_text(
             task, model, prompt, resolution, duration, reference_material,
-            greedy, seed, keep_model_loaded, settings, progress,
+            greedy, seed, keep_model_loaded, settings, progress, system_prompt,
         )
         _head, sections = split_sections(text, OUTPUT_FIELDS)
         _report(progress, text, sections, OUTPUT_FIELDS)
@@ -1396,6 +1425,10 @@ class MiniMaxH3GuidedWriterRef:
             "optional": {
                 "options": (OPTIONS_TYPE,),
                 "bypass": ("BOOLEAN", {"default": False, "tooltip": BYPASS_TOOLTIP}),
+                "system_prompt": (
+                    "STRING",
+                    {"multiline": True, "default": "", "tooltip": SYSTEM_PROMPT_TOOLTIP},
+                ),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
         }
@@ -1415,6 +1448,7 @@ class MiniMaxH3GuidedWriterRef:
         greedy,
         seed,
         keep_model_loaded,
+        system_prompt="",
         options=None,
         bypass=False,
         unique_id=None,
@@ -1429,7 +1463,7 @@ class MiniMaxH3GuidedWriterRef:
 
         text = _guided_text(
             guide_prompt.REF_MODE, model, prompt, resolution, duration, reference_assets,
-            greedy, seed, keep_model_loaded, settings, progress,
+            greedy, seed, keep_model_loaded, settings, progress, system_prompt,
         )
         _head, sections = split_sections(text, REF_OUTPUT_FIELDS, fallback="detailed_description")
         _report(progress, text, sections, REF_OUTPUT_FIELDS)
@@ -1594,6 +1628,89 @@ CAPTION_LENGTHS = {
     "standard": "Answer in two or three sentences.",
     "detailed": "Answer in four to six sentences, covering every listed aspect.",
 }
+
+INSTRUCTIONS_TOOLTIP = (
+    "What each reference is asked, as JSON, written by the narrow band under each square "
+    "on the strip. Two shapes are accepted per slot: a plain string, which is *added* to "
+    "the role's own question, or {\"text\": ..., \"add\": false}, which asks it "
+    "*instead*. It is kept as a widget so the text travels with the workflow and through "
+    "the API; the interface hides it. A slot missing from the map is asked the usual "
+    "question."
+)
+
+
+@dataclass(frozen=True)
+class Question:
+    """One reference's own wording, and whether it replaces the role's or joins it."""
+
+    text: str
+    add: bool = True
+
+
+def slot_instructions(raw: str) -> dict[str, Question]:
+    """Per-reference questions out of the strip's JSON widget.
+
+    A bare string means "add this to the role's question", which is the
+    forgiving reading and the right default for anything hand-written: an
+    instruction like "do not mention the window" is a rule about an answer, and
+    on its own it is not a question at all -- a model handed only that answers
+    the rule rather than describing anything.
+
+    Anything unreadable means every asset is asked its role's own question,
+    which is the same rule the switch map follows: a corrupted widget should
+    cost the wording, never the run.
+    """
+    try:
+        parsed = json.loads(raw or "{}")
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+
+    found: dict[str, Question] = {}
+    for name, value in parsed.items():
+        if not isinstance(name, str):
+            continue
+        if isinstance(value, str):
+            text, add = value, True
+        elif isinstance(value, dict):
+            text = value.get("text")
+            add = bool(value.get("add", True))
+            if not isinstance(text, str):
+                continue
+        else:
+            continue
+        if text.strip():
+            found[name] = Question(text.strip(), add)
+    return found
+
+
+def caption_question(role: str, length: str, question: Question | None = None) -> str:
+    """What one asset is actually asked, in the one place all three nodes share.
+
+    Both halves of this were learned the same way, from two instructions that
+    wanted opposite things. "Always answer 'blah blah blah'" is a whole question
+    and has to replace the role's, or the model reads two contradictory
+    instructions and settles it by doing the more concrete one. "Never mention
+    the window" is a rule and has to join the role's question, or there is
+    nothing left asking for a description and the model simply answers "No".
+
+    So the band says which it is, and the length line follows the question: a
+    replacement owns the shape of its own answer, an addition leaves the preset
+    where it was.
+
+    The no-reasoning line survives either way. It is about which channel the
+    model answers on rather than about what it says, and losing it is how a
+    thinking model writes its deliberation into the reference block.
+    """
+    stock = CAPTION_INSTRUCTIONS[role]
+    length_line = CAPTION_LENGTHS[length]
+    if question is None or not question.text:
+        return f"{stock} {length_line} {NO_REASONING}"
+    if question.add:
+        return f"{stock} {question.text} {length_line} {NO_REASONING}"
+    return f"{question.text} {NO_REASONING}"
+
 
 _ASSET_LINE = re.compile(r"^[ \t]*(Subject|Picture|Video|Audio)[ \t]+(\d+)[ \t]*:", re.IGNORECASE | re.MULTILINE)
 
@@ -1777,8 +1894,8 @@ class MiniMaxH3ReferenceCaption:
                     f"{role}: nothing to describe. Connect an image, an audio clip or a video, "
                     f"or type the description into 'description'."
                 )
-            asked = (instruction or "").strip() or CAPTION_INSTRUCTIONS[role]
-            asked = f"{asked} {CAPTION_LENGTHS[length]}"
+            typed = (instruction or "").strip()
+            asked = caption_question(role, length, Question(typed, add=False) if typed else None)
 
             if clip is not None:
                 kinds = set()

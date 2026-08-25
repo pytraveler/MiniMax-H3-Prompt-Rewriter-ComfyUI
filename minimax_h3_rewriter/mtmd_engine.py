@@ -35,7 +35,7 @@ import logging
 import os
 
 from . import devices, discovery, llamacpp, media, runner
-from .constants import normalize_seed
+from .constants import answer_only, normalize_seed
 from .progress import NodeProgress
 
 log = logging.getLogger(__name__)
@@ -356,6 +356,8 @@ def describe(
         except runner.ChildFailed as error:
             raise RuntimeError(f"{error}\n\n{_failure_hint(str(error), n_ctx)}") from error
 
+    text = answer_only(text.replace("\r\n", "\n"))
+
     if progress is not None:
         progress.finish(f"Done · {len(text)} chars{runner.speed(stderr_text)}")
-    return text.replace("\r\n", "\n")
+    return text

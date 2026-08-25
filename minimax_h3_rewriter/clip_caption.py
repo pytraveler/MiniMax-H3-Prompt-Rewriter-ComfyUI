@@ -32,36 +32,15 @@ from __future__ import annotations
 import logging
 
 from . import media
-from .constants import normalize_seed
+
+from .constants import answer_only, normalize_seed
 
 log = logging.getLogger(__name__)
 
 MAX_CAPTION_TOKENS = 1024
 
-THINK_OPEN = "<think>"
-THINK_CLOSE = "</think>"
-
 VISION_MODULES = ("visual", "vision_model")
 AUDIO_MODULES = ("audio_projector",)
-
-
-def answer_only(text: str) -> str:
-    """The caption without the model's reasoning in front of it.
-
-    Asking for no reasoning is not the same as getting none. Gemma-4's own
-    decoder rewrites its thought channel into ``<think>``/``</think>``, and an
-    E4B build here writes a full analysis into it even though the prompt primes
-    that channel closed -- ComfyUI's own 'Generate Text' node shows the same
-    thing on the same checkpoint, so it is the model, not the wiring. A caption
-    is one line of a reference block, so the reasoning is cut rather than
-    shipped: everything up to the last close tag goes, and an unclosed block --
-    which is what a truncated answer leaves behind -- goes with it.
-    """
-    if THINK_CLOSE in text:
-        text = text.rsplit(THINK_CLOSE, 1)[-1]
-    elif THINK_OPEN in text:
-        text = text.split(THINK_OPEN, 1)[0]
-    return text.strip()
 
 
 def _module_names(clip) -> set[str]:

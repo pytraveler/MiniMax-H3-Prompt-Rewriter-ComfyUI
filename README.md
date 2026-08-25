@@ -455,6 +455,27 @@ answer would come back in some other format with nothing to say why.
 If a field comes back missing, the node still returns everything it got and says
 which fields are absent, on the node. Lower the temperature or move up a size.
 
+#### `system_prompt` — pointing the writer at another model
+
+The guide is the whole of what makes this an H3 writer: it goes into the system
+prompt and nothing else in the node knows the format. So replacing that text is
+what turns these nodes into a writer for something else — LTX, Krea, Wan, or a
+house style of your own. Write it into `system_prompt` and the assembled guide is
+not used; on an empty field nothing changes.
+
+The guide is then not even fetched, which matters on a machine kept offline:
+there is no 24 KB document downloaded to be ignored.
+
+The shortest way in is
+[Guide Prompt (any LLM)](#minimax-h3-guide-prompt-any-llm), which hands you the
+stock system prompt on an output. Take it, edit it, connect it back.
+
+Two things do not move. The task message is never replaced — it carries the
+prompt, the aspect ratio and the duration, which any guide needs. And the answer
+is still split into the H3 sections, so a guide that replies with one paragraph
+fills `rewritten_prompt` and leaves the section outputs empty. That is worth
+knowing rather than worth avoiding.
+
 ### MiniMax-H3 Prompt Writer (Ref2VA)
 
 Full-reference mode, from MiniMax's
@@ -534,6 +555,9 @@ moves.
   round again. A clip and a sound are what they are, so those do not cycle.
 - **Click its number** to switch that reference off without unplugging it — the
   checkbox on the slot's own row does the same thing from the other side.
+- **Click the band under it** to ask that one reference something other than its
+  role's usual question. `+ instr` adds your line to the role's question,
+  `= instr` asks it instead; right-click takes it back, hovering reads it out.
 
 So one socket still produces the four labels Ref2VA allows, and the distinction
 Multi Reference Caption makes structurally — a subject is not a frame — is made
@@ -591,8 +615,8 @@ its widgets.
 > and two dropdowns — and the node still runs. Those three are HTML and work in
 > both of ComfyUI's renderers. The checkboxes on the input rows are drawn on the
 > canvas, which *Modern Node Design (Nodes 2.0)* does not run; there the number
-> on each square is the way to switch a reference off. The same is true of the
-> checkboxes on Multi Reference Caption.
+> on each square is the way to switch a reference off. Multi Reference Caption
+> draws the same squares and needs no checkboxes at all any more.
 >
 > The three drawn controls are also kept off the right-side **Parameters**
 > panel, which has no way to draw a control like this and would have to take it
@@ -667,6 +691,20 @@ Other inputs:
   device is the other half. Type a number to say it yourself; too small a value
   fails the run instead of truncating it.
 
+**A thinking model does not think into the block.** Whatever a captioner writes
+between `<think>` and `</think>` is cut before the caption becomes a line of
+`reference_assets`, on both the GGUF and the `CLIPLoader` path — otherwise an
+empty `<think> </think>` opens every caption, and a model that really reasons
+sends its whole deliberation on into the writer's prompt.
+
+Cutting it is only half, and the other half cannot be a flag. The writers render
+the chat template themselves and pass `enable_thinking=False`; a caption cannot,
+because `llama-mtmd-cli` applies the template itself — that is what puts the
+media tokens in the right place — and offers no switch for the thought channel.
+The reasoning is therefore still charged against `--predict`, so every caption
+question ends with a line asking for the description alone. If a model of yours
+still insists, `instruction` is where to say so in your own words.
+
 > **Not every multimodal GGUF works here**, and the ones that do not fail loudly.
 > llama.cpp's `mtmd` has to understand the projector format: Gemma 4's aborts the
 > process outright on `b10310` — with Google's own file and with unsloth's alike,
@@ -710,11 +748,37 @@ the shot needs and no taller.
 off, so the block came out as `Subject 1` and `Audio 1` with no `Video` line at
 all: the reference stays in the graph, it just costs nothing on this run.*
 
-**The checkbox on a slot's own row switches it off** without unplugging anything.
-A caption costs a model load and seconds to minutes, which makes "everything
+**The strip under the inputs is one coloured square per connected reference**,
+in the order the block will be written and labelled with what each will be
+called. Click a square to switch that reference off without unplugging anything:
+a caption costs a model load and seconds to minutes, which makes "everything
 except this one" the ordinary thing to want, and pulling the wire out to get it
 throws away the wiring you meant to keep. The state is saved with the workflow
 and travels through the API like any other value.
+
+Squares here do not drag and their labels do not cycle, unlike the
+[Universal Writer](#minimax-h3-universal-writer)'s: this node writes the block in
+the guide's own order, and the group an asset is plugged into is what names it.
+
+**The band under a square asks that one reference something else.** Dark while it
+is asked its role's usual question, lit once it is not. Click to write the
+question, right-click to take it back, hover to read it. It is per reference
+rather than per node on purpose — a node describing a picture, a clip and a sound
+at once has no single question that suits all three.
+
+The checkbox in that little window decides which of two things your text is, and
+the band then says which: `+ instr` for a line **added** to the role's question,
+`= instr`, on a solid band, for one asked **instead** of it. Both are needed.
+
+| What you write | Which mode | Why the other one fails |
+|---|---|---|
+| `Do not mention the window.` | added | A rule is not a question. Asked on its own it leaves nothing wanting a description, and the model answers the rule: `Subject 1: No`. |
+| `Always answer "blah blah blah".` | instead | Left after the role's question it contradicts it, and a small model settles that by describing anyway. |
+
+Asked *instead*, your text also takes over from `length`: whoever writes the
+question owns the shape of its answer, so state the length yourself if it
+matters. Added, the role's question and the length preset both stay where they
+were.
 
 **A `videos` slot takes a `VIDEO` or an `IMAGE` batch**, whichever your loader
 hands out — VideoHelperSuite's `Load Video (Upload)` wires straight in. Frames
@@ -727,10 +791,11 @@ category, continuing from whatever arrives on `previous`. So this node still sit
 in a chain with single caption nodes on either side.
 
 `model`, `length`, `seed`, `max_frames`, `context_size` and `bypass` are shared
-by every asset in the node. `role`, `description` and `instruction` are gone on
-purpose: the group is the role, and text you write yourself belongs to one asset
-at a time. Keep [Reference Caption](#minimax-h3-reference-caption) for an asset
-you want to describe by hand or ask a different question about.
+by every asset in the node; the question is not, and lives on the band under each
+square. `role` and `description` are gone on purpose: the group is the role, and
+a description you write out yourself belongs to one asset at a time. Keep
+[Reference Caption](#minimax-h3-reference-caption) for an asset you would rather
+describe by hand.
 
 > **This node needs a recent ComfyUI.** Its growing inputs are `io.Autogrow` from
 > the v3 node API. On an older install it is the only node that goes missing —

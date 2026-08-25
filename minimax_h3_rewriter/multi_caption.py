@@ -38,15 +38,17 @@ from comfy_api.latest import io
 from . import clip_caption, discovery, media, mtmd_engine
 from .nodes import (
     BYPASS_CAPTION_TOOLTIP,
-    CAPTION_INSTRUCTIONS,
     CAPTION_LENGTHS,
     CATEGORY,
     DEFAULT_OPTIONS,
+    INSTRUCTIONS_TOOLTIP,
     OPTIONS_TYPE,
     _ensure_pair,
     _resolve_captioner_choice,
+    caption_question,
     captioner_choices,
     next_index,
+    slot_instructions,
 )
 from .progress import NodeProgress
 
@@ -94,14 +96,15 @@ DESCRIPTION = (
     "Describes every connected reference asset with a small multimodal model and writes them out "
     "as one finished 'reference_assets' block for the Ref2VA writer. The group an asset is "
     "plugged into decides its label, so the four labels the guide allows are the only four that "
-    "can come out. Inputs grow as you fill them, and the checkbox on a slot's own row silences it "
-    "without unplugging anything."
+    "can come out. Inputs grow as you fill them, and the strip below shows what is connected: "
+    "click a square to silence that reference without unplugging it, and the band under a square "
+    "asks that one reference something other than its role's usual question."
 )
 
 MASK_TOOLTIP = (
-    "Which slots are switched off, as JSON, written by the checkboxes on the input rows. It is "
-    "kept as a widget so the state travels with the workflow and through the API; the interface "
-    "hides it. A slot missing from the map is on."
+    "Which slots are switched off, as JSON, written by the squares on the strip. It is kept as a "
+    "widget so the state travels with the workflow and through the API; the interface draws it as "
+    "squares instead. A slot missing from the map is on."
 )
 
 
@@ -308,6 +311,12 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
                     optional=True,
                     tooltip=BYPASS_CAPTION_TOOLTIP,
                 ),
+                io.String.Input(
+                    "reference_instructions",
+                    default="{}",
+                    optional=True,
+                    tooltip=INSTRUCTIONS_TOOLTIP,
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="reference_assets"),
@@ -330,6 +339,7 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
         clip=None,
         options=None,
         enabled_mask="{}",
+        reference_instructions="{}",
         max_frames=media.DEFAULT_MAX_FRAMES,
         context_size=mtmd_engine.CONTEXT_FROM_MODEL,
         bypass=False,
@@ -378,6 +388,8 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
         else:
             clip_caption.check(clip, kinds)
 
+        asked_for = slot_instructions(reference_instructions)
+
         progress.set_total(len(assets))
         captions = []
         for done, asset in enumerate(assets):
@@ -388,7 +400,7 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
                 f"{asset.role} {index}: reading {asset.slot} ({done + 1} of {len(assets)})",
             )
 
-            asked = f"{CAPTION_INSTRUCTIONS[asset.role]} {CAPTION_LENGTHS[length]}"
+            asked = caption_question(asset.role, length, asked_for.get(asset.slot))
             as_image = asset.value if asset.kind == "image" or frames else None
             as_audio = asset.value if asset.kind == "audio" else None
             as_video = None if frames else (asset.value if asset.kind == "video" else None)
