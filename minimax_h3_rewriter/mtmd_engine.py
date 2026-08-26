@@ -69,6 +69,7 @@ CONTEXT_EXCEEDED = (
     "too long",
     "exceed",
     "n_batch",
+    "find a memory slot",
 )
 
 
@@ -155,8 +156,9 @@ def _failure_hint(message: str, n_ctx: int) -> str:
         size = f"{n_ctx} tokens" if n_ctx else "the model's own"
         return (
             f"That is the other direction: the pictures did not fit the context, which was "
-            f"{size}. Raise 'context_size' on the node, or lower 'max_frames' -- mtmd charges "
-            f"a frame by its resolution, so a long clip at full size is expensive."
+            f"{size}. Raise 'context_size' -- or 'n_ctx' on the Options node -- or lower "
+            f"'max_frames': mtmd charges a frame by its resolution, so a long clip at full "
+            f"size is expensive."
         )
     return (
         "Not every multimodal GGUF works here: llama.cpp's mtmd has to understand the "

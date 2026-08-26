@@ -15,6 +15,7 @@ import {
     installStripStyle,
     instructionBand,
     readInstructions,
+    slotNumber,
     stripHeight as stripHeightFor,
     writeInstruction,
 } from "./reference_strip.js";
@@ -80,11 +81,6 @@ function slotOf(input, prefix) {
     const name = String(input?.name || "");
     const tail = name.slice(name.lastIndexOf(".") + 1);
     return tail.startsWith(prefix) ? tail : null;
-}
-
-function slotNumber(name) {
-    const tail = name.slice(name.lastIndexOf("_") + 1);
-    return /^\d+$/.test(tail) ? Number(tail) : 0;
 }
 
 function arranged(node) {

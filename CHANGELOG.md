@@ -6,6 +6,123 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.17.0 - 2026-08-26
+
+### Added
+
+- **MiniMax-H3 Prompt Rewriter Omni**, for LightX2V's third adapter - the first
+  that hears. It is trained on Qwen2.5-Omni-7B, the same model this pack's
+  captioners already use, so a reference reaches it as the asset itself rather
+  than as a sentence somebody wrote about it: the picture, the clip, or the
+  sound. It is also the only one of the three trained on **Ref2AV**, the
+  full-reference task, which answers with six fields instead of three.
+
+  One growing socket takes an IMAGE, a VIDEO or an AUDIO, so there is no wrong
+  socket to plug into: what a reference is called follows from what it is, and
+  pictures are numbered among pictures, sounds among sounds. The strip below
+  shows what is connected, in what order, and what each will be called - and
+  that order is the ordering: drag the second picture to the front and it
+  becomes `<Picture 1>`. There is deliberately no relabelling here, unlike the
+  Universal Writer's strip: the socket settles what a reference is, and a
+  *subject* is something this adapter produces in `subject_definitions`, not
+  something the request supplies.
+
+  `duration` is snapped before it is written into the turn. MiniMax-H3 generates
+  on a 17n+5 frame grid at 24 fps, so most lengths do not exist: ask for 10
+  seconds and it is 243 frames, 10.13 s, and that is the number the alignment
+  line quotes back. The widget stays what you meant.
+
+- **The Omni adapter as GGUF**, converted from LightX2V's safetensors with
+  llama.cpp's `convert_lora_to_gguf.py` and published at
+  [pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-Omni-GGUF](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-Omni-GGUF)
+  in `F16` (0.65 GB) and `Q8_0` (0.34 GB, same rewrite behaviour). Which means
+  the Omni rewriter runs on the llama.cpp route with nothing installed, at a 6.2
+  GB download rather than the 22.4 GB the safetensors base costs.
+
+- **`models_omni` and `adapters_omni` in `models.json`**, holding the
+  Qwen2.5-Omni-7B bases in both shapes the adapter is published for. Two kinds
+  of near-miss are marked in the list rather than hidden: a Qwen2.5-Omni-**3B**
+  is `(wrong size for the adapter)`, and a **Qwen2.5-VL-7B** - the same
+  architecture string, the same 28 blocks, the same width, so the adapter *would*
+  attach - is `(vision only, not an Omni build)`, told apart by its projector
+  having no audio encoder.
+
+- **A third tab on the Universal Rewriter, and Ref2VA with it.** Same prompt,
+  same two frames, third adapter, one click. `model_omni` and `quantization_omni`
+  belong to the tab; everything above them is shared, as before.
+
+  The tab also brings the fifth task, and two sockets to feed it:
+  `reference_video` and `reference_audio`, read by `Ref2VA` and by nothing else -
+  the other two adapters have no ear, and the four frame tasks take pictures
+  alone, so a sound connected to `FL2VA` is refused by name rather than quietly
+  dropped. On `Ref2VA` everything connected is a reference in socket order:
+  `first_frame`, `last_frame`, the clip, the sound.
+
+  Its four extra outputs are appended **after** the three every task fills rather
+  than interleaved with them, because ComfyUI addresses an output link by its
+  slot index: putting `subject_definitions` in the middle would have moved
+  `overall_soundscape` in every workflow already built on this node. The same
+  trap as widget positions, one layer down.
+
+  Four references and no strip, where the Prompt Rewriter Omni node takes twelve
+  and lets you drag them: order is the whole labelling rule, and with four
+  sockets the order is the order of the sockets.
+
+### Fixed
+
+- **A section deleted from the model list stays deleted.** Removing entries one
+  at a time already stuck -- `seed_offered` records every name the packaged list
+  has ever put in front of you, so anything you take out is not put back. But
+  removing a whole section did not: the merge read an absent section as "this
+  installation predates it" and copied the packaged one in wholesale, every
+  start, forever. Which made a section the one edit the file would not keep,
+  in the one file whose whole point is that it is yours to edit.
+
+  The two situations are told apart by the same record the entries use. An
+  installation that predates a section has never been offered its entries and
+  gets all of them; somebody who deleted the section has been offered every one
+  and gets none. Found while checking that `models_omni` and `adapters_omni`
+  reach an existing user file - they do, and this was underneath.
+
+- **A reference frame no longer arrives at the vision tower full size.** Qwen
+  spends a token per 28x28 block, so a 1616x1616 picture - which is what a
+  ComfyUI workflow hands over without thinking about it - is 3249 tokens. Two of
+  them overflowed an 8k context before a word of the prompt was counted, and
+  `FL2AV` died at `decode: failed to find a memory slot for batch of size 1316`
+  with both pictures already encoded. `I2AV` with one picture survived, which is
+  what made it look like a broken task rather than a budget.
+
+  The size is not the only thing wrong with that. LightX2V's own inference
+  scripts cap a picture on the processor - 301056 pixels for the Omni adapter,
+  1024x1024 for the 8B - so a full-size frame is also a shape neither model saw
+  in training. Both nodes now scale to their adapter's own ceiling, and a frame
+  taken from a clip is capped harder still, at 100352 pixels, for the reason a
+  clip is many pictures.
+
+  The context is then sized to what the turn actually costs, measured off the
+  written files rather than guessed, so a `Ref2AV` with eight references widens
+  it instead of failing.
+
+- **The Omni safetensors base is no longer refused as the wrong model.** The
+  check that reads `config.json` looked one level in, at `text_config`.
+  Qwen2.5-Omni keeps its language model two levels down, under
+  `thinker_config.text_config`, because the checkpoint holds a talker and a
+  vocoder as well - so the top level has no `hidden_size` at all and the base the
+  adapter was trained on was reported as `not Qwen2.5-Omni-7B`. It now walks
+  down.
+
+- **And it now loads.** `AutoModelForImageTextToText` has no entry for
+  `qwen2_5_omni`, only for the thinker inside it, which is the half the adapter
+  was cut for and the only half that writes anything - so even past the check
+  above the load would have failed with "unrecognized configuration class". The
+  loader descends the same nested configs and takes the class from Transformers'
+  own mapping.
+
+- **A full KV cache no longer reports itself as an unreadable projector.** `find
+  a memory slot` was not among the strings the failure hint recognised, so it
+  fell through to the note about projector formats and sent the reader off to
+  change models when the fix was one number.
+
 ## 0.16.6 - 2026-08-25
 
 ### Added

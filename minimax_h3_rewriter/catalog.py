@@ -48,11 +48,12 @@ FORMATS = (FORMAT_TRANSFORMERS, FORMAT_GGUF)
 
 PLACEHOLDER = "REPLACE_ME"
 
-SECTIONS = ("models", "models_8b", "writers", "captioners")
+SECTIONS = ("models", "models_8b", "models_omni", "writers", "captioners")
 
 ADAPTERS_27B = "adapters"
 ADAPTERS_8B = "adapters_8b"
-ADAPTER_SECTIONS = (ADAPTERS_27B, ADAPTERS_8B)
+ADAPTERS_OMNI = "adapters_omni"
+ADAPTER_SECTIONS = (ADAPTERS_27B, ADAPTERS_8B, ADAPTERS_OMNI)
 
 RENAMED_REPOS = {
     "ivanfromm/minimax-h3-prompt-rewriter-lora-gguf":
@@ -247,21 +248,28 @@ def merge(live: dict, seed: dict) -> tuple[dict, list[str]]:
             continue
 
         current = merged.get(section)
+        known = set(_names(current)) if isinstance(current, list) else set()
+        seen = set(offered.get(section) or [])
+        fresh = [
+            raw for raw in available
+            if isinstance(raw, dict) and raw.get("name")
+            and raw["name"] not in known and raw["name"] not in seen
+        ]
+
         if not isinstance(current, list):
-            # The section did not exist at all -- this installation predates it.
-            merged[section] = list(available)
-            changes.append(f"{section}: added {len(available)} (section is new)")
-        else:
-            known = set(_names(current))
-            seen = set(offered.get(section) or [])
-            fresh = [
-                raw for raw in available
-                if isinstance(raw, dict) and raw.get("name")
-                and raw["name"] not in known and raw["name"] not in seen
-            ]
+            # The section is absent, which is two different situations told
+            # apart by ``seed_offered``: an installation that predates the
+            # section has never been offered its entries and gets all of them,
+            # while somebody who deleted the section has been offered every one
+            # and gets none. Adding them back regardless is what this used to
+            # do, and it made a whole section the one edit the file would not
+            # keep -- deleting the entries one at a time already stuck.
             if fresh:
-                merged[section] = current + fresh
-                changes.append(f"{section}: added {', '.join(_names(fresh))}")
+                merged[section] = fresh
+                changes.append(f"{section}: added {len(fresh)} (section is new)")
+        elif fresh:
+            merged[section] = current + fresh
+            changes.append(f"{section}: added {', '.join(_names(fresh))}")
 
         offered[section] = sorted(set(offered.get(section) or []) | set(_names(available)))
 
@@ -397,6 +405,16 @@ def models_8b() -> list[CatalogEntry]:
     their own lists.
     """
     return _entries(_data(), "models_8b")
+
+
+def models_omni() -> list[CatalogEntry]:
+    """Base models for the Omni rewriter, which reads frames, clips and sound.
+
+    A third list for the third architecture, and the same reason as the other
+    two: an entry here loads in no other node, and offering it there would only
+    produce a tensor-shape error after a multi-gigabyte download.
+    """
+    return _entries(_data(), "models_omni")
 
 
 def writers() -> list[CatalogEntry]:

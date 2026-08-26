@@ -14,6 +14,7 @@ for [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) comes out — enti
   <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA"><img alt="Hugging Face" src="https://img.shields.io/badge/Hugging%20Face-LoRA-FFD21E?logo=huggingface&logoColor=black"></a>
   <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-GGUF"><img alt="GGUF adapter, 27B" src="https://img.shields.io/badge/GGUF-27B-FFD21E?logo=huggingface&logoColor=black"></a>
   <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-8B-GGUF"><img alt="GGUF adapter, 8B" src="https://img.shields.io/badge/GGUF-8B-FFD21E?logo=huggingface&logoColor=black"></a>
+  <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-Omni-GGUF"><img alt="GGUF adapter, Omni" src="https://img.shields.io/badge/GGUF-Omni-FFD21E?logo=huggingface&logoColor=black"></a>
 </p>
 
 ![The rewriter node in ComfyUI: a short prompt on the left, the structured shot-by-shot description, soundscape and music fields on the right](docs/node_preview.png)
@@ -38,25 +39,27 @@ English, which is what MiniMax-H3 expects.
 
 There are three ways to get that output, and the pack ships all of them:
 
-| | Rewriter node | Rewriter 8B | Writer nodes |
-|---|---|---|---|
-| Where the format comes from | the LoRA — a 27B trained until H3 output came out of it unprompted | a second LoRA, on a model that also sees | MiniMax's own writing guide, in the system prompt |
-| Model | Qwen3.6-27B only | Qwen3-VL-8B-Instruct only | any instruction-following GGUF |
-| Smallest working setup | ~10 GB download, ~13 GB VRAM | ~6.1 GB download, ~9 GB VRAM | **2.6 GB download, ~5 GB VRAM** |
-| Tasks | T2VA | T2VA, I2VA, FL2VA, L2VA | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
-| Reference frames | described to it in words | **it looks at them** | described to it in words |
-| Quality | the reference | the same trained contract, at a third of the download; wobblier on the alignment line | close, and it runs on hardware the LoRA cannot touch |
+| | Rewriter node | Rewriter 8B | Rewriter Omni | Writer nodes |
+|---|---|---|---|---|
+| Where the format comes from | the LoRA — a 27B trained until H3 output came out of it unprompted | a second LoRA, on a model that also sees | a third LoRA, on a model that also hears | MiniMax's own writing guide, in the system prompt |
+| Model | Qwen3.6-27B only | Qwen3-VL-8B-Instruct only | Qwen2.5-Omni-7B only | any instruction-following GGUF |
+| Smallest working setup | ~10 GB download, ~13 GB VRAM | ~6.1 GB download, ~9 GB VRAM | ~6.2 GB download, ~9 GB VRAM | **2.6 GB download, ~5 GB VRAM** |
+| Tasks | T2VA | T2VA, I2VA, FL2VA, L2VA | T2VA, I2VA, FL2VA, L2VA, **Ref2VA** | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
+| Reference frames | described to it in words | **it looks at them** | **it looks at them** | described to it in words |
+| Clips and sound | described to it in words | described to it in words | **it watches and listens** | described to it in words |
+| Quality | the reference | the same trained contract, at a third of the download; wobblier on the alignment line | the only one that hears; six fields on Ref2VA | close, and it runs on hardware the LoRA cannot touch |
 
-The first two columns are also available as one node — [Universal Rewriter](#minimax-h3-universal-rewriter) — where a tab swaps the adapter and everything else stays where it is.
+The first three columns are also available as one node — [Universal Rewriter](#minimax-h3-universal-rewriter) — where a tab swaps the adapter and everything else stays where it is.
 
-Two of the three read text only. [Reference Caption](#minimax-h3-reference-caption)
+Two of the four read text only. [Reference Caption](#minimax-h3-reference-caption)
 turns an image, an audio clip or a video into the text they need — 3 to 5 seconds
 per asset on a 3.4 GB model. When a whole shot's worth of references is waiting,
 [Multi Reference Caption](#minimax-h3-multi-reference-caption) does all of them at
 once — or [Universal Writer](#minimax-h3-universal-writer) describes them and writes
 the prompt in the same node, with their order a widget you can drag rather than a
 consequence of which slot you happened to use. The 8B rewriter needs none of that
-for its reference *frames*: connect the picture and it reads it.
+for its reference *frames*: connect the picture and it reads it. The Omni rewriter
+needs none of it at all — a clip and a sound reach it as themselves.
 
 If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2vai2vafl2val2va).
 
@@ -208,40 +211,167 @@ picture is occasionally credited to `Shot 1` rather than the last shot. The
 27B does not do this. Nothing downstream parses that line, so it costs
 correctness nowhere — but it is worth a glance before pasting.
 
+### MiniMax-H3 Prompt Rewriter Omni (sees and hears)
+
+LightX2V's third adapter, and the first that listens. It is trained on
+[Qwen2.5-Omni-7B](https://huggingface.co/Qwen/Qwen2.5-Omni-7B) — the same model
+this pack's captioners already use — so a reference reaches it as the asset
+itself: the picture, the clip, or the sound. It is also the only one of the three
+that covers **Ref2AV**, the full-reference task, which answers with six fields
+instead of three.
+
+![The Omni rewriter node set to REF2AV: four reference sockets down the left with a checkbox on each row, eight outputs on the right from rewritten_prompt down to non_diegetic_music, and between them a strip of three coloured squares - a blue "pic 1" over ref_0, a blue "pic 2" over ref_1 and a purple "aud 1" over ref_2 - above the line "drag to reorder - that order numbers the labels - click a square to switch it off". Below that the five tasks with REF2AV lit, six aspect-ratio rectangles drawn to proportion with 16:9 chosen, a duration of 10.0, a Russian prompt, and an on-disk Qwen2.5-Omni-7B Q8_0 with its projector. On the right the finished rewrite fills all six Ref2AV fields, naming Subject 1, Subject 2, Picture 1, Picture 2 and Audio 1 across two shots](docs/node_rewriter_omni.png)
+
+**Outputs.** Seven, and which of them fill depends on the task. The four frame
+tasks return the same three as the other two rewriters, so they are
+interchangeable downstream. `Ref2AV` returns six: `subject_definitions`,
+`summary`, `retention_analysis`, `detailed_description`, `overall_soundscape`
+and `non_diegetic_music` — the same set the
+[Ref2VA writer](#minimax-h3-prompt-writer-ref2va) produces, and the same meanings.
+`rewritten_prompt` always carries the whole answer.
+
+**Inputs**
+
+- `prompt`, `resolution`, `greedy`, `seed` — as above.
+- `references` — one growing socket that takes an IMAGE, a VIDEO or an AUDIO.
+  There is no wrong socket to plug into: what a reference is called follows from
+  what it is. Pictures are numbered among pictures and sounds among sounds, so
+  connecting a sound between two pictures does not renumber them.
+- `task` — `T2AV`, `I2AV`, `L2AV`, `FL2AV`, `REF2AV`. Only `REF2AV` takes clips
+  and sound; the other four are written from pictures alone, and connecting a
+  sound to one of them is refused by name before anything loads.
+- `duration` — **the node snaps it.** MiniMax-H3 generates on a 17n+5 frame grid
+  at 24 fps, so most lengths do not exist: ask for 10 seconds and it is 243
+  frames, 10.13 s, and *that* is the number written into the turn and quoted back
+  in the alignment line. The widget is what you meant; the line and the video
+  agree because of the snapping.
+- `model` — a Qwen2.5-Omni-7B base, as a **GGUF** pair (the model and its
+  projector) or as the official **safetensors** folder. Entries prefixed
+  `on disk:` are already in your model folders. Two kinds of near-miss are marked
+  rather than hidden: a Qwen2.5-Omni-**3B** is `(wrong size for the adapter)`,
+  and a **Qwen2.5-VL-7B** — which is the same architecture string, the same 28
+  blocks and the same width, so the adapter *would* attach — is
+  `(vision only, not an Omni build)`, because its projector has no audio encoder
+  and the rewrite would be about sound that was never heard.
+- `quantization` — how to load a **safetensors** base: `nf4` about 9 GB of VRAM,
+  `int8` about 12, `bfloat16` about 20. Ignored for GGUF. **Pick the largest your
+  card holds** — see below.
+- `max_frames` — how many frames to take from a clip, spread evenly. Each frame
+  is its own picture to the model.
+- `reference_layout` — the strip's state as JSON. It is a widget so the
+  arrangement travels with the workflow and through the API; the interface draws
+  it as squares instead.
+- `keep_model_loaded` — honoured on a **safetensors** base. On a **GGUF** base a
+  task with references runs through `llama-mtmd-cli`, a fresh process that takes
+  the model with it when it exits, and the node says so rather than ignoring the
+  switch.
+- `options` — the same options node as everything else.
+
+**The strip is the ordering.** Every connected reference appears as a coloured
+square — blue for a picture, green for a clip, purple for a sound — showing what
+it will be called and which socket it came from. Drag to reorder, and that order
+is what numbers the labels: dragging the second picture to the front is what
+makes it `<Picture 1>`. Click a square to switch it off without unplugging it.
+The task strip greys out a task the connected references cannot serve and says
+why on hover, so `FL2AV` with one picture is visibly unavailable rather than a
+failure two minutes later.
+
+There is deliberately **no relabelling here**, unlike the Universal Writer's
+strip. There, a picture can be told to stand for a subject or a clip, because the
+guide-driven turn names its references by hand. Here the socket settles it — and
+a *subject* is something this adapter **produces** in `subject_definitions`, not
+something the request supplies.
+
+**What it costs**
+
+| | Download | VRAM |
+|---|---|---|
+| Q4_K_M base + projector + Q8_0 adapter | 4.4 + 1.4 + 0.34 GB | ~9 GB |
+| Q8_0 base + projector + F16 adapter | 8.1 + 1.4 + 0.65 GB | ~13 GB |
+| safetensors base + adapter, `nf4` | 22.4 + 1.3 GB | ~9 GB |
+| safetensors base + adapter, `bfloat16` | 22.4 + 1.3 GB | ~20 GB |
+
+The GGUF adapter is converted from LightX2V's own safetensors with llama.cpp's
+`convert_lora_to_gguf.py` and published at
+[pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-Omni-GGUF](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-Omni-GGUF).
+The `Q8_0` build is half the size of the `F16` and behaves the same.
+
+**Quantization buys VRAM, not speed.** Which is the opposite of the intuition — a
+smaller model should move fewer bytes and go faster. Measured on this adapter, on
+one card, same prompt, same two pictures, same 256 tokens:
+
+| | VRAM | Generation |
+|---|---|---|
+| `bfloat16` | 19.4 GB | **18.6 tok/s** |
+| `nf4` | 8.6 GB | 15.1 tok/s |
+| `int8` | 12.0 GB | 6.0 tok/s |
+
+`int8` is the worst of the three on both counts: slower than `nf4` *and* larger
+than it. That is not a quirk of this adapter — bitsandbytes' `load_in_8bit` is
+LLM.int8(), which splits every matmul into an fp16 outlier part and an int8 part
+and recombines them, casting the activations each time. It is a scheme for
+fitting a model that would not fit, and it costs what it costs. `nf4` is the
+better small option and dequantizes on every matmul too, which is why it does not
+beat `bfloat16` either. So quantize only down to what the card actually holds:
+with 24 GB or more, `bfloat16` is both the fastest and the most faithful.
+
+The same applies to any safetensors base in this pack, since the mechanism is
+bitsandbytes' rather than the model's. **And none of it applies to the GGUF
+route**, where llama.cpp has real quantized kernels: the same FL2AV that takes
+26 seconds through `bfloat16` safetensors takes 10 through `Q4_K_M`.
+
+**Pictures are scaled before the model sees them.** LightX2V's own inference
+script caps a picture at 301056 pixels — 384 tokens — and a frame from a clip at
+100352, and this node does the same. It is not only a saving: a 1616×1616 picture
+is 3249 tokens, two of them overflow an 8k context before a word of the prompt is
+counted, and the model is being shown a shape it never saw in training. The
+context is then sized to what the turn actually costs, so a `Ref2AV` with eight
+references widens it instead of failing.
+
+**The safetensors route shows pictures only.** ComfyUI's in-process Transformers
+path has no way to hand the model a sound, so a clip or a sound on that base is
+refused rather than silently dropped from the turn. Pick a GGUF base to use them.
+
 ### MiniMax-H3 Universal Rewriter
 
-Both prompt-rewriter LoRAs in one node, with a tab at the top choosing which one
-runs. [Prompt Rewriter](#minimax-h3-prompt-rewriter) and
-[Prompt Rewriter 8B](#minimax-h3-prompt-rewriter-8b-sees-frames) are unchanged
-and still there — nothing you have already built stops working.
+All three prompt-rewriter LoRAs in one node, with a tab at the top choosing which
+one runs. [Prompt Rewriter](#minimax-h3-prompt-rewriter),
+[Prompt Rewriter 8B](#minimax-h3-prompt-rewriter-8b-sees-frames) and
+[Prompt Rewriter Omni](#minimax-h3-prompt-rewriter-omni-sees-and-hears) are
+unchanged and still there — nothing you have already built stops working.
 
-The two adapters are not two settings of one thing. The 27B is text: Qwen3.6-27B,
-one task, and a reference frame reaches it only as a sentence somebody wrote. The
-8B is multimodal: Qwen3-VL-8B, four tasks, and the picture itself. Different
-base, different size, different download.
+The three adapters are not three settings of one thing. The 27B is text:
+Qwen3.6-27B, one task, and a reference frame reaches it only as a sentence
+somebody wrote. The 8B is multimodal: Qwen3-VL-8B, four tasks, and the picture
+itself. The Omni is multimodal and hears as well: Qwen2.5-Omni-7B, the same four
+tasks and a fifth of its own. Different base, different size, different
+download.
 
 Which is exactly why choosing between them by hand is tedious. The prompt is the
 same prompt, the aspect ratio is the same aspect ratio, the duration is the same
-duration — so trying the other adapter meant retyping all of it into a second
-node and then keeping the two in step.
+duration — so trying another adapter meant retyping all of it into a second node
+and then keeping them in step.
 
 ![The Universal Rewriter on its 27B tab: two tabs across the top with "27B LoRA / text only" lit and "8B LoRA / sees frames" dark, a task strip with T2VA lit and I2VA, FL2VA and L2VA greyed out, six aspect-ratio rectangles drawn to proportion with 16:9 chosen, a duration slider at 8, the prompt, and below them model_27b pointing at an on-disk Qwen3.6-27B GGUF with quantization_27b set to nf4](docs/node_universal_rewriter_27b.png)
 
 ![The same node one click later, on its 8B tab: "8B LoRA / sees frames" lit and "27B LoRA" dark, all four tasks available with FL2VA chosen, the same 16:9, the same duration of 8 and the same prompt, and below them model_8b pointing at an on-disk Qwen3-VL-8B-Instruct with quantization_8b set to int8](docs/node_universal_rewriter_8b.png)
 
-*The same node, one click apart. Nothing above the model rows moved — the ratio,
-the duration, the prompt are one set of values. Below them each tab is holding
-its own: a 27B GGUF at `nf4` on one, a Qwen3-VL-8B at `int8` on the other, both
-still where they were left. The task strip is the other difference — the 27B tab
-lights `T2VA` alone, while on the 8B tab all four are available, because both
-frame inputs are connected and switched on.*
+![The Universal Rewriter on its Omni tab, running Ref2VA: four reference rows down the left - first_frame, last_frame, reference_video and reference_audio, each with a checkbox - and eight outputs on the right, the three every task fills first and the four Ref2VA adds after them. Three tabs across the top with Omni lit, a task strip with Ref2VA lit, 16:9 chosen among the ratio rectangles, a duration slider at 10, the prompt, and below them model_omni pointing at an on-disk Qwen2.5-Omni-7B Q8_0 with quantization_omni set to nf4. On the right the six-field answer, with Audio 1 marked partially_copy in the retention analysis](docs/node_universal_rewriter_omni.png)
+
+*The same node, three clicks apart. Nothing above the model rows moved — the
+ratio, the duration, the prompt are one set of values. Below them each tab is
+holding its own: a 27B GGUF at `nf4` on the first, a Qwen3-VL-8B at `int8` on the
+second, a Qwen2.5-Omni-7B at `nf4` on the third, all still where they were left.
+The task strip is the other difference — the 27B tab lights `T2VA` alone; the 8B
+tab has all four frame tasks, because both frame inputs are connected and
+switched on; and the Omni tab adds `Ref2VA`, which no other tab can reach.*
 
 **So the tab carries what differs, and nothing else:**
 
 | Belongs to the tab | Shared between them |
 |---|---|
-| `model_27b` / `model_8b` | `prompt`, `task`, `resolution`, `duration` |
-| `quantization_27b` / `quantization_8b` | `greedy`, `seed`, `keep_model_loaded`, `bypass`, `options`, both frames |
+| `model_27b` / `model_8b` / `model_omni` | `prompt`, `task`, `resolution`, `duration` |
+| `quantization_27b` / `quantization_8b` / `quantization_omni` | `greedy`, `seed`, `keep_model_loaded`, `bypass`, `options`, both frames, the clip and the sound |
 
 The widget the other tab uses is hidden rather than reset, so it is still set to
 whatever you last chose when you switch back — including across a save and load.
@@ -261,15 +391,34 @@ whatever you last chose when you switch back — including across a save and loa
 **The task switch is shared, and the 27B tab does not touch it.** On that tab it
 shows `T2VA` lit with the three frame tasks greyed out, because that is the
 honest picture of a text-only model, and clicking does nothing at all — the value
-the 8B tab had is still there when you switch back. On the 8B tab a frame task
-greys out until the frame it is written from is actually connected and switched
-on, the same way `Ref2VA` does on the Universal Writer.
+the other two tabs had is still there when you switch back. On the 8B and Omni
+tabs a frame task greys out until the frame it is written from is actually
+connected and switched on, the same way `Ref2VA` does on the Universal Writer.
 
-**Two IMAGE inputs, with a checkbox on each row.** `first_frame` and `last_frame`
-are the same two the 8B node has, and a switched-off row counts as unplugged —
-which is how a picture gets parked without dragging the wire off. Run the 27B tab
-with frames connected and the node says on itself that it is not reading them,
-and where to put them instead, rather than leaving you to wonder.
+**`Ref2VA` is on the Omni tab, with a clip socket and a sound socket to feed it.**
+`reference_video` and `reference_audio` are read by that task and by nothing else
+— the 27B and 8B adapters have no ear, and the four frame tasks take pictures
+alone, so connecting a sound to `FL2VA` is refused by name rather than quietly
+dropped. On `Ref2VA` everything connected becomes a reference the target video
+reuses, in socket order: `first_frame` is `<Picture 1>`, `last_frame` is
+`<Picture 2>`, then `<Video 1>`, then `<Audio 1>`. The answer comes back in six
+fields instead of three; the four extra outputs sit **after** the three every
+task fills, so nothing already wired to this node moves.
+
+> **Four references, not twelve.** Order is the whole labelling rule, and with
+> four sockets the order is the order of the sockets. Past that, arranging them
+> by hand is the thing you actually want — which is what the draggable strip on
+> [Prompt Rewriter Omni](#minimax-h3-prompt-rewriter-omni-sees-and-hears) is for,
+> along with `max_frames` and any number of pictures. This tab is for the other
+> thing: trying the same prompt on a different adapter without leaving the node.
+
+**Four reference inputs, with a checkbox on each row.** `first_frame` and
+`last_frame` are the same two the 8B node has; `reference_video` and
+`reference_audio` are the two `Ref2VA` adds. A switched-off row counts as
+unplugged — which is how a reference gets parked without dragging the wire off.
+Run the 27B tab with any of them connected and the node says on itself that it is
+not reading them, and where to put them instead, rather than leaving you to
+wonder.
 
 **`duration` is a slider, and its range is 4–15 seconds.** Not a property you can
 raise, unlike the Universal Writer's: that node writes from a prose guide, while
@@ -277,10 +426,10 @@ these two are LoRAs, and 4–15 is the range they were trained on. A number outs
 it is a worse prompt rather than a longer video — MiniMax-H3 gets the length from
 its own settings, not from this line.
 
-**There is no "Open guide folder" button**, because neither adapter reads a
-guide: the format is in the system prompt they were trained with. The model list
-button is there, and it opens the same `models.json` — `models` for the 27B tab,
-`models_8b` for the 8B one.
+**There is no "Open guide folder" button**, because none of the three adapters
+reads a guide: the format is in the system prompt they were trained with. The
+model list button is there, and it opens the same `models.json` — `models` for
+the 27B tab, `models_8b` for the 8B one, `models_omni` for the Omni one.
 
 > **If the interface script does not load**, the tab strip, the task switch and
 > the ratio picker fall back to the plain dropdowns they are built on, and every
@@ -930,7 +1079,7 @@ in your desktop's JSON editor — on the machine running ComfyUI, which is not
 necessarily the one looking at the browser tab. It is seeded from the packaged
 copy on first use, so updating the node pack never overwrites your edits.
 
-It holds four lists with the same fields. **`models`** feeds the LoRA rewriter
+It holds five lists with the same fields. **`models`** feeds the LoRA rewriter
 and has to be Qwen3.6-27B:
 
 ```json
@@ -957,10 +1106,26 @@ an `mmproj` beside the model — being multimodal, it is two files:
 }
 ```
 
-A list of its own rather than more entries in `models`, because an entry from
-either would fail to load in the other's node — different architecture,
-different adapter. The two adapters live apart for the same reason, under
-`adapters` and `adapters_8b`.
+**`models_omni`** feeds the Omni rewriter, has to be Qwen2.5-Omni-7B, and takes
+the same two files — with the difference that its projector has to carry an audio
+encoder, or the adapter attaches to a model that cannot hear:
+
+```json
+{
+  "name": "Qwen2.5-Omni-7B GGUF Q4_K_M",
+  "repo": "ggml-org/Qwen2.5-Omni-7B-GGUF",
+  "file": "Qwen2.5-Omni-7B-Q4_K_M.gguf",
+  "mmproj": "mmproj-Qwen2.5-Omni-7B-Q8_0.gguf",
+  "format": "gguf",
+  "download_gb": 6.2,
+  "vram": "~9 GB with the adapter and a 12k context"
+}
+```
+
+Three lists rather than more entries in `models`, because an entry from any of
+them would fail to load in either other node — different architecture, different
+adapter. The three adapters live apart for the same reason, under `adapters`,
+`adapters_8b` and `adapters_omni`.
 
 **`writers`** feeds the writer nodes and can be anything, as long as it is a GGUF
 language model with a chat template:

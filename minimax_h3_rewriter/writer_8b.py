@@ -64,6 +64,10 @@ BASE_REPO_8B = "Qwen/Qwen3-VL-8B-Instruct"
 
 BASE_SPEC_8B = dict(BASE_SPEC, default_repo=BASE_REPO_8B, label="Base model")
 
+PATCH_8B = 32
+
+IMAGE_MAX_PIXELS_8B = 1024 * 1024
+
 
 @dataclass
 class BaseChoice:
@@ -271,7 +275,7 @@ def _with_transformers(
 
     images = []
     for name, value in frames:
-        picture = media.pil_frames(value, 1)
+        picture = media.pil_frames(value, 1, IMAGE_MAX_PIXELS_8B, PATCH_8B)
         if not picture:
             raise ValueError(f"'{name}' is an empty IMAGE batch, so there is no frame to read.")
         images.append(picture[0])
@@ -309,7 +313,10 @@ def _with_frames(
         )
     with media.Workspace() as workspace:
         attachments = [
-            ("image", media.image_files(tensor, workspace, max_frames=1, prefix=name)[0])
+            ("image", media.image_files(
+                tensor, workspace, max_frames=1, prefix=name,
+                max_pixels=IMAGE_MAX_PIXELS_8B, patch=PATCH_8B,
+            )[0])
             for name, tensor in frames
         ]
         return mtmd_engine.describe(

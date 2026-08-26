@@ -105,6 +105,24 @@
       ]
     }
   },
+  "adapters_omni": {
+    "transformers": {
+      "repo": "lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA-Omni",
+      "download_gb": 1.29
+    },
+    "gguf": {
+      "repo": "pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-Omni-GGUF",
+      "file": "MiniMax-H3-Prompt-Rewriter-LoRA-Omni-F16.gguf",
+      "download_gb": 0.65,
+      "alternatives": [
+        {
+          "file": "MiniMax-H3-Prompt-Rewriter-LoRA-Omni-Q8_0.gguf",
+          "download_gb": 0.34,
+          "note": "half the size, same rewrite behaviour"
+        }
+      ]
+    }
+  },
   "models": [
     {
       "name": "Qwen3.6-27B (official, bf16)",
@@ -257,6 +275,33 @@
       "format": "gguf",
       "download_gb": 8.8,
       "vram": "~13 GB with the adapter"
+    }
+  ],
+  "models_omni": [
+    {
+      "name": "Qwen2.5-Omni-7B (official, bf16)",
+      "repo": "Qwen/Qwen2.5-Omni-7B",
+      "format": "transformers",
+      "download_gb": 22.4,
+      "vram": "~9 GB as nf4 / ~13 GB as int8 / ~24 GB as bf16"
+    },
+    {
+      "name": "Qwen2.5-Omni-7B GGUF Q4_K_M",
+      "repo": "ggml-org/Qwen2.5-Omni-7B-GGUF",
+      "file": "Qwen2.5-Omni-7B-Q4_K_M.gguf",
+      "mmproj": "mmproj-Qwen2.5-Omni-7B-Q8_0.gguf",
+      "format": "gguf",
+      "download_gb": 6.2,
+      "vram": "~9 GB with the adapter and a 12k context"
+    },
+    {
+      "name": "Qwen2.5-Omni-7B GGUF Q8_0",
+      "repo": "ggml-org/Qwen2.5-Omni-7B-GGUF",
+      "file": "Qwen2.5-Omni-7B-Q8_0.gguf",
+      "mmproj": "mmproj-Qwen2.5-Omni-7B-Q8_0.gguf",
+      "format": "gguf",
+      "download_gb": 9.7,
+      "vram": "~13 GB - closer to the bf16 rewrite on a card that has room"
     }
   ],
   "writers": [

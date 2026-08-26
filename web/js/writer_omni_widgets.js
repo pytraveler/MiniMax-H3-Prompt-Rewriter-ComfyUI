@@ -1,15 +1,13 @@
 import { app } from "../../scripts/app.js";
 import { addSlotSwitches } from "./slot_switches.js";
 import {
+    CHIP_H_PLAIN,
     chipElement,
     installStripStyle,
-    instructionBand,
     placeDragged,
-    readInstructions,
     slotNumber,
-    slots as slotsWithPrefix,
+    slots,
     stripHeight as stripHeightFor,
-    writeInstruction,
 } from "./reference_strip.js";
 import {
     MARGIN,
@@ -21,53 +19,43 @@ import {
     replaceWithDom,
     repaintOn,
     setWidgetValue,
-    showWidget,
     widgetNamed,
     widgetValues,
 } from "./mmx_controls.js";
 
-
-const NODE = "MiniMaxH3UniversalWriter";
+const NODE = "MiniMaxH3PromptWriterOmni";
 
 const LAYOUT = "reference_layout";
-const INSTRUCTIONS = "reference_instructions";
 const TASK = "task";
 const RESOLUTION = "resolution";
 const DURATION = "duration";
 
 const PREFIX = "ref_";
-const REF_TASK = "Ref2VA";
-const TEXT_TASK = "T2VA";
+const REF_TASK = "REF2AV";
+const TEXT_TASK = "T2AV";
 
-const PICTURES_FOR_TASK = { I2VA: 1, FL2VA: 2, L2VA: 1 };
+const PICTURES_FOR_TASK = { I2AV: 1, L2AV: 1, FL2AV: 2 };
 
-const DURATION_PROPERTY = "max_duration";
-const DURATION_PROPERTY_DEFAULT = 30;
-const DURATION_MIN = 0.1;
-const DURATION_CEILING = 600;
-
-const IMAGE_ROLES = ["Picture", "Subject", "Video"];
+const ROLE_FOR_KIND = { image: "Picture", video: "Video", audio: "Audio" };
 
 const HINT_H = 12;
 const HINT_GAP = 3;
-const HINT_IMAGES =
-    "drag to reorder - click the label to change it - click below to switch off - 'instr' asks, right-click clears";
-const HINT_PLAIN =
-    "drag to reorder - click a square below its label to switch it off - 'instr' asks, right-click clears";
+const HINT =
+    "drag to reorder - that order numbers the labels - click a square to switch it off";
 
 const TASKS_H = 26;
 const RATIOS_H = 38;
 
 const DRAG_SLOP = 6;
 
-const STYLE_ID = "minimax-h3-universal-style";
-const STATE = "__minimaxH3Universal";
+const STYLE_ID = "minimax-h3-omni-style";
+const STATE = "__minimaxH3Omni";
 
 const STYLE = `
-.mmx-refs { display: flex; flex-direction: column; gap: ${HINT_GAP}px;
+.mmx-omni-refs { display: flex; flex-direction: column; gap: ${HINT_GAP}px;
     width: 100%; height: 100%; overflow: hidden;
     font-family: system-ui, sans-serif; }
-.mmx-hint { flex: 0 0 ${HINT_H}px; font-size: 9px; line-height: ${HINT_H}px;
+.mmx-omni-hint { flex: 0 0 ${HINT_H}px; font-size: 9px; line-height: ${HINT_H}px;
     color: var(--descrip-text, #999); white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; }
 `;
@@ -84,26 +72,13 @@ function readLayout(node) {
         const found = parsed[key];
         return Array.isArray(found) ? found.filter((n) => typeof n === "string") : [];
     };
-    return {
-        order: names("order"),
-        off: names("off"),
-        roles: parsed.roles && typeof parsed.roles === "object" ? { ...parsed.roles } : {},
-    };
+    return { order: names("order"), off: names("off") };
 }
 
 function writeLayout(node, layout) {
     const kept = {};
     if (layout.order.length) kept.order = layout.order;
     if (layout.off.length) kept.off = layout.off;
-    const settled = new Set(
-        slots(node).filter((s) => s.connected && s.kind !== "image").map((s) => s.name)
-    );
-    const roles = {};
-    for (const [name, role] of Object.entries(layout.roles || {})) {
-        if (settled.has(name)) continue;
-        if (IMAGE_ROLES.includes(role) && role !== IMAGE_ROLES[0]) roles[name] = role;
-    }
-    if (Object.keys(roles).length) kept.roles = roles;
 
     const widget = widgetNamed(node, LAYOUT);
     if (widget) widget.value = JSON.stringify(kept);
@@ -111,12 +86,10 @@ function writeLayout(node, layout) {
 }
 
 
-const slots = (node) => slotsWithPrefix(node, PREFIX);
-
 function arranged(node) {
     const layout = readLayout(node);
     const connected = new Map();
-    for (const slot of slots(node)) {
+    for (const slot of slots(node, PREFIX)) {
         if (slot.connected) connected.set(slot.name, slot);
     }
 
@@ -131,66 +104,64 @@ function arranged(node) {
     const counts = {};
     return names.map((name) => {
         const slot = connected.get(name);
-        let role = "Audio";
-        if (slot.kind === "video") role = "Video";
-        else if (slot.kind === "image") {
-            role = IMAGE_ROLES.includes(layout.roles[name]) ? layout.roles[name] : IMAGE_ROLES[0];
-        }
+        const role = ROLE_FOR_KIND[slot.kind] || ROLE_FOR_KIND.image;
         const on = !layout.off.includes(name);
         if (on) counts[role] = (counts[role] || 0) + 1;
         return { name, kind: slot.kind, role, on, number: on ? counts[role] : null };
     });
 }
 
-function anyEnabled(node) {
-    return arranged(node).some((entry) => entry.on);
-}
-
-function pictureCount(node) {
-    return arranged(node).filter((entry) => entry.on && entry.role === IMAGE_ROLES[0]).length;
+function counted(node) {
+    const on = arranged(node).filter((entry) => entry.on);
+    return {
+        total: on.length,
+        pictures: on.filter((entry) => entry.role === "Picture").length,
+        heard: on.filter((entry) => entry.role !== "Picture").map((entry) => entry.role),
+    };
 }
 
 function whyShut(node, task) {
-    if (task === TEXT_TASK) return "";
+    const { total, pictures, heard } = counted(node);
+
+    if (task === TEXT_TASK) {
+        return total
+            ? "T2AV is written from text alone, and the strip is not empty. Switch every " +
+              "square off, or pick a task that reads them."
+            : "";
+    }
     if (task === REF_TASK) {
-        return anyEnabled(node)
+        return total
             ? ""
-            : "Ref2VA is written from at least one reference, and the strip is empty. " +
-              "Connect an image, a clip or a sound and switch its square on.";
+            : "Ref2AV describes how a target video reuses reference assets, so it needs at " +
+              "least one. Connect a picture, a clip or a sound and switch its square on.";
+    }
+    if (heard.length) {
+        const kinds = [...new Set(heard)].map((role) => role.toLowerCase()).join(" and ");
+        return (
+            `${task} is written from pictures alone, and ${kinds} is connected. Switch those ` +
+            "squares off, or pick Ref2AV, which is the task that takes clips and sound."
+        );
     }
     const wanted = PICTURES_FOR_TASK[task] ?? 0;
-    const have = pictureCount(node);
-    if (have === wanted) return "";
-    const short = `${task} is written from ${wanted} picture(s), and the strip has ${have}.`;
-    return have > wanted
-        ? `${short} Switch the extra squares off, or click a badge to call one a subject ` +
-          `or a clip -- those are not counted here.`
-        : `${short} Connect the missing image, switch its square back on, or click a badge ` +
-          `to turn a subject back into a picture.`;
+    if (pictures === wanted) return "";
+    const short = `${task} is written from ${wanted} picture(s), and the strip has ${pictures}.`;
+    return pictures > wanted
+        ? `${short} Switch the extra squares off, or pick Ref2AV.`
+        : `${short} Connect the missing picture, or switch its square back on.`;
 }
 
 
 function stripHeight(node) {
-    return stripHeightFor(node, node[STATE]?.chipCount ?? 0, HINT_H, HINT_GAP, MARGIN);
+    return stripHeightFor(
+        node, node[STATE]?.chipCount ?? 0, HINT_H, HINT_GAP, MARGIN, CHIP_H_PLAIN
+    );
 }
-
-const instructions = (node) => ({
-    read: (slot) => readInstructions(node, INSTRUCTIONS)[slot] || null,
-    write: (slot, text, add) => writeInstruction(node, INSTRUCTIONS, slot, text, add),
-});
 
 function commitOrder(node, strip) {
     const layout = readLayout(node);
     layout.order = [...strip.children]
         .filter((child) => child.dataset?.slot)
         .map((child) => child.dataset.slot);
-    writeLayout(node, layout);
-}
-
-function cycleRole(node, name) {
-    const layout = readLayout(node);
-    const current = Math.max(0, IMAGE_ROLES.indexOf(layout.roles[name]));
-    layout.roles[name] = IMAGE_ROLES[(current + 1) % IMAGE_ROLES.length];
     writeLayout(node, layout);
 }
 
@@ -206,7 +177,7 @@ function isSlotEnabled(node, name) {
     return !readLayout(node).off.includes(name);
 }
 
-function beginGesture(node, chip, role, entry, event) {
+function beginGesture(node, chip, entry, event) {
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
@@ -214,7 +185,6 @@ function beginGesture(node, chip, role, entry, event) {
     const strip = chip.parentElement;
     const startX = event.clientX;
     const startY = event.clientY;
-    const onLabel = event.clientY <= role.getBoundingClientRect().bottom;
     let dragging = false;
 
     const move = (moved) => {
@@ -235,31 +205,22 @@ function beginGesture(node, chip, role, entry, event) {
         if (node[STATE]) node[STATE].dragging = false;
 
         if (dragging) commitOrder(node, strip);
-        else if (onLabel && entry.kind === "image") cycleRole(node, entry.name);
         else toggleSlot(node, entry.name);
     };
 
-    // Bound to the window, with no pointer capture: moving the chip in the DOM
-    // is what a live reorder does, and that releases capture mid-gesture.
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", finish);
     window.addEventListener("pointercancel", finish);
 }
 
 function buildChip(node, entry) {
-    const { chip, role } = chipElement(entry);
-    chip.appendChild(instructionBand(entry.name, entry.role, instructions(node)));
-
-    const relabel =
-        entry.kind === "image"
-            ? "click the dark label band to call it a subject or a clip instead, "
-            : "";
+    const { chip } = chipElement(entry, true);
     chip.title =
-        `${entry.name}: ${entry.role.toLowerCase()}` +
-        (entry.on ? ` ${entry.number}` : ", switched off") +
-        `\nDrag to reorder, ${relabel}click below the label to switch it off.`;
+        `${entry.name}: <${entry.role} ${entry.on ? entry.number : "-"}>` +
+        (entry.on ? "" : ", switched off") +
+        "\nDrag to reorder -- the order is what numbers the labels. Click to switch off.";
 
-    chip.addEventListener("pointerdown", (event) => beginGesture(node, chip, role, entry, event));
+    chip.addEventListener("pointerdown", (event) => beginGesture(node, chip, entry, event));
     return chip;
 }
 
@@ -281,14 +242,8 @@ function renderStrip(node) {
         return;
     }
     for (const entry of entries) strip.appendChild(buildChip(node, entry));
-
-    if (hint) {
-        hint.textContent = entries.some((entry) => entry.kind === "image")
-            ? HINT_IMAGES
-            : HINT_PLAIN;
-    }
+    if (hint) hint.textContent = HINT;
 }
-
 
 function renderTasks(node) {
     const holder = node[STATE]?.tasks;
@@ -310,17 +265,25 @@ function renderTasks(node) {
     );
 }
 
+const FRAME_RATE = 24;
+const FRAME_STEP = 17;
+const FRAME_BASE = 5;
 
-function applyDurationCeiling(node) {
+function snapped(seconds) {
+    const steps = Math.ceil((FRAME_RATE * Number(seconds) - FRAME_BASE) / FRAME_STEP);
+    const frames = steps * FRAME_STEP + FRAME_BASE;
+    return { frames, seconds: frames / FRAME_RATE };
+}
+
+function renderDuration(node) {
     const widget = widgetNamed(node, DURATION);
-    if (!widget?.options) return;
-
-    let ceiling = Number(node.properties?.[DURATION_PROPERTY]);
-    if (!isFinite(ceiling) || ceiling <= DURATION_MIN) ceiling = DURATION_PROPERTY_DEFAULT;
-    ceiling = Math.min(Math.round(ceiling * 10) / 10, DURATION_CEILING);
-
-    widget.options.max = ceiling;
-    if (Number(widget.value) > ceiling) widget.value = ceiling;
+    if (!widget) return;
+    const value = Number(widget.value);
+    if (!isFinite(value) || value <= 0) return;
+    const fit = snapped(value);
+    widget.tooltip =
+        `${fit.frames} frames at ${FRAME_RATE} fps, ${fit.seconds.toFixed(2)} s -- the ` +
+        "nearest length MiniMax-H3 can actually produce, and the one the rewrite quotes.";
 }
 
 
@@ -329,7 +292,7 @@ function redraw(node) {
     renderStrip(node);
     renderTasks(node);
     renderRatios(node, node[STATE].ratios, RESOLUTION);
-    applyDurationCeiling(node);
+    renderDuration(node);
     node.setDirtyCanvas?.(true, true);
 }
 
@@ -337,14 +300,13 @@ function build(node) {
     installBaseStyle();
     installStripStyle();
     installStyle(STYLE_ID, STYLE);
-    showWidget(node, INSTRUCTIONS, false);
 
     const references = document.createElement("div");
-    references.className = "mmx-refs";
+    references.className = "mmx-omni-refs";
     const strip = document.createElement("div");
     strip.className = "mmx-strip";
     const hint = document.createElement("div");
-    hint.className = "mmx-hint";
+    hint.className = "mmx-omni-hint";
     references.appendChild(strip);
     references.appendChild(hint);
 
@@ -356,28 +318,15 @@ function build(node) {
     node[STATE] = { strip, hint, tasks, ratios, chipCount: 0, dragging: false };
     onRefresh(node, () => redraw(node));
 
-    replaceWithDom(node, LAYOUT, "minimaxh3_references", references, () => stripHeight(node));
-    replaceWithDom(node, TASK, "minimaxh3_task", tasks, () => TASKS_H);
-    replaceWithDom(node, RESOLUTION, "minimaxh3_ratio", ratios, () => RATIOS_H);
+    replaceWithDom(node, LAYOUT, "minimaxh3_omni_references", references, () => stripHeight(node));
+    replaceWithDom(node, TASK, "minimaxh3_omni_task", tasks, () => TASKS_H);
+    replaceWithDom(node, RESOLUTION, "minimaxh3_omni_ratio", ratios, () => RATIOS_H);
 
-    if (node.properties?.[DURATION_PROPERTY] === undefined) {
-        node.addProperty?.(DURATION_PROPERTY, DURATION_PROPERTY_DEFAULT, "number");
-    }
     redraw(node);
 }
 
 function addControls(nodeType) {
     repaintOn(nodeType, build);
-
-    const onPropertyChanged = nodeType.prototype.onPropertyChanged;
-    nodeType.prototype.onPropertyChanged = function (name) {
-        const result = onPropertyChanged?.apply(this, arguments);
-        if (name === DURATION_PROPERTY) {
-            applyDurationCeiling(this);
-            this.setDirtyCanvas?.(true, true);
-        }
-        return result;
-    };
 
     addSlotSwitches(nodeType, {
         prefixes: [PREFIX],
@@ -387,7 +336,7 @@ function addControls(nodeType) {
 }
 
 app.registerExtension({
-    name: "minimax_h3_rewriter.universal_widgets",
+    name: "minimax_h3_rewriter.writer_omni_widgets",
     async beforeRegisterNodeDef(nodeType, nodeData) {
         if (nodeData.name === NODE) addControls(nodeType);
     },

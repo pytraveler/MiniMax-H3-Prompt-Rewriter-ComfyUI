@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 for _module_name, _label in (
     ("multi_caption", "Multi Reference Caption"),
     ("universal", "Universal Writer"),
+    ("writer_omni", "Prompt Rewriter Omni"),
     ("universal_rewriter", "Universal Rewriter"),
 ):
     try:

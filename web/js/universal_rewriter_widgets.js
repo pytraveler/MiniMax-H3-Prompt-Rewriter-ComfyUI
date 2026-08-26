@@ -23,17 +23,20 @@ const SWITCHES = "frame_switches";
 
 const LORA_27B = "27B LoRA";
 const LORA_8B = "8B LoRA";
+const LORA_OMNI = "Omni LoRA";
 
 const TEXT_TASK = "T2VA";
 
 const PER_TAB = {
     [LORA_27B]: ["model_27b", "quantization_27b"],
     [LORA_8B]: ["model_8b", "quantization_8b"],
+    [LORA_OMNI]: ["model_omni", "quantization_omni"],
 };
 
 const TAB_SUB = {
     [LORA_27B]: "text only",
     [LORA_8B]: "sees frames",
+    [LORA_OMNI]: "sees, hears",
 };
 
 const TAB_TITLE = {
@@ -43,7 +46,13 @@ const TAB_TITLE = {
     [LORA_8B]:
         "Qwen3-VL-8B, four tasks. It looks at the frames you connect and writes the alignment " +
         "line from what it sees.",
+    [LORA_OMNI]:
+        "Qwen2.5-Omni-7B, the same four tasks here. It looks at the frames too, and it is the " +
+        "one that hears -- but sound, clips and the six-field Ref2AV task are on the Prompt " +
+        "Rewriter Omni node, which has the strip they need.",
 };
+
+const REF_TASK = "Ref2VA";
 
 const FRAME_FOR_TASK = {
     T2VA: [],
@@ -52,7 +61,11 @@ const FRAME_FOR_TASK = {
     L2VA: ["last_frame"],
 };
 
-const PREFIXES = ["first_", "last_"];
+const REFERENCE_SLOTS = ["first_frame", "last_frame", "reference_video", "reference_audio"];
+
+const HEARD_SLOTS = ["reference_video", "reference_audio"];
+
+const PREFIXES = ["first_", "last_", "reference_"];
 
 const TABS_H = 34;
 const TASKS_H = 26;
@@ -96,7 +109,8 @@ function frameReady(node, name) {
 }
 
 function currentTab(node) {
-    return widgetNamed(node, LORA)?.value === LORA_8B ? LORA_8B : LORA_27B;
+    const chosen = widgetNamed(node, LORA)?.value;
+    return chosen === LORA_8B || chosen === LORA_OMNI ? chosen : LORA_27B;
 }
 
 
@@ -118,36 +132,64 @@ function renderTabs(node) {
     );
 }
 
+function whyShut(node, name, tab) {
+    if (tab === LORA_27B) {
+        return name === TEXT_TASK
+            ? ""
+            : `${name} needs the frames, which only the 8B and Omni LoRAs read. Switch tabs.`;
+    }
+    if (name === REF_TASK) {
+        if (tab !== LORA_OMNI) {
+            return (
+                "Ref2VA is the full-reference task, and only the Omni LoRA was trained on it. " +
+                "Switch to the Omni tab."
+            );
+        }
+        return REFERENCE_SLOTS.some((slot) => frameReady(node, slot))
+            ? ""
+            : "Ref2VA is written from at least one reference, and nothing is connected. Plug " +
+              "in a frame, a clip or a sound and switch its row on.";
+    }
+    const missing = (FRAME_FOR_TASK[name] || []).filter((slot) => !frameReady(node, slot));
+    if (missing.length) {
+        return (
+            `${name} is written from ${missing.join(" and ")}, which is not connected or is ` +
+            "switched off on its row."
+        );
+    }
+    const heard = HEARD_SLOTS.filter((slot) => frameReady(node, slot));
+    if (heard.length && tab === LORA_OMNI) {
+        return (
+            `${name} is written from pictures alone, and ${heard.join(" and ")} ` +
+            `${heard.length > 1 ? "are" : "is"} connected. Switch those rows off, or pick ` +
+            "Ref2VA."
+        );
+    }
+    return "";
+}
+
 function renderTasks(node) {
     const holder = node[STATE]?.tasks;
     if (!holder) return;
 
-    const text = currentTab(node) === LORA_27B;
+    const tab = currentTab(node);
+    const text = tab === LORA_27B;
     const chosen = text ? TEXT_TASK : widgetNamed(node, TASK)?.value;
 
     renderSegments(
         holder,
         widgetValues(node, TASK).map((name) => {
-            const missing = (FRAME_FOR_TASK[name] || []).filter(
-                (slot) => !frameReady(node, slot)
-            );
-            const shut = text ? name !== TEXT_TASK : missing.length > 0;
-            let title = name;
-            if (text) {
+            const why = whyShut(node, name, tab);
+            let title = why || name;
+            if (text && name === TEXT_TASK) {
                 title =
-                    name === TEXT_TASK
-                        ? "The 27B LoRA writes T2VA and nothing else. Switch to the 8B tab to " +
-                          "choose a task -- the one you had there is still set."
-                        : `${name} needs the frames, which only the 8B LoRA reads. Switch tabs.`;
-            } else if (shut) {
-                title =
-                    `${name} is written from ${missing.join(" and ")}, which is not ` +
-                    `connected or is switched off on its row.`;
+                    "The 27B LoRA writes T2VA and nothing else. Switch to the 8B or Omni tab " +
+                    "to choose a task -- the one you had there is still set.";
             }
             return {
                 label: name,
                 on: name === chosen,
-                shut,
+                shut: !!why,
                 title,
                 pick: text ? null : () => setWidgetValue(node, TASK, name),
             };

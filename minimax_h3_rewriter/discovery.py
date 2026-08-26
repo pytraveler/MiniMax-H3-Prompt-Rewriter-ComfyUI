@@ -37,10 +37,10 @@ VOCAB_SIZE = 248320
 class Shape:
     """The checkpoint an adapter's LoRA layers were cut to fit.
 
-    Two adapters, two shapes. Everything that judges a candidate base model does
-    it by comparing four numbers with the ones the adapter expects, so the four
-    travel together rather than being read off module constants -- which is what
-    made the check answer for the 27B no matter who was asking.
+    Three adapters, three shapes. Everything that judges a candidate base model
+    does it by comparing four numbers with the ones the adapter expects, so the
+    four travel together rather than being read off module constants -- which is
+    what made the check answer for the 27B no matter who was asking.
     """
 
     name: str
@@ -53,6 +53,19 @@ class Shape:
 SHAPE_27B = Shape("Qwen3.6-27B", MODEL_TYPES, HIDDEN_SIZE, NUM_LAYERS, VOCAB_SIZE)
 
 SHAPE_8B = Shape("Qwen3-VL-8B-Instruct", ("qwen3_vl", "qwen3_vl_text"), 4096, 36, 151936)
+
+#: The third adapter's base. Three model_type strings rather than two, because
+#: Qwen2.5-Omni nests them: the checkpoint says ``qwen2_5_omni``, its thinker
+#: says ``qwen2_5_omni_thinker``, and the text tower the LoRA actually touches
+#: says ``qwen2_5_omni_text``. A candidate may present any of the three
+#: depending on how deep the config being read is.
+SHAPE_OMNI = Shape(
+    "Qwen2.5-Omni-7B",
+    ("qwen2_5_omni", "qwen2_5_omni_thinker", "qwen2_5_omni_text"),
+    3584,
+    28,
+    152064,
+)
 
 SCAN_FOLDERS = ("LLM", "transformers", "diffusers")
 GGUF_FOLDERS = ("LLM", "unet_gguf", "transformers")
@@ -79,9 +92,19 @@ GGUF_ARCH_8B = "qwen3vl"
 GGUF_BLOCK_COUNT_8B = 36
 GGUF_EMBEDDING_LENGTH_8B = 4096
 
+#: The same three numbers again for the Omni rewriter, whose base is
+#: Qwen2.5-Omni-7B. llama.cpp files its thinker under the ``qwen2vl``
+#: architecture -- the same string the Omni captioner GGUFs already report --
+#: so the arch alone would offer a Qwen2.5-VL as a base for this adapter, and
+#: the block count and width are what tell them apart.
+GGUF_ARCH_OMNI = "qwen2vl"
+GGUF_BLOCK_COUNT_OMNI = 28
+GGUF_EMBEDDING_LENGTH_OMNI = 3584
+
 #: What the shape refusals call each base, in the voice a user would use.
 BASE_NAME = "Qwen3.6-27B"
 BASE_NAME_8B = "Qwen3-VL-8B-Instruct"
+BASE_NAME_OMNI = "Qwen2.5-Omni-7B"
 
 HEADER_KEYS = (
     "general.architecture",
@@ -152,12 +175,35 @@ class ModelReport:
         return "\n".join(lines)
 
 
+#: Wrappers a checkpoint may put its language model behind, outermost first.
+#: Qwen2.5-Omni is two deep -- ``thinker_config.text_config`` -- because the
+#: checkpoint holds a talker and a vocoder as well, and the LoRA touches none of
+#: them. Reading only the top level there finds no ``hidden_size`` at all, and a
+#: base that is exactly right gets refused for not being itself.
+NESTED_CONFIGS = ("thinker_config", "text_config")
+
+
+def configs(config: dict):
+    """The config and every language-model config nested inside it, outermost first."""
+    yield config
+    holder = config
+    for key in NESTED_CONFIGS:
+        inner = holder.get(key)
+        if isinstance(inner, dict):
+            yield inner
+            holder = inner
+
+
 def _text_config(config: dict) -> dict:
-    return config.get("text_config") or config
+    """The innermost config that names the language model's own dimensions."""
+    for candidate in reversed(list(configs(config))):
+        if candidate.get("hidden_size"):
+            return candidate
+    return config
 
 
 def quant_method(config: dict) -> str:
-    for holder in (config, _text_config(config)):
+    for holder in configs(config):
         quant = holder.get("quantization_config")
         if isinstance(quant, dict) and quant.get("quant_method"):
             return str(quant["quant_method"]).lower()
@@ -552,6 +598,13 @@ def gguf_problem_8b(path: str) -> str:
     """The same question for the multimodal 8B rewriter's base model."""
     return gguf_problem(
         path, GGUF_ARCH_8B, GGUF_BLOCK_COUNT_8B, GGUF_EMBEDDING_LENGTH_8B, BASE_NAME_8B
+    )
+
+
+def gguf_problem_omni(path: str) -> str:
+    """The same question for the Omni rewriter's base model."""
+    return gguf_problem(
+        path, GGUF_ARCH_OMNI, GGUF_BLOCK_COUNT_OMNI, GGUF_EMBEDDING_LENGTH_OMNI, BASE_NAME_OMNI
     )
 
 

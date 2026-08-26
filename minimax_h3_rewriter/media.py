@@ -21,6 +21,7 @@ Two deliberate choices:
 from __future__ import annotations
 
 import logging
+import math
 import os
 import shutil
 import tempfile
@@ -32,6 +33,45 @@ log = logging.getLogger(__name__)
 DEFAULT_MAX_FRAMES = 8
 
 VIDEO_SUFFIX = ".mp4"
+
+PATCH = 28
+
+AUDIO_TOKENS_PER_SECOND = 25
+
+
+def token_cost(width: int, height: int, patch: int = PATCH) -> int:
+    """How many tokens a picture of this size costs the vision tower."""
+    return max(1, (int(width) // patch) * (int(height) // patch))
+
+
+def fit_pixels(image, max_pixels: int, patch: int = PATCH):
+    """Scale a picture down to ``max_pixels``, on the grid the tower counts in.
+
+    Down only, and never below one block a side. Each adapter's own inference
+    script sets this ceiling on its processor, so a picture arriving at full
+    size is outside what the model was trained to look at -- and expensive with
+    it: a 1616x1616 frame is 3249 tokens, and two of them overflow an 8k context
+    before a word of the prompt has been counted. The GGUF route has no
+    processor to do this, so it is done here for both.
+    """
+    if max_pixels <= 0:
+        return image
+    width, height = image.size
+    if width * height <= max_pixels:
+        return image
+    scale = math.sqrt(width * height / max_pixels)
+    fitted = (
+        max(patch, int(width / scale) // patch * patch),
+        max(patch, int(height / scale) // patch * patch),
+    )
+
+    from PIL import Image
+
+    log.info(
+        "[minimax_h3_rewriter.media.fit_pixels] %dx%d -> %dx%d, %d tokens",
+        width, height, fitted[0], fitted[1], token_cost(*fitted, patch),
+    )
+    return image.resize(fitted, Image.LANCZOS)
 
 
 class Workspace:
@@ -69,12 +109,19 @@ def frame_indices(count: int, limit: int) -> list[int]:
     return sorted({int(round(index * step)) for index in range(limit)})
 
 
-def pil_frames(image, max_frames: int = DEFAULT_MAX_FRAMES) -> list:
+def pil_frames(
+    image,
+    max_frames: int = DEFAULT_MAX_FRAMES,
+    max_pixels: int = 0,
+    patch: int = PATCH,
+) -> list:
     """The frames of an IMAGE batch as PIL images, thinned to ``max_frames``.
 
     A subprocess engine needs these on disk and a Transformers processor needs
     them in memory, so the conversion from ComfyUI's float tensor lives here and
     only the last step differs.
+
+    ``max_pixels`` scales each frame down to fit; 0 leaves it as it came.
     """
     from PIL import Image
 
@@ -91,7 +138,7 @@ def pil_frames(image, max_frames: int = DEFAULT_MAX_FRAMES) -> list:
         frame = numpy.clip(array[index] * 255.0 + 0.5, 0, 255).astype(numpy.uint8)
         if frame.shape[-1] == 1:
             frame = frame[..., 0]
-        frames.append(Image.fromarray(frame))
+        frames.append(fit_pixels(Image.fromarray(frame), max_pixels, patch))
     return frames
 
 
@@ -100,6 +147,8 @@ def image_files(
     workspace: Workspace,
     max_frames: int = DEFAULT_MAX_FRAMES,
     prefix: str = "frame",
+    max_pixels: int = 0,
+    patch: int = PATCH,
 ) -> list[str]:
     """Write an IMAGE batch out as PNGs. Returns the paths, in order.
 
@@ -107,7 +156,7 @@ def image_files(
     which is what the 8B rewriter does with its first and last reference frame.
     """
     paths = []
-    for position, frame in enumerate(pil_frames(image, max_frames)):
+    for position, frame in enumerate(pil_frames(image, max_frames, max_pixels, patch)):
         path = workspace.file(f"{prefix}_{position:03d}.png")
         frame.save(path, format="PNG")
         paths.append(path)
@@ -166,6 +215,17 @@ def audio_file(audio, workspace: Workspace, name: str = "audio.wav") -> str:
         handle.setframerate(rate)
         handle.writeframes(pcm.tobytes())
     return path
+
+
+def wav_seconds(path: str) -> float:
+    """How long a WAV this module wrote runs for, for costing it in tokens."""
+    try:
+        with wave.open(path, "rb") as handle:
+            rate = handle.getframerate() or 1
+            return handle.getnframes() / float(rate)
+    except (OSError, wave.Error):
+        log.debug("[minimax_h3_rewriter.media.wav_seconds] cannot read %s", path, exc_info=True)
+        return 0.0
 
 
 SEEK_ABOVE_FRAMES = 300
@@ -234,20 +294,22 @@ def _by_seeking(container, stream, wanted: list[int], total: int):
             break
 
 
-def _save(frames, workspace: Workspace) -> list[str]:
+def _save(frames, workspace: Workspace, max_pixels: int = 0) -> list[str]:
     """Write frames out as PNGs one at a time, so no batch is ever held in memory."""
     paths = []
     for position, frame in enumerate(frames):
         path = workspace.file(f"frame_{position:03d}.png")
-        frame.to_image().save(path, format="PNG")
+        fit_pixels(frame.to_image(), max_pixels).save(path, format="PNG")
         paths.append(path)
     return paths
 
 
-def _stack(frames, workspace: Workspace):
+def _stack(frames, workspace: Workspace, max_pixels: int = 0):
     """Turn frames into one ComfyUI IMAGE batch: ``(frames, height, width, 3)``, 0 to 1.
 
     ``workspace`` is unused and kept so this can stand in for :func:`_save`.
+    ``max_pixels`` is accepted for the same reason and ignored: this batch goes
+    to a Transformers processor, which does its own scaling from its own config.
     """
     import torch
 
@@ -265,7 +327,7 @@ def _empty(result) -> bool:
     return result is None or len(result) == 0
 
 
-def _collect(video, workspace: Workspace, max_frames: int, sink):
+def _collect(video, workspace: Workspace, max_frames: int, sink, max_pixels: int = 0):
     """Decode the sampled frames of a VIDEO and hand them to ``sink``.
 
     Both routes share this, so a clip is described from exactly the same frames
@@ -289,7 +351,9 @@ def _collect(video, workspace: Workspace, max_frames: int, sink):
 
         if total > SEEK_ABOVE_FRAMES and stream.duration:
             try:
-                result = sink(_by_seeking(container, stream, wanted, total), workspace)
+                result = sink(
+                    _by_seeking(container, stream, wanted, total), workspace, max_pixels
+                )
             except Exception as error:
                 log.info(
                     "[minimax_h3_rewriter.media._collect] seeking failed (%s), "
@@ -298,13 +362,16 @@ def _collect(video, workspace: Workspace, max_frames: int, sink):
                 container.seek(0)
                 result = None
         if _empty(result):
-            result = sink(_in_order(container, stream, wanted), workspace)
+            result = sink(_in_order(container, stream, wanted), workspace, max_pixels)
 
     return result, total, seconds
 
 
 def video_frames(
-    video, workspace: Workspace, max_frames: int = DEFAULT_MAX_FRAMES
+    video,
+    workspace: Workspace,
+    max_frames: int = DEFAULT_MAX_FRAMES,
+    max_pixels: int = 0,
 ) -> tuple[list[str], int, float]:
     """Sample a VIDEO input into PNGs. Returns ``(paths, total frames, seconds)``.
 
@@ -322,7 +389,7 @@ def video_frames(
       the vision tower; a thirty-second clip is 750. ``max_frames`` exists so
       the cost of describing a clip does not depend on how long it is.
     """
-    paths, total, seconds = _collect(video, workspace, max_frames, _save)
+    paths, total, seconds = _collect(video, workspace, max_frames, _save, max_pixels)
     if _empty(paths):
         raise RuntimeError("no frames could be decoded from the VIDEO input")
     return paths, max(total, len(paths)), seconds

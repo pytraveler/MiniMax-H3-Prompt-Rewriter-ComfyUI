@@ -105,22 +105,64 @@ def _quantization_config(quantization: str):
     return config, torch.bfloat16
 
 
+def _inner_class(config: dict):
+    """The concrete class for a language model buried inside a wrapper config.
+
+    Qwen2.5-Omni's checkpoint is a thinker, a talker and a vocoder under one
+    ``config.json``, and ``AutoModelForImageTextToText`` has no entry for the
+    wrapper -- only for the thinker inside it, which is the half the adapter was
+    cut for and the only half that writes anything. Asking the auto class for
+    the outer type gets "unrecognized configuration class" and no model at all.
+
+    Nothing about that class is hard-coded here: Transformers' own mapping is
+    what names it, and the only knowledge added is which way is down. Returns
+    ``None`` whenever the outer config is loadable as it stands, which is every
+    checkpoint but this family.
+    """
+    try:
+        import transformers
+        from transformers.models.auto.modeling_auto import (
+            MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES as mapping,
+        )
+    except ImportError:
+        return None
+
+    from .discovery import configs
+
+    if not config or config.get("model_type") in mapping:
+        return None
+    for nested in list(configs(config))[1:]:
+        named = mapping.get(nested.get("model_type"))
+        candidate = getattr(transformers, named, None) if named else None
+        if candidate is not None:
+            log.info(
+                "[minimax_h3_rewriter._model_class] %s wraps %s, loading it as %s",
+                config.get("model_type"), nested.get("model_type"), named,
+            )
+            return candidate
+    return None
+
+
 def _model_class(directory: str = ""):
     """Pick the auto class the checkpoint's own config can actually be built by.
 
     A text-only repack declares ``qwen3_5_text``, which has no image-text-to-text
-    mapping — asking for the multimodal class there fails outright. The adapter
+    mapping - asking for the multimodal class there fails outright. The adapter
     only touches language-model weights, so either shape is fine.
     """
     import transformers
 
-    text_only = False
+    config = {}
     if directory:
         from .discovery import read_local_config
 
         config = read_local_config(directory) or {}
-        text_only = str(config.get("model_type") or "").endswith("_text")
 
+    inner = _inner_class(config)
+    if inner is not None:
+        return inner
+
+    text_only = str(config.get("model_type") or "").endswith("_text")
     names = ("AutoModelForCausalLM",) if text_only else (
         "AutoModelForImageTextToText",
         "AutoModelForVision2Seq",

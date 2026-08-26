@@ -6,6 +6,7 @@ export const CHIP_ROLE_H = 18;
 export const CHIP_SLOT_H = 16;
 export const CHIP_INSTR_H = 17;
 export const CHIP_H = 78;
+export const CHIP_H_PLAIN = CHIP_H - CHIP_INSTR_H;
 export const CHIP_GAP = 4;
 
 export const COLOUR = {
@@ -41,6 +42,9 @@ const STYLE = `
 .mmx-chip-slot { flex: 0 0 ${CHIP_SLOT_H}px; font-size: 9px;
     line-height: ${CHIP_SLOT_H}px; text-align: center; letter-spacing: 0.02em;
     color: rgba(255, 255, 255, 0.75); background: rgba(0, 0, 0, 0.22); }
+.mmx-chip.mmx-plain { height: ${CHIP_H_PLAIN}px; }
+.mmx-chip.mmx-plain .mmx-chip-num {
+    line-height: ${CHIP_H_PLAIN - CHIP_ROLE_H - CHIP_SLOT_H - 2}px; }
 .mmx-chip.mmx-off { opacity: 0.35; }
 .mmx-chip.mmx-dragging { cursor: grabbing; transform: scale(1.1);
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55); }
@@ -254,9 +258,10 @@ Click to edit, right-click to clear.`
     return band;
 }
 
-export function chipElement(entry) {
+export function chipElement(entry, plain = false) {
     const chip = document.createElement("div");
-    chip.className = entry.on ? "mmx-chip" : "mmx-chip mmx-off";
+    chip.className =
+        (entry.on ? "mmx-chip" : "mmx-chip mmx-off") + (plain ? " mmx-plain" : "");
     chip.dataset.slot = entry.name;
     chip.style.background = COLOUR[entry.role];
 
@@ -278,10 +283,55 @@ export function chipElement(entry) {
     return { chip, role };
 }
 
-export function stripHeight(node, count, hintHeight, hintGap, margin) {
+export function stripHeight(node, count, hintHeight, hintGap, margin, chipHeight = CHIP_H) {
     const usable = Math.max(node.size?.[0] ?? 300, 120) - 2 * margin;
     const perRow = Math.max(1, Math.floor((usable + CHIP_GAP) / (CHIP_W + CHIP_GAP)));
     const rows = Math.max(1, Math.ceil(count / perRow));
     const hint = count ? hintHeight + hintGap : 0;
-    return rows * CHIP_H + (rows - 1) * CHIP_GAP + hint;
+    return rows * chipHeight + (rows - 1) * CHIP_GAP + hint;
+}
+
+
+export function linkKind(node, link) {
+    const links = node.graph?.links;
+    const info = links?.get ? links.get(link) : links?.[link];
+    const type = String(info?.type || "").toUpperCase();
+    if (type.includes("AUDIO")) return "audio";
+    if (type.includes("VIDEO")) return "video";
+    return "image";
+}
+
+export function slotNumber(name) {
+    const tail = name.slice(name.lastIndexOf("_") + 1);
+    return /^\d+$/.test(tail) ? Number(tail) : 0;
+}
+
+export function slots(node, prefix) {
+    const found = [];
+    for (const input of node.inputs || []) {
+        const name = String(input.name || "");
+        const tail = name.slice(name.lastIndexOf(".") + 1);
+        if (!tail.startsWith(prefix)) continue;
+        const link = input.link;
+        const connected = link !== null && link !== undefined;
+        found.push({ name: tail, connected, kind: connected ? linkKind(node, link) : "image" });
+    }
+    return found;
+}
+
+export function placeDragged(strip, chip, x, y) {
+    let before = null;
+    for (const other of strip.children) {
+        if (other === chip || !other.dataset?.slot) continue;
+        const rect = other.getBoundingClientRect();
+        if (y < rect.top || (y <= rect.bottom && x < rect.left + rect.width / 2)) {
+            before = other;
+            break;
+        }
+    }
+    if (before) {
+        if (before.previousElementSibling !== chip) strip.insertBefore(chip, before);
+    } else if (strip.lastElementChild !== chip) {
+        strip.appendChild(chip);
+    }
 }
