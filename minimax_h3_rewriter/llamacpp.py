@@ -641,11 +641,18 @@ def ensure_mtmd(backend: str, auto_download: bool, progress=None) -> str:
 
     The same five places in the same order, since the captioner is built beside
     the completion binary and ships in the same archive: a captioner run on a
-    machine that has already rewritten a prompt downloads nothing.
+    machine whose rewrites went through the binaries downloads nothing.
 
-    The exception is a build that has one and not the other, which a distribution
-    package often is. That is no reason to go without: the archive carries both,
-    so it is fetched for this job even though the rewriter runs from PATH.
+    Rewrites that did not are the common case, though, and they leave nothing
+    here to find: ``gguf_runtime`` defaults to the wheel wherever it imports,
+    and a safetensors base never touches llama.cpp at all. Neither has ever
+    fetched an archive, so the first caption is what pays for it -- which is
+    what ``wheel_cannot_caption`` is there to say before the download starts.
+
+    The other case is a build that has one binary and not the other, which a
+    distribution package often is. That is no reason to go without: the archive
+    carries both, so it is fetched for this job even though the rewriter runs
+    from PATH.
     """
     named = _named_binary(MTMD_BINARIES)
     if named:

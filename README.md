@@ -77,7 +77,7 @@ their table below.
 | VRAM (`int8`) | ~28 GB |
 | VRAM (`bfloat16`) | ~54 GB, spills into system RAM via accelerate |
 | VRAM (GGUF) | ~13–19 GB depending on the quant, lower still with fewer offloaded layers |
-| Packages | `transformers`, `peft`, `accelerate`, and `bitsandbytes` for `nf4`/`int8`; `llama-cpp-python` for GGUF |
+| Packages | `transformers`, `peft`, `accelerate`, and `bitsandbytes` for `nf4`/`int8`. **Nothing at all on the GGUF route:** `llama-cpp-python` is used when it happens to be installed, and the official llama.cpp binaries are fetched when it is not |
 
 > **The MiniMax-H3 text encoder cannot be reused for this.** It is a different
 > model (Qwen3-VL-32B, vocabulary 151936) from the LoRA's base (Qwen3.6-27B,
@@ -192,6 +192,12 @@ interchangeable downstream.
 | safetensors base + adapter, `nf4` | 17.5 + 2.8 GB | ~8 GB |
 | safetensors base + adapter, `bfloat16` | 17.5 + 2.8 GB | ~20 GB |
 
+The GGUF rows pay for the runtime as well, once per machine: `I2VA`, `FL2VA` and
+`L2VA` run through `llama-mtmd-cli`, so the first of them fetches the official
+llama.cpp build — 34 MB, or 511 MB where `llama_backend` resolves to CUDA — and
+an installed `llama-cpp-python` does not cover it. `T2VA` is the one task that
+can take the wheel instead.
+
 The GGUF route is much the smaller download and needs nothing installed. The
 safetensors route is the shape the adapter was published in, keeps the model
 resident for every task rather than only for `T2VA`, and is the one to reach for
@@ -252,7 +258,8 @@ and `non_diegetic_music` — the same set the
   and a **Qwen2.5-VL-7B** — which is the same architecture string, the same 28
   blocks and the same width, so the adapter *would* attach — is
   `(vision only, not an Omni build)`, because its projector has no audio encoder
-  and the rewrite would be about sound that was never heard.
+  and the rewrite would be about sound that was never heard. The **Open model
+  list** button edits the `models_omni` section — see below.
 - `quantization` — how to load a **safetensors** base: `nf4` about 9 GB of VRAM,
   `int8` about 12, `bfloat16` about 20. Ignored for GGUF. **Pick the largest your
   card holds** — see below.
@@ -290,6 +297,11 @@ something the request supplies.
 | Q8_0 base + projector + F16 adapter | 8.1 + 1.4 + 0.65 GB | ~13 GB |
 | safetensors base + adapter, `nf4` | 22.4 + 1.3 GB | ~9 GB |
 | safetensors base + adapter, `bfloat16` | 22.4 + 1.3 GB | ~20 GB |
+
+A GGUF base pays for the llama.cpp runtime as well, once: every task but `T2VA`
+carries references and therefore runs through `llama-mtmd-cli` — 34 MB, or
+511 MB where `llama_backend` resolves to CUDA, and an installed
+`llama-cpp-python` makes no difference to it.
 
 The GGUF adapter is converted from LightX2V's own safetensors with llama.cpp's
 `convert_lora_to_gguf.py` and published at
@@ -785,10 +797,16 @@ connect an image, an audio clip or a video, and a small multimodal model
 describes it into one labelled line of `reference_assets`.
 
 Measured on a 3.4 GB Qwen2.5-Omni-3B: **3 s for a frame, 2 s for an audio clip,
-5 s for a video.** It runs through the same llama.cpp binaries as everything else
-— `llama-mtmd-cli` ships in the archive the rewriter already fetches, so a
-machine that has run one rewrite downloads no runtime at all. An installed
-`llama-cpp-python` does not spare it: multimodal input goes through
+5 s for a video.** It runs `llama-mtmd-cli`, which ships beside
+`llama-completion` in the same archive, so a machine whose rewrites already ran
+on the binaries downloads no runtime for this.
+
+**A machine whose rewrites did not, pays for it here.** `llama-cpp-python` is
+what `gguf_runtime = auto` picks whenever the wheel is importable — and a recent
+ComfyUI portable ships one — while a safetensors base never touches llama.cpp at
+all; neither route has ever fetched an archive, so the first caption is where it
+arrives: 34 MB, or 511 MB where `llama_backend` resolves to CUDA. The wheel does
+not spare it either, however it was compiled: multimodal input goes through
 `llama-mtmd-cli`, a program, and the wheel is a set of shared libraries with no
 executables in it. `gguf_runtime` is therefore a writer setting — the caption
 nodes run the binaries whatever it says.
@@ -1336,7 +1354,8 @@ Pick a `[gguf]` entry from the model list and the rewriter runs under llama.cpp
 instead of Transformers. **No pip install is involved.** If `llama-cpp-python`
 happens to be in ComfyUI's environment the node uses it; if it is not, it runs an
 llama.cpp the machine already has, and failing that fetches the official binaries
-(~34 MB) into `ComfyUI/user/minimax_h3_rewriter/runtime/` and runs
+(~34 MB, or ~511 MB where `llama_backend` resolves to CUDA — see the table below)
+into `ComfyUI/user/minimax_h3_rewriter/runtime/` and runs
 `llama-completion` as a subprocess. Same download switch as the weights:
 `auto_download`.
 
@@ -1365,15 +1384,17 @@ when the binaries are in use:
 
 | `llama_backend` | Download | Notes |
 |---|---|---|
-| `auto` → `vulkan` | 34 MB | NVIDIA, AMD and Intel alike; about half the CUDA throughput |
+| `auto` | 34 or 511 MB | **the fastest build this machine can run, not the smallest.** CUDA on Windows with an NVIDIA card of compute capability 8.6, 8.9, 12.0 or 12.1 — the archive carries native SASS for exactly those and no PTX to fall back on — and Vulkan everywhere else |
+| `vulkan` | 34 MB | NVIDIA, AMD and Intel alike; about half the CUDA throughput. Pick it explicitly to keep the download small on a card `auto` would send to CUDA |
 | `cuda` | 511 MB | ~2× faster on NVIDIA; **Windows only** — upstream publishes no Linux CUDA build, so on Linux you compile one yourself and the node runs it |
 | `cpu` | 17 MB | no GPU at all |
 
 **An llama.cpp you already have is run as it is.** Before fetching anything the
 node looks in four places, in order: the path in `MINIMAX_H3_LLAMA_BIN`, the
-path written in `ComfyUI/user/minimax_h3_rewriter/llama_bin.txt`, its own
-`runtime/` folder, then `PATH`. A build you compiled yourself therefore needs no
-setting at all — put its `build/bin` on `PATH`, or name it outright:
+path written in `ComfyUI/user/minimax_h3_rewriter/llama_bin.txt`, the copy it has
+already unpacked **for the backend in use**, then `PATH`. A build you compiled
+yourself therefore needs no setting at all — put its `build/bin` on `PATH`, or
+name it outright:
 
 ```sh
 export MINIMAX_H3_LLAMA_BIN=/opt/llama.cpp/build/bin   # the folder, or the binary in it
@@ -1395,6 +1416,12 @@ llama.cpp on Linux — build it once with `-DGGML_CUDA=ON`, name it here, and
 `device = cuda:0` does what it says. The caption nodes look for
 `llama-mtmd-cli` beside it; a build without that target sends the node back to
 the archive for that one job.
+
+**The unpacked copy is per backend**, in `runtime/<release>-<backend>`, so an
+archive already sitting in `runtime/b10310-vulkan` does not answer for a run that
+resolved to CUDA — the node fetches that one too. Changing `llama_backend` is
+therefore a second download, and unpacking a build by hand means putting it in
+the folder named for the backend you will actually run.
 
 A path pointing at nothing is an error rather than a quiet download, so a typo
 says so instead of costing half a gigabyte. And when nothing is found anywhere,

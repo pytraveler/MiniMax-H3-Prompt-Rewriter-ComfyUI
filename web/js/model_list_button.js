@@ -4,6 +4,7 @@ import { api } from "../../scripts/api.js";
 const MODEL_LIST_NODES = [
     "MiniMaxH3PromptRewriter",
     "MiniMaxH3PromptWriter8B",
+    "MiniMaxH3PromptWriterOmni",
     "MiniMaxH3GuidedWriter",
     "MiniMaxH3GuidedWriterRef",
     "MiniMaxH3ReferenceCaption",
@@ -24,9 +25,10 @@ const MODEL_LIST = {
     what: "the model list",
     fallback: "ComfyUI/user/minimax_h3_rewriter/models.json",
     tooltip:
-        "Opens models.json in the ComfyUI user directory. 'models' feeds the LoRA " +
-        "rewriter, 'writers' the guided writers, 'captioners' the reference caption " +
-        "node. Refresh the browser to see your edits in the dropdown.",
+        "Opens models.json in the ComfyUI user directory. 'models', 'models_8b' and " +
+        "'models_omni' feed the three LoRA rewriters, 'writers' the guided writers, " +
+        "'captioners' the caption nodes. Refresh the browser to see your edits in " +
+        "the dropdown.",
 };
 
 const GUIDE_FOLDER = {
