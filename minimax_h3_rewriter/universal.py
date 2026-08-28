@@ -34,7 +34,7 @@ from dataclasses import dataclass
 
 from comfy_api.latest import io
 
-from . import clip_caption, guide_prompt, media, mtmd_engine
+from . import aspect, clip_caption, guide_prompt, media, mtmd_engine
 from .constants import OUTPUT_FIELDS, REF_OUTPUT_FIELDS, RESOLUTIONS
 from .fields import split_sections
 from .nodes import (
@@ -336,7 +336,8 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                     "resolution",
                     options=list(RESOLUTIONS),
                     default="16:9",
-                    tooltip="Target aspect ratio the rewrite is composed for.",
+                    socketless=True,
+                    tooltip=aspect.PICKER_TOOLTIP,
                 ),
                 io.Float.Input(
                     "duration",
@@ -451,6 +452,15 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                     optional=True,
                     tooltip=SYSTEM_PROMPT_TOOLTIP,
                 ),
+                io.MultiType.Input(
+                    io.String.Input(
+                        "aspect_ratio",
+                        optional=True,
+                        default="",
+                        tooltip=aspect.TOOLTIP,
+                    ),
+                    types=[io.String, io.Combo],
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="rewritten_prompt"),
@@ -484,6 +494,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         max_frames=media.DEFAULT_MAX_FRAMES,
         context_size=mtmd_engine.CONTEXT_FROM_MODEL,
         bypass=False,
+        aspect_ratio=None,
     ) -> io.NodeOutput:
         progress = NodeProgress(cls.hidden.unique_id)
         block = (previous or "").strip()
@@ -492,6 +503,8 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         if bypass:
             progress.finish("bypassed")
             return io.NodeOutput((prompt or "").strip(), *empty, block, "")
+
+        resolution = aspect.resolve(aspect_ratio, resolution)
 
         settings = dict(DEFAULT_OPTIONS)
         if options:

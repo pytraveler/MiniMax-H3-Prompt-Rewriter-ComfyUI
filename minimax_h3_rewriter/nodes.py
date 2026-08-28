@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import re
 
 from . import (
+    aspect,
     catalog,
     cli_engine,
     clip_caption,
@@ -966,7 +967,7 @@ class MiniMaxH3PromptRewriter:
                 ),
                 "resolution": (
                     list(RESOLUTIONS),
-                    {"default": "16:9", "tooltip": "Target aspect ratio the rewrite is composed for."},
+                    {"default": "16:9", "socketless": True, "tooltip": aspect.PICKER_TOOLTIP},
                 ),
                 "duration": (
                     "INT",
@@ -1019,6 +1020,10 @@ class MiniMaxH3PromptRewriter:
                 ),
             },
             "optional": {
+                "aspect_ratio": (
+                    "STRING,COMBO",
+                    {"default": "", "widgetType": "STRING", "tooltip": aspect.TOOLTIP},
+                ),
                 "options": (OPTIONS_TYPE,),
                 "bypass": ("BOOLEAN", {"default": False, "tooltip": BYPASS_TOOLTIP}),
             },
@@ -1040,6 +1045,7 @@ class MiniMaxH3PromptRewriter:
         greedy,
         seed,
         keep_model_loaded,
+        aspect_ratio=None,
         options=None,
         bypass=False,
         unique_id=None,
@@ -1049,6 +1055,8 @@ class MiniMaxH3PromptRewriter:
 
         if not (prompt or "").strip():
             raise ValueError("prompt must not be empty")
+
+        resolution = aspect.resolve(aspect_ratio, resolution)
 
         settings = dict(DEFAULT_OPTIONS)
         if options:
@@ -1233,7 +1241,7 @@ class MiniMaxH3GuidedWriter:
                 ),
                 "resolution": (
                     list(RESOLUTIONS),
-                    {"default": "16:9", "tooltip": "Target aspect ratio the rewrite is composed for."},
+                    {"default": "16:9", "socketless": True, "tooltip": aspect.PICKER_TOOLTIP},
                 ),
                 "duration": (
                     "INT",
@@ -1277,6 +1285,10 @@ class MiniMaxH3GuidedWriter:
                 ),
             },
             "optional": {
+                "aspect_ratio": (
+                    "STRING,COMBO",
+                    {"default": "", "widgetType": "STRING", "tooltip": aspect.TOOLTIP},
+                ),
                 "reference_material": (
                     "STRING",
                     {
@@ -1317,6 +1329,7 @@ class MiniMaxH3GuidedWriter:
         keep_model_loaded,
         reference_material="",
         system_prompt="",
+        aspect_ratio=None,
         options=None,
         bypass=False,
         unique_id=None,
@@ -1324,6 +1337,7 @@ class MiniMaxH3GuidedWriter:
         if bypass:
             return _bypassed(unique_id, prompt, OUTPUT_FIELDS)
 
+        resolution = aspect.resolve(aspect_ratio, resolution)
         settings = dict(DEFAULT_OPTIONS)
         if options:
             settings.update(options)
@@ -1386,7 +1400,7 @@ class MiniMaxH3GuidedWriterRef:
                 ),
                 "resolution": (
                     list(RESOLUTIONS),
-                    {"default": "16:9", "tooltip": "Target aspect ratio the rewrite is composed for."},
+                    {"default": "16:9", "socketless": True, "tooltip": aspect.PICKER_TOOLTIP},
                 ),
                 "duration": (
                     "INT",
@@ -1423,6 +1437,10 @@ class MiniMaxH3GuidedWriterRef:
                 ),
             },
             "optional": {
+                "aspect_ratio": (
+                    "STRING,COMBO",
+                    {"default": "", "widgetType": "STRING", "tooltip": aspect.TOOLTIP},
+                ),
                 "options": (OPTIONS_TYPE,),
                 "bypass": ("BOOLEAN", {"default": False, "tooltip": BYPASS_TOOLTIP}),
                 "system_prompt": (
@@ -1449,6 +1467,7 @@ class MiniMaxH3GuidedWriterRef:
         seed,
         keep_model_loaded,
         system_prompt="",
+        aspect_ratio=None,
         options=None,
         bypass=False,
         unique_id=None,
@@ -1456,6 +1475,7 @@ class MiniMaxH3GuidedWriterRef:
         if bypass:
             return _bypassed(unique_id, prompt, REF_OUTPUT_FIELDS)
 
+        resolution = aspect.resolve(aspect_ratio, resolution)
         settings = dict(DEFAULT_OPTIONS)
         if options:
             settings.update(options)
@@ -1521,13 +1541,20 @@ class MiniMaxH3GuidePrompt:
                         "tooltip": "Ref2VA uses the full-reference guide and its six output sections.",
                     },
                 ),
-                "resolution": (list(RESOLUTIONS), {"default": "16:9"}),
+                "resolution": (
+                    list(RESOLUTIONS),
+                    {"default": "16:9", "socketless": True, "tooltip": aspect.PICKER_TOOLTIP},
+                ),
                 "duration": (
                     "INT",
                     {"default": 10, "min": DURATION_MIN, "max": DURATION_MAX, "step": 1},
                 ),
             },
             "optional": {
+                "aspect_ratio": (
+                    "STRING,COMBO",
+                    {"default": "", "widgetType": "STRING", "tooltip": aspect.TOOLTIP},
+                ),
                 "reference_material": (
                     "STRING",
                     {
@@ -1579,10 +1606,12 @@ class MiniMaxH3GuidePrompt:
         resolution,
         duration,
         reference_material="",
+        aspect_ratio=None,
         auto_download=True,
         format="plain",
         unique_id=None,
     ):
+        resolution = aspect.resolve(aspect_ratio, resolution)
         progress = NodeProgress(unique_id)
         guide = guides.text(guide_prompt.GUIDE_FOR_MODE[task], auto_download, progress)
         messages = guide_prompt.build_messages(

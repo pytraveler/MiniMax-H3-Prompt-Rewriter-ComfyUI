@@ -77,6 +77,7 @@ function addButton(nodeType, action) {
         const result = onNodeCreated?.apply(this, arguments);
         const widget = this.addWidget("button", action.label, null, () => open(action));
         widget.serialize = false;
+        widget.serializeValue = () => undefined;
         widget.tooltip = action.tooltip;
         return result;
     };

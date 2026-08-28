@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from . import catalog, discovery, engine, media, mtmd_engine
+from . import aspect, catalog, discovery, engine, media, mtmd_engine
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
 from .constants import (
     DURATION_MAX,
@@ -478,7 +478,7 @@ class MiniMaxH3PromptWriter8B:
                 ),
                 "resolution": (
                     list(RESOLUTIONS),
-                    {"default": "16:9", "tooltip": "Target aspect ratio the rewrite is composed for."},
+                    {"default": "16:9", "socketless": True, "tooltip": aspect.PICKER_TOOLTIP},
                 ),
                 "duration": (
                     "INT",
@@ -532,6 +532,10 @@ class MiniMaxH3PromptWriter8B:
                 ),
             },
             "optional": {
+                "aspect_ratio": (
+                    "STRING,COMBO",
+                    {"default": "", "widgetType": "STRING", "tooltip": aspect.TOOLTIP},
+                ),
                 "first_frame": ("IMAGE", {"tooltip": FRAME_TOOLTIPS["first_frame"]}),
                 "last_frame": ("IMAGE", {"tooltip": FRAME_TOOLTIPS["last_frame"]}),
                 "options": (OPTIONS_TYPE,),
@@ -558,6 +562,7 @@ class MiniMaxH3PromptWriter8B:
         keep_model_loaded,
         first_frame=None,
         last_frame=None,
+        aspect_ratio=None,
         options=None,
         bypass=False,
         unique_id=None,
@@ -567,6 +572,8 @@ class MiniMaxH3PromptWriter8B:
 
         if not (prompt or "").strip():
             raise ValueError("prompt must not be empty")
+
+        resolution = aspect.resolve(aspect_ratio, resolution)
 
         settings = dict(DEFAULT_OPTIONS)
         if options:

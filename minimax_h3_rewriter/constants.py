@@ -13,7 +13,7 @@ ADAPTER_DIR_NAME = "MiniMax-H3-Prompt-Rewriter-LoRA"
 ADAPTER_FILES = ("adapter_config.json", "adapter_model.safetensors")
 BASE_SKIP_SUFFIXES = (".md", ".gitattributes")
 
-RESOLUTIONS = ("21:9", "16:9", "4:3", "1:1", "3:4", "9:16")
+RESOLUTIONS = ("48:9", "32:9", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16")
 DURATION_MIN = 4
 DURATION_MAX = 15
 
@@ -42,9 +42,6 @@ REF_OUTPUT_FIELDS = (
 
 MODELS_SUBDIR = "LLM"
 
-#: transformers' set_seed feeds numpy, whose legacy seeding refuses anything at
-#: or above 2**32; llama.cpp takes a uint32 too. ComfyUI's "randomize" happily
-#: produces 64-bit values, so every seed is folded into this range before use.
 SEED_MODULUS = 2 ** 32
 
 

@@ -3,6 +3,7 @@ import { addSlotSwitches, hideWidget } from "./slot_switches.js";
 import {
     installBaseStyle,
     onRefresh,
+    ratiosHeight,
     renderRatios,
     renderSegments,
     replaceWithDom,
@@ -69,7 +70,6 @@ const PREFIXES = ["first_", "last_", "reference_"];
 
 const TABS_H = 34;
 const TASKS_H = 26;
-const RATIOS_H = 38;
 
 const STATE = "__minimaxH3UniversalRewriter";
 
@@ -228,7 +228,7 @@ function build(node) {
 
     replaceWithDom(node, LORA, "minimaxh3_lora", tabs, () => TABS_H);
     replaceWithDom(node, TASK, "minimaxh3_task", tasks, () => TASKS_H);
-    replaceWithDom(node, RESOLUTION, "minimaxh3_ratio", ratios, () => RATIOS_H);
+    replaceWithDom(node, RESOLUTION, "minimaxh3_ratio", ratios, () => ratiosHeight(node, RESOLUTION));
 
     redraw(node);
 }

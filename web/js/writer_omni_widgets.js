@@ -14,6 +14,7 @@ import {
     installBaseStyle,
     installStyle,
     onRefresh,
+    ratiosHeight,
     renderRatios,
     renderSegments,
     replaceWithDom,
@@ -44,7 +45,6 @@ const HINT =
     "drag to reorder - that order numbers the labels - click a square to switch it off";
 
 const TASKS_H = 26;
-const RATIOS_H = 38;
 
 const DRAG_SLOP = 6;
 
@@ -320,7 +320,7 @@ function build(node) {
 
     replaceWithDom(node, LAYOUT, "minimaxh3_omni_references", references, () => stripHeight(node));
     replaceWithDom(node, TASK, "minimaxh3_omni_task", tasks, () => TASKS_H);
-    replaceWithDom(node, RESOLUTION, "minimaxh3_omni_ratio", ratios, () => RATIOS_H);
+    replaceWithDom(node, RESOLUTION, "minimaxh3_omni_ratio", ratios, () => ratiosHeight(node, RESOLUTION));
 
     redraw(node);
 }

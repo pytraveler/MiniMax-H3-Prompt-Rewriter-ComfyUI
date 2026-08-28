@@ -16,6 +16,14 @@ export function refresh(node) {
     node[REFRESH]?.();
 }
 
+const RATIO_BOX_W = 34;
+const RATIO_BOX_H = 22;
+const RATIO_BOX_MIN = 4;
+const RATIO_GAP = 4;
+const RATIO_ITEM_W = RATIO_BOX_W + 2;
+const RATIO_ITEM_MAX = 72;
+const RATIO_ROW_H = 38;
+
 const BASE_STYLE_ID = "minimax-h3-controls-style";
 
 const BASE_STYLE = `
@@ -46,13 +54,26 @@ const BASE_STYLE = `
 .mmx-seg-sub { font-size: 9px; line-height: 10px; font-weight: 400;
     opacity: 0.75; }
 
-.mmx-ratios { display: flex; gap: 4px; width: 100%; height: 100%;
+.mmx-ratios { display: flex; flex-wrap: wrap; align-content: center;
+    justify-content: center; gap: ${RATIO_GAP}px; width: 100%; height: 100%;
     overflow: hidden; font-family: system-ui, sans-serif; }
-.mmx-ratio { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
+/* min-width is what makes a narrow node wrap the row instead of clipping it: a
+   column narrower than its rectangle would cut the rectangle off, since that one
+   is not allowed to shrink. ratiosHeight counts the same way and asks the node
+   for the rows. max-width is for the other end -- on a wide node the columns
+   would otherwise stretch and leave each rectangle alone in a field of nothing,
+   and a part-filled second row would stretch its one item across the whole. */
+.mmx-ratio { flex: 1 1 0; min-width: ${RATIO_ITEM_W}px; max-width: ${RATIO_ITEM_MAX}px;
+    display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 3px; cursor: pointer;
     user-select: none; touch-action: none; border-radius: 5px;
     border: 1px solid transparent; }
 .mmx-ratio.mmx-on { border-color: #3B7DD8; background: rgba(59, 125, 216, 0.16); }
+/* Driven from the aspect_ratio socket: dimmed, nothing lit, clicks refused.
+   Nothing is lit on purpose -- a highlighted square would be naming a ratio the
+   run is not going to use. */
+.mmx-ratios.mmx-driven { opacity: 0.4; }
+.mmx-ratios.mmx-driven .mmx-ratio { cursor: not-allowed; }
 /* Without flex: 0 0 auto these are shrunk to fit and every ratio draws the
    same rectangle, which is the one thing the control exists to show. */
 .mmx-box { flex: 0 0 auto; box-sizing: border-box;
@@ -161,29 +182,48 @@ export function renderSegments(holder, items, extraClass = "") {
     }
 }
 
-const RATIO_BOX_W = 28;
-const RATIO_BOX_H = 22;
-
 function ratioBox(ratio) {
     const [width, height] = ratio.split(":").map(Number);
     const box = document.createElement("div");
     box.className = "mmx-box";
     if (!width || !height) return box;
     const scale = Math.min(RATIO_BOX_W / width, RATIO_BOX_H / height);
-    box.style.width = `${Math.max(6, Math.round(width * scale))}px`;
-    box.style.height = `${Math.max(6, Math.round(height * scale))}px`;
+    box.style.width = `${Math.max(RATIO_BOX_MIN, Math.round(width * scale))}px`;
+    box.style.height = `${Math.max(RATIO_BOX_MIN, Math.round(height * scale))}px`;
     return box;
 }
+
+export function ratiosHeight(node, name) {
+    const count = widgetValues(node, name).length || 1;
+    const usable = Math.max(node.size?.[0] ?? 300, 120) - 2 * MARGIN - RATIO_GAP;
+    const perRow = Math.max(1, Math.floor((usable + RATIO_GAP) / (RATIO_ITEM_W + RATIO_GAP)));
+    const rows = Math.max(1, Math.ceil(count / perRow));
+    return rows * RATIO_ROW_H + (rows - 1) * RATIO_GAP;
+}
+
+export const ASPECT_INPUT = "aspect_ratio";
+export const RESOLUTION_WIDGET = "resolution";
+
+export function drivenByWire(node) {
+    const input = node.inputs?.find((slot) => slot.name === ASPECT_INPUT);
+    return !!input && input.link !== null && input.link !== undefined;
+}
+
+const DRIVEN_TITLE =
+    "aspect_ratio is connected and decides the ratio, so this is not consulted. " +
+    "Unplug it to choose here again.";
 
 export function renderRatios(node, holder, name) {
     if (!holder) return;
     const chosen = widgetNamed(node, name)?.value;
+    const driven = drivenByWire(node);
+    holder.classList.toggle("mmx-driven", driven);
 
     holder.replaceChildren();
     for (const ratio of widgetValues(node, name)) {
         const item = document.createElement("div");
-        item.className = "mmx-ratio" + (ratio === chosen ? " mmx-on" : "");
-        item.title = `Compose for ${ratio}`;
+        item.className = "mmx-ratio" + (ratio === chosen && !driven ? " mmx-on" : "");
+        item.title = driven ? DRIVEN_TITLE : `Compose for ${ratio}`;
         item.appendChild(ratioBox(ratio));
 
         const label = document.createElement("span");
@@ -194,6 +234,7 @@ export function renderRatios(node, holder, name) {
         item.addEventListener("pointerdown", (event) => {
             event.preventDefault();
             event.stopPropagation();
+            if (drivenByWire(node)) return;
             setWidgetValue(node, name, ratio);
         });
         holder.appendChild(item);

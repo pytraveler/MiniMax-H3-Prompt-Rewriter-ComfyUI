@@ -128,7 +128,32 @@ releases the VRAM again.
   is downloaded on first use, resuming if interrupted. The **Open model list**
   button edits the list — see below.
 - `resolution` / `duration` — conditions the rewrite is composed for. Keep them
-  equal to what you pass to MiniMax-H3, or the shot pacing will not match.
+  equal to what you pass to MiniMax-H3, or the shot pacing will not match. The
+  list runs `48:9` down to `9:16`; the two ultrawides are the multi-monitor
+  case — 32:9 is two 16:9 screens side by side, 48:9 three. They condition how
+  the shot is composed, which is all this node decides; what a generator will
+  render at that shape is its own question.
+- `aspect_ratio` — **the same setting, on a socket**, and it wins while something
+  is connected. Every writer and rewriter node in the pack has it, and it takes a
+  `STRING` or a `COMBO` link, so the primitive that already sets ComfyUI's
+  **Resolution Selector** can drive this from the same wire. It is there
+  because the shape of the frame is usually decided elsewhere in the graph and
+  spelled differently there: ComfyUI's own **Resolution Selector** calls 16:9
+  `16:9 (Widescreen)`, a size node says `3840x1080`, a divider says `1.78`. All
+  three are read, and a label around the pair is read through — the number pair
+  is what counts. A frame size within 2% of a listed ratio is called by its
+  name, so `1376x768` (which is what Resolution Selector produces for 16:9 at
+  1 MP) arrives as `16:9` rather than as `43:24`; a ratio that is nothing on the
+  list passes through as itself, which is how `2.39:1` or `5:4` gets in.
+  Something that is not a ratio at all is refused by name rather than composed
+  for. The `resolution` widget itself has no socket, so there is one way in and
+  it is the one that reads what other nodes write. **The picker greys out while
+  the wire is connected** — dimmed, nothing lit, clicks refused — because a lit
+  square would be naming a ratio the run is not going to use. **Unplugging clears
+  the field**: an upstream node writes its value into the widget — that is how a
+  wire feeds a widget input at all — so the text would otherwise stay behind, and
+  it is not inert while it sits there. Anything in `aspect_ratio` outranks the
+  picker, including a leftover.
 - `quantization` — how to load an *unquantized* checkpoint: `nf4` (default,
   ~16 GB VRAM), `int8` (~28 GB), `bfloat16` / `float16` (~54 GB). Ignored when
   the checkpoint brings its own quantization.
@@ -734,6 +759,12 @@ from the run to the sight of it, and the greyed button carries the same sentence
 are counted, not sockets: turn a picture into a subject and the task it was
 blocking lights up. A task already chosen and no longer possible turns red rather
 than quietly failing later.
+
+Every rectangle in the picker is drawn to its own proportion within one budget,
+so the wide end reads as how little height is left: `21:9`, `32:9` and `48:9`
+come out at roughly 15, 10 and 6 pixels tall. A node too narrow to hold the whole
+row wraps it onto a second line rather than cutting the last rectangles off, and
+grows by exactly that much.
 
 **`duration` is a slider, in tenths of a second.** How far it reaches is the
 node's own `max_duration` property — right-click the node, Properties Panel —

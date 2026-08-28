@@ -35,7 +35,7 @@ from dataclasses import dataclass
 
 from comfy_api.latest import io
 
-from . import catalog, discovery, engine, media, mtmd_engine
+from . import aspect, catalog, discovery, engine, media, mtmd_engine
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
 from .constants import (
     DURATION_MAX,
@@ -652,7 +652,8 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
                     "resolution",
                     options=list(RESOLUTIONS),
                     default="16:9",
-                    tooltip="Target aspect ratio the rewrite is composed for.",
+                    socketless=True,
+                    tooltip=aspect.PICKER_TOOLTIP,
                 ),
                 io.Float.Input(
                     "duration",
@@ -719,6 +720,15 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
                     optional=True,
                     tooltip=BYPASS_TOOLTIP,
                 ),
+                io.MultiType.Input(
+                    io.String.Input(
+                        "aspect_ratio",
+                        optional=True,
+                        default="",
+                        tooltip=aspect.TOOLTIP,
+                    ),
+                    types=[io.String, io.Combo],
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="rewritten_prompt"),
@@ -744,6 +754,7 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         options=None,
         max_frames=media.DEFAULT_MAX_FRAMES,
         bypass=False,
+        aspect_ratio=None,
     ) -> io.NodeOutput:
         progress = NodeProgress(cls.hidden.unique_id)
         empty = ("",) * len(ALL_FIELDS)
@@ -751,6 +762,8 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         if bypass:
             progress.finish("bypassed")
             return io.NodeOutput((prompt or "").strip(), *empty)
+
+        resolution = aspect.resolve(aspect_ratio, resolution)
 
         settings = dict(DEFAULT_OPTIONS)
         if options:

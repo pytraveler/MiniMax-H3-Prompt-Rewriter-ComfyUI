@@ -6,6 +6,88 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.17.1 - 2026-08-28
+
+### Added
+
+- **32:9 and 48:9**, for the frame that spans more than one monitor -- 32:9 is
+  two 16:9 screens side by side, 48:9 three. The value travels as text, one line
+  of the task message, and neither this pack nor MiniMax's guides parse it, so
+  the list was free to grow. Worth knowing before you reach for them: no adapter
+  was trained on those strings, so the model composes wider by reading the
+  request rather than by recognising a shape it was taught.
+
+  The picker had to grow with it. Every rectangle is drawn to its own proportion
+  inside one budget, so the wide end reads as how little height is left, and at
+  the old budget 32:9 and 48:9 came out 8 and 6 pixels tall -- the second one
+  clamped, both of them the same line. The budget is wider now and the floor
+  lower, which steps 21:9, 32:9 and 48:9 apart at roughly 15, 10 and 6 pixels. A
+  node too narrow to hold eight of them wraps the row onto a second line and
+  grows by exactly that much, rather than cutting the last rectangles off.
+
+  Requested by [@Geese586](https://github.com/Geese586) in
+  [#9](https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/issues/9).
+
+- **`aspect_ratio`, an input on every writer and rewriter**, because the shape of
+  the frame is usually decided elsewhere in the graph and spelled differently
+  there. ComfyUI's own Resolution Selector calls 16:9 `16:9 (Widescreen)`; a size
+  node says `3840x1080`; a divider says `1.78`. All three are read, and a label
+  around the pair is read through -- the number pair is what counts, wherever it
+  sits. A frame size within 2% of a listed ratio is called by that ratio's name,
+  which is what turns `1376x768` -- the Resolution Selector's own answer for 16:9
+  at 1 MP -- into `16:9` rather than into `43:24`. A ratio that is on no list
+  passes through as itself, which is how `2.39:1` and `5:4` get in, and something
+  that is not a ratio at all is refused by name rather than composed for.
+
+  The socket takes a `STRING` or a `COMBO` link, so the primitive that already
+  drives the Resolution Selector drives this from the same wire. Draw that one
+  from the selector first: a primitive adopts the type of whatever it is plugged
+  into first, and a primitive that has become a STRING has nothing a COMBO widget
+  will take.
+
+  It outranks the picker while it is connected, and the interface says so: the
+  squares dim, nothing stays lit, clicks are refused. Unplugging clears the
+  field, because the upstream node writes its value into the widget -- that is
+  how a wire feeds a widget input at all -- and a value left sitting there would
+  go on outranking a picker that has just lit up again.
+
+- **The Open model list button on the Prompt Rewriter Omni node**, which was the
+  one node in the pack without it. Its tooltip now names `models_8b` and
+  `models_omni` beside `models`, since three rewriters read three sections and
+  the button opens the file for all of them.
+
+### Changed
+
+- **The ratio picker has no socket any more.** `resolution` is `socketless`, on
+  every node that has it: a ratio arriving from the graph belongs on
+  `aspect_ratio`, which reads the spellings other nodes actually use, and two
+  doors into one setting meant the parser could be walked around. A workflow that
+  had `resolution` converted to an input loses that link when it loads -- the
+  input it pointed at no longer exists -- and the value it was feeding is worth
+  checking on the picker afterwards.
+
+### Fixed
+
+- **The buttons stop appearing in the prompt.** `Open model list` and `Open guide
+  folder` are canvas buttons with no value, but they still reached the API-format
+  export as `"Open model list": null` -- an input the node never declared, in
+  every workflow using this pack. `serialize = false` only keeps a widget out of
+  the saved `widgets_values`; the prompt needs `serializeValue` as well. ComfyUI
+  drops unknown keys, so this was noise rather than a failure.
+
+- **Four things the README said that the code did not do.** The captioner was
+  described as costing no runtime on a machine that had run one rewrite, which is
+  true only when that rewrite went through the binaries: `gguf_runtime` defaults
+  to `llama-cpp-python` wherever the wheel imports, and a safetensors base never
+  touches llama.cpp at all, so for most installations the first caption is what
+  pays for the archive. `llama_backend = auto` was documented as Vulkan at 34 MB
+  when it takes CUDA -- 511 MB -- on Windows with an NVIDIA card of compute
+  capability 8.6, 8.9, 12.0 or 12.1. The unpacked runtime was described as "its
+  own `runtime/` folder" when the lookup is per backend, so a Vulkan build
+  unpacked by hand does not answer for a run that resolved to CUDA. And the
+  requirements table listed `llama-cpp-python` as what GGUF needs, against a
+  section three pages down headed "nothing to install".
+
 ## 0.17.0 - 2026-08-26
 
 ### Added

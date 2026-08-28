@@ -55,7 +55,7 @@ import logging
 
 from comfy_api.latest import io
 
-from . import writer_8b, writer_omni
+from . import aspect, writer_8b, writer_omni
 from .constants import (
     DURATION_MAX,
     DURATION_MIN,
@@ -347,7 +347,8 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
                     "resolution",
                     options=list(RESOLUTIONS),
                     default="16:9",
-                    tooltip="Target aspect ratio the rewrite is composed for.",
+                    socketless=True,
+                    tooltip=aspect.PICKER_TOOLTIP,
                 ),
                 io.Int.Input(
                     "duration",
@@ -432,6 +433,15 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
                     optional=True,
                     tooltip=REFERENCE_AUDIO_TOOLTIP,
                 ),
+                io.MultiType.Input(
+                    io.String.Input(
+                        "aspect_ratio",
+                        optional=True,
+                        default="",
+                        tooltip=aspect.TOOLTIP,
+                    ),
+                    types=[io.String, io.Combo],
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="rewritten_prompt"),
@@ -464,6 +474,7 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
         quantization_omni="nf4",
         reference_video=None,
         reference_audio=None,
+        aspect_ratio=None,
     ) -> io.NodeOutput:
         progress = NodeProgress(cls.hidden.unique_id)
         empty = ("",) * len(UNIVERSAL_FIELDS)
@@ -474,6 +485,8 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
 
         if not (prompt or "").strip():
             raise ValueError("prompt must not be empty")
+
+        resolution = aspect.resolve(aspect_ratio, resolution)
 
         settings = dict(DEFAULT_OPTIONS)
         if options:
