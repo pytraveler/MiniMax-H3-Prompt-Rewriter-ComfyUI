@@ -13,9 +13,10 @@ import json
 import logging
 import os
 import threading
+import time
 
 from . import devices
-from .constants import normalize_seed
+from .constants import MERGE_AUTO, MERGE_OFF, MERGE_ON, normalize_seed
 from .progress import NodeProgress
 
 log = logging.getLogger(__name__)
@@ -238,6 +239,24 @@ def _install_shard_hook(progress: NodeProgress, title: str, scale: float = 0.9):
         return None, None
 
 
+def _merges(setting: str, quantized: bool) -> bool:
+    """Whether to fold the adapter into the base weights at load.
+
+    PEFT otherwise runs the adapter as its own matmuls on every token, which
+    measures at roughly half the tokens per second: 14 against 25 on
+    Qwen3-VL-8B. Folding it in is free on an unquantized base (0.07 s) and
+    costs about 4.5 s on a bitsandbytes one, which has to be dequantized and
+    quantized back -- so 'auto' takes the free half and leaves the other to
+    whoever asks for it, the same way the requantization drifts further from
+    the unmerged answer than plain reassociation does.
+    """
+    if setting == MERGE_OFF:
+        return False
+    if setting == MERGE_ON:
+        return True
+    return not quantized
+
+
 def load(
     base_dir: str,
     adapter_dir: str | None,
@@ -246,6 +265,7 @@ def load(
     device: str = devices.AUTO,
     progress: NodeProgress | None = None,
     trust_remote_code: bool = False,
+    merge_lora: str = MERGE_AUTO,
 ):
     """Return ``(tokenizer, model)``, reusing the cached pair when unchanged."""
     device = devices.validate(device)
@@ -266,6 +286,7 @@ def load(
         attn_implementation,
         device,
         remote_code,
+        merge_lora if adapter_dir else "",
     )
 
     with _LOCK:
@@ -337,6 +358,23 @@ def load(
             from peft import PeftModel
 
             model = PeftModel.from_pretrained(model, adapter_dir, is_trainable=False)
+
+            if _merges(merge_lora, bool(quant_config) or bool(prequantized)):
+                if progress is not None:
+                    progress.ratio(0.96, "Merging the LoRA into the base weights")
+                started = time.perf_counter()
+                try:
+                    model = model.merge_and_unload()
+                except Exception as error:
+                    log.warning(
+                        "[minimax_h3_rewriter.load] merge_lora='%s' could not merge (%s), "
+                        "running with the adapter attached", merge_lora, error,
+                    )
+                else:
+                    log.info(
+                        "[minimax_h3_rewriter.load] LoRA merged into the base weights in %.2f s",
+                        time.perf_counter() - started,
+                    )
 
         model.eval()
         _STATE.update(
@@ -584,6 +622,7 @@ def rewrite(
     device: str = devices.AUTO,
     progress: NodeProgress | None = None,
     trust_remote_code: bool = False,
+    merge_lora: str = MERGE_AUTO,
     images: list | None = None,
     **generation,
 ) -> str:
@@ -594,7 +633,7 @@ def rewrite(
     """
     tokenizer, model = load(
         base_dir, adapter_dir, quantization, attn_implementation, device, progress,
-        trust_remote_code=trust_remote_code,
+        trust_remote_code=trust_remote_code, merge_lora=merge_lora,
     )
     try:
         if images:

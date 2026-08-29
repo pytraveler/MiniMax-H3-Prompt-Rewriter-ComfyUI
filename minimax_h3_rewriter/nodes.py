@@ -35,6 +35,8 @@ from .constants import (
     DURATION_MAX,
     DURATION_MIN,
     GGUF_RUNTIMES,
+    MERGE_AUTO,
+    MERGE_LORA,
     NO_REASONING,
     OUTPUT_FIELDS,
     QUANTIZATIONS,
@@ -69,6 +71,7 @@ DEFAULT_OPTIONS = {
     "attn_implementation": "sdpa",
     "adapter": ADAPTER_REPO,
     "use_lora": True,
+    "merge_lora": MERGE_AUTO,
     "auto_download": True,
     "gpu_layers": -1,
     "n_ctx": 8192,
@@ -720,6 +723,24 @@ class MiniMaxH3RewriterOptions:
                     "BOOLEAN",
                     {"default": True, "tooltip": "Turn off to run the plain Qwen3.6-27B baseline."},
                 ),
+                "merge_lora": (
+                    list(MERGE_LORA),
+                    {
+                        "default": MERGE_AUTO,
+                        "tooltip": (
+                            "Fold the adapter into the base weights once at load, rather than "
+                            "running it as its own matmuls on every token. Measured on "
+                            "Qwen3-VL-8B: 25 tokens a second against 14. 'auto' merges on an "
+                            "unquantized base, where it costs 0.07 s and nothing else, and "
+                            "leaves the adapter attached on a bitsandbytes 4-bit or 8-bit one, "
+                            "where merging means dequantizing and quantizing back. 'on' merges "
+                            "there too, for about 4.5 s at load and the same speed afterwards.\n\n"
+                            "A merged run is not word-for-word the unmerged one at the same "
+                            "seed: folding the adapter in reassociates the arithmetic, so a "
+                            "token here and there comes out different. GGUF is unaffected."
+                        ),
+                    },
+                ),
                 "auto_download": (
                     "BOOLEAN",
                     {
@@ -928,6 +949,7 @@ def rewrite_t2va(
         device=settings["device"],
         progress=progress,
         trust_remote_code=bool(settings.get("trust_remote_code", False)),
+        merge_lora=settings.get("merge_lora", MERGE_AUTO),
         **decoding,
     )
 

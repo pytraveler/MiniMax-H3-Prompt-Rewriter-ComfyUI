@@ -495,12 +495,41 @@ rewriter uses the decoding parameters the adapter was published with.
 | `attn_implementation` | `sdpa` | `eager` or `flash_attention_2` if you have it |
 | `adapter` | the LightX2V repo | Which build of the LoRA to apply — see below |
 | `use_lora` | on | Turn off for the plain base-model baseline |
+| `merge_lora` | `auto` | Fold the adapter into the weights at load — twice the tokens a second, see below |
 | `auto_download` | on | Turn off to fail loudly instead of fetching 52 GB |
 | `device` | `auto` | Which GPU runs the language model — see below |
 | `trust_remote_code` | **off** | Allow a checkpoint to run the Python it ships with — see below |
 
 The same options node feeds the writer nodes and the captioner; `adapter` and
 `use_lora` simply do not apply there.
+
+#### `merge_lora` — the adapter as weights rather than as a second matmul
+
+PEFT keeps an attached LoRA beside the base model and computes it on every
+token, on top of the base weights. Folding it in once at load does the same
+arithmetic ahead of time, and the difference is not small. Measured here on
+Qwen3-VL-8B with the 8B adapter, 128 tokens on a 5090:
+
+| | adapter attached | folded in | merge costs |
+|---|---|---|---|
+| `bfloat16` | 8.98 s — 14.3 tokens/s | **5.13 s — 25.0 tokens/s** | 0.07 s |
+| `nf4` | 9.43 s — 13.6 tokens/s | **5.09 s — 25.1 tokens/s** | 4.6 s |
+
+`auto`, the default, takes the free half: it folds the adapter into an
+unquantized base, where the merge costs a tenth of a second, and leaves it
+attached on a bitsandbytes `nf4`/`int8` one, where merging means dequantizing
+every layer and quantizing it back. `on` does it there too, if you would rather
+pay 4.6 s at load and have the tokens; `off` is the old behaviour. Nothing here
+touches the GGUF route, where llama.cpp applies the adapter its own way.
+
+**A folded run is not word-for-word the attached one.** Merging reassociates the
+arithmetic — `W + BA` computed once is not bit-for-bit `Wx + B(Ax)` computed per
+token — so a token here and there falls differently and the rest of the sentence
+follows it. Measured on the pair above at the same seed: two differences in 128
+tokens on `bfloat16`, more on `nf4`, where the requantization adds error of its
+own and PEFT prints a warning saying so. Neither answer is the better one, but
+they are not the same answer, and a workflow you have tuned to the token is a
+reason to leave this on `off`.
 
 #### `adapter` — a dropdown, and what is in it
 

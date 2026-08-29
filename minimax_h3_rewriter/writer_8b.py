@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from . import aspect, catalog, discovery, engine, media, mtmd_engine
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
 from .constants import (
+    MERGE_AUTO,
     DURATION_MAX,
     DURATION_MIN,
     OUTPUT_FIELDS,
@@ -289,6 +290,7 @@ def _with_transformers(
         device=settings["device"],
         progress=progress,
         trust_remote_code=bool(settings.get("trust_remote_code", False)),
+        merge_lora=settings.get("merge_lora", MERGE_AUTO),
         images=images or None,
         messages=build_messages(prompt, task, resolution, duration),
         seed=int(seed),

@@ -6,6 +6,37 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.17.2 - 2026-08-29
+
+### Added
+
+- **`merge_lora`, and about twice the tokens a second on the safetensors
+  route.** PEFT keeps an attached adapter beside the base model and computes it
+  on every token, on top of the base weights; folding it into those weights once
+  at load does the same arithmetic ahead of time. Measured on Qwen3-VL-8B with
+  the 8B adapter, 128 tokens on a 5090: **14.3 tokens a second attached against
+  25.0 folded in** on `bfloat16`, and 13.6 against 25.1 on `nf4`. The merge
+  itself costs 0.07 s on an unquantized base and 4.6 s on a bitsandbytes one,
+  which has to be dequantized and quantized back a layer at a time.
+
+  `auto`, the default, takes the free half: it folds the adapter in on an
+  unquantized base and leaves it attached on `nf4`/`int8`, where the cost is
+  real and so is the extra rounding. `on` folds it in there as well; `off` is
+  the behaviour up to now. The GGUF route is untouched -- llama.cpp applies an
+  adapter its own way, and `merge_lora` says nothing about it.
+
+  **A folded run is not word-for-word the attached one.** `W + BA` computed once
+  is not bit-for-bit `Wx + B(Ax)` computed per token, so a token here and there
+  falls differently and the sentence follows it: two differences in 128 tokens
+  on `bfloat16` at the same seed, more on `nf4`, where PEFT prints a warning of
+  its own about the requantization. Neither answer is the better one. A workflow
+  tuned to the token is a reason to set `off`.
+
+  Worth recording what turned out not to be the problem, since the measuring was
+  the work: reusing a loaded model costs 0.00 s, the tokenizer 0.28 s and the
+  processor 0.48 s against a 6-15 s load, and `device_map` pinned to one card
+  came out level with `"auto"`. The adapter was the whole of it.
+
 ## 0.17.1 - 2026-08-28
 
 ### Added

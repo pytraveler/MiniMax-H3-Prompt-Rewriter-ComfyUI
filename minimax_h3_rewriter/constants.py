@@ -20,6 +20,11 @@ DURATION_MAX = 15
 QUANTIZATIONS = ("nf4", "int8", "bfloat16", "float16")
 ATTN_IMPLEMENTATIONS = ("sdpa", "eager", "flash_attention_2")
 
+MERGE_AUTO = "auto"
+MERGE_ON = "on"
+MERGE_OFF = "off"
+MERGE_LORA = (MERGE_AUTO, MERGE_ON, MERGE_OFF)
+
 RUNTIME_AUTO = "auto"
 RUNTIME_WHEEL = "llama-cpp-python"
 RUNTIME_BINARY = "llama.cpp"
