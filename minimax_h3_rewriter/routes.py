@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from . import catalog, guides, memory
+from . import catalog, guides, library, memory
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +47,83 @@ def register() -> None:
         return web.json_response(
             {node: memory.summary(record) for node, record in memory.LAST.items()}
         )
+
+    @routes.get(f"{PREFIX}/memory/text")
+    async def memory_text(request):
+        """The whole answer a node is holding -- the summary carries only its opening."""
+        record = memory.recall(request.query.get("node") or "")
+        return web.json_response({"text": record.text if record else ""})
+
+    @routes.get(f"{PREFIX}/references")
+    async def node_references(request):
+        """The thumbnails one node is holding -- what a save would put in the file."""
+        record = memory.recall(request.query.get("node") or "")
+        return web.json_response({"references": record.references if record else []})
+
+    @routes.get(f"{PREFIX}/library/files")
+    async def library_files(request):
+        return web.json_response({"files": library.files(), "path": library.root()})
+
+    @routes.get(f"{PREFIX}/library")
+    async def library_records(request):
+        name = request.query.get("file") or library.DEFAULT_FILE
+        data = library.load(name)
+        return web.json_response(
+            {
+                "file": library.clean(name),
+                "records": data["records"],
+                "groups": library.groups(data["records"]),
+                "problem": data.get("problem", ""),
+            }
+        )
+
+    @routes.post(f"{PREFIX}/library/create")
+    async def library_create(request):
+        body = await request.json()
+        try:
+            made = library.create(body.get("file") or "")
+        except OSError as error:
+            return web.json_response({"ok": False, "error": str(error)}, status=500)
+        return web.json_response({"ok": True, "file": made, "files": library.files()})
+
+    @routes.post(f"{PREFIX}/library/save")
+    async def library_save(request):
+        """Keep the session record this node is holding, under a name."""
+        body = await request.json()
+        record = memory.recall(body.get("node"))
+        if record is None:
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": (
+                        "this node has nothing to save yet - run it once, and the answer it "
+                        "writes is what gets kept"
+                    ),
+                },
+                status=404,
+            )
+        try:
+            saved = library.add(
+                body.get("file") or library.DEFAULT_FILE,
+                library.from_record(
+                    record,
+                    body.get("name") or "",
+                    body.get("description") or "",
+                    body.get("groups") or [],
+                ),
+            )
+        except OSError as error:
+            return web.json_response({"ok": False, "error": str(error)}, status=500)
+        return web.json_response({"ok": True, "record": saved})
+
+    @routes.post(f"{PREFIX}/library/delete")
+    async def library_delete(request):
+        body = await request.json()
+        try:
+            gone = library.remove(body.get("file") or library.DEFAULT_FILE, body.get("id") or "")
+        except OSError as error:
+            return web.json_response({"ok": False, "error": str(error)}, status=500)
+        return web.json_response({"ok": gone})
 
     @routes.get(f"{PREFIX}/model_list")
     async def model_list(request):

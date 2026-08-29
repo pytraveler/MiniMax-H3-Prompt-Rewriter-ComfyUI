@@ -34,7 +34,16 @@ from dataclasses import dataclass
 
 from comfy_api.latest import io
 
-from . import aspect, clip_caption, guide_prompt, media, memory, mtmd_engine
+from . import (
+    aspect,
+    clip_caption,
+    guide_prompt,
+    library,
+    media,
+    memory,
+    mtmd_engine,
+    snapshot,
+)
 from .constants import OUTPUT_FIELDS, REF_OUTPUT_FIELDS, RESOLUTIONS
 from .fields import split_sections
 from .nodes import (
@@ -467,6 +476,12 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                     optional=True,
                     tooltip=memory.REPEAT_TOOLTIP,
                 ),
+                io.String.Input(
+                    "library_pick",
+                    default="",
+                    optional=True,
+                    tooltip=library.PICK_TOOLTIP,
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="rewritten_prompt"),
@@ -502,6 +517,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         bypass=False,
         aspect_ratio=None,
         repeat_last=False,
+        library_pick="",
     ) -> io.NodeOutput:
         given = dict(locals())
         progress = NodeProgress(cls.hidden.unique_id)
@@ -511,6 +527,26 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         if bypass:
             progress.finish("bypassed")
             return io.NodeOutput((prompt or "").strip(), *empty, block, "")
+
+        assets, skipped = arrange(references, reference_layout)
+
+        chosen, saved = library.picked(
+            library_pick, repeat_last, "MiniMaxH3UniversalWriter", 1 + len(ALL_FIELDS) + 2,
+            cls.hidden.unique_id, having=[item.kind for item in assets],
+        )
+        if chosen is not None:
+            return io.NodeOutput(*chosen)
+        if saved:
+            _head, sections = split_sections(
+                saved, guide_prompt.FIELDS_FOR_MODE[task],
+                fallback=guide_prompt.BODY_FIELD[task],
+            )
+            return io.NodeOutput(
+                saved,
+                *(sections.get(name, "") for name in ALL_FIELDS),
+                block,
+                "",
+            )
 
         kept = memory.repeat(
             cls.hidden.unique_id, "MiniMaxH3UniversalWriter", repeat_last, given
@@ -523,8 +559,6 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         settings = dict(DEFAULT_OPTIONS)
         if options:
             settings.update(options)
-
-        assets, skipped = arrange(references, reference_layout)
 
         if task == TEXT_TASK:
             if assets or block:
@@ -645,7 +679,10 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
 
         fields = tuple(sections.get(name, "") for name in ALL_FIELDS)
         outputs = (text,) + fields + (block, "\n".join(captions))
-        memory.keep(cls.hidden.unique_id, "MiniMaxH3UniversalWriter", outputs, given)
+        memory.keep(
+            cls.hidden.unique_id, "MiniMaxH3UniversalWriter", outputs, given,
+            references=snapshot.take((item.slot, item.kind, item.value) for item in assets),
+        )
         return io.NodeOutput(*outputs)
 
 

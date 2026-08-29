@@ -55,7 +55,7 @@ import logging
 
 from comfy_api.latest import io
 
-from . import aspect, memory, writer_8b, writer_omni
+from . import aspect, library, memory, snapshot, writer_8b, writer_omni
 from .constants import (
     DURATION_MAX,
     DURATION_MIN,
@@ -448,6 +448,12 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
                     optional=True,
                     tooltip=memory.REPEAT_TOOLTIP,
                 ),
+                io.String.Input(
+                    "library_pick",
+                    default="",
+                    optional=True,
+                    tooltip=library.PICK_TOOLTIP,
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="rewritten_prompt"),
@@ -482,6 +488,7 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
         reference_audio=None,
         aspect_ratio=None,
         repeat_last=False,
+        library_pick="",
     ) -> io.NodeOutput:
         given = dict(locals())
         progress = NodeProgress(cls.hidden.unique_id)
@@ -490,21 +497,6 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
         if bypass:
             progress.finish("bypassed")
             return io.NodeOutput((prompt or "").strip(), *empty)
-
-        kept = memory.repeat(
-            cls.hidden.unique_id, "MiniMaxH3UniversalRewriter", repeat_last, given
-        )
-        if kept is not None:
-            return io.NodeOutput(*kept)
-
-        if not (prompt or "").strip():
-            raise ValueError("prompt must not be empty")
-
-        resolution = aspect.resolve(aspect_ratio, resolution)
-
-        settings = dict(DEFAULT_OPTIONS)
-        if options:
-            settings.update(options)
 
         connected = connected_references(
             {
@@ -515,6 +507,36 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
             },
             frame_switches,
         )
+
+        chosen, saved = library.picked(
+            library_pick, repeat_last, "MiniMaxH3UniversalRewriter", 1 + len(UNIVERSAL_FIELDS),
+            cls.hidden.unique_id,
+            having=[KIND_OF_SLOT.get(name) for name in connected],
+        )
+        if chosen is not None:
+            return io.NodeOutput(*chosen)
+
+        kept = memory.repeat(
+            cls.hidden.unique_id, "MiniMaxH3UniversalRewriter", repeat_last and not saved, given
+        )
+        if kept is not None:
+            return io.NodeOutput(*kept)
+
+        if saved:
+            fields = split_fields(saved, FIELDS_FOR_TASK[task], BODY_FIELD[task])
+            return io.NodeOutput(
+                saved, *(fields.get(name, "") for name in UNIVERSAL_FIELDS)
+            )
+
+        if not (prompt or "").strip():
+            raise ValueError("prompt must not be empty")
+
+        resolution = aspect.resolve(aspect_ratio, resolution)
+
+        settings = dict(DEFAULT_OPTIONS)
+        if options:
+            settings.update(options)
+
         frames = {
             name: value
             for name, value in connected.items()
@@ -577,7 +599,12 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
         fields = split_fields(text, FIELDS_FOR_TASK[task], BODY_FIELD[task])
         progress.text(text[-2000:] if text else "(empty rewrite)", force=True)
         outputs = (text,) + tuple(fields.get(name, "") for name in UNIVERSAL_FIELDS)
-        memory.keep(cls.hidden.unique_id, "MiniMaxH3UniversalRewriter", outputs, given)
+        memory.keep(
+            cls.hidden.unique_id, "MiniMaxH3UniversalRewriter", outputs, given,
+            references=snapshot.take(
+                (name, KIND_OF_SLOT.get(name), value) for name, value in connected.items()
+            ),
+        )
         return io.NodeOutput(*outputs)
 
 

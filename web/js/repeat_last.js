@@ -43,6 +43,10 @@ function apply(node) {
     else widget.tooltip = base ? `${base}\n\n--\n${note}` : note;
 }
 
+export function recordFor(nodeId) {
+    return state.get(String(nodeId));
+}
+
 function applyAll() {
     for (const node of app.graph?.nodes ?? []) apply(node);
 }

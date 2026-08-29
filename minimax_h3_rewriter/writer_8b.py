@@ -38,7 +38,7 @@ from .constants import (
     QUANTIZATIONS,
     RESOLUTIONS,
 )
-from . import memory
+from . import library, memory, snapshot
 from .fields import split_fields
 from .guide_prompt import BASE_MODES
 from .nodes import (
@@ -544,6 +544,7 @@ class MiniMaxH3PromptWriter8B:
                 "options": (OPTIONS_TYPE,),
                 "bypass": ("BOOLEAN", {"default": False, "tooltip": BYPASS_TOOLTIP}),
                 "repeat_last": ("BOOLEAN", {"default": False, "tooltip": memory.REPEAT_TOOLTIP}),
+                "library_pick": ("STRING", {"default": "", "tooltip": library.PICK_TOOLTIP}),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
         }
@@ -570,17 +571,26 @@ class MiniMaxH3PromptWriter8B:
         options=None,
         bypass=False,
         repeat_last=False,
+        library_pick="",
         unique_id=None,
     ):
         given = dict(locals())
         if bypass:
             return _bypassed(unique_id, prompt, OUTPUT_FIELDS)
 
-        kept = memory.repeat(unique_id, "MiniMaxH3PromptWriter8B", repeat_last, given)
+        chosen, saved = library.picked(
+            library_pick, repeat_last, "MiniMaxH3PromptWriter8B",
+            1 + len(OUTPUT_FIELDS), unique_id,
+            having=["image" for frame in (first_frame, last_frame) if frame is not None],
+        )
+        if chosen is not None:
+            return chosen
+
+        kept = memory.repeat(unique_id, "MiniMaxH3PromptWriter8B", repeat_last and not saved, given)
         if kept is not None:
             return kept
 
-        if not (prompt or "").strip():
+        if not saved and not (prompt or "").strip():
             raise ValueError("prompt must not be empty")
 
         resolution = aspect.resolve(aspect_ratio, resolution)
@@ -590,16 +600,24 @@ class MiniMaxH3PromptWriter8B:
             settings.update(options)
 
         progress = NodeProgress(unique_id)
-        text = rewrite_8b(
+        text = saved or rewrite_8b(
             model, prompt, task, resolution, duration, quantization,
             greedy, seed, keep_model_loaded, settings, progress,
             first_frame, last_frame,
         )
 
         fields = split_fields(text)
-        progress.text(text[-2000:] if text else "(empty rewrite)", force=True)
+        if not saved:
+            progress.text(text[-2000:] if text else "(empty rewrite)", force=True)
         outputs = (text,) + tuple(fields[name] for name in OUTPUT_FIELDS)
-        memory.keep(unique_id, "MiniMaxH3PromptWriter8B", outputs, given)
+        if saved:
+            return outputs
+        memory.keep(
+            unique_id, "MiniMaxH3PromptWriter8B", outputs, given,
+            references=snapshot.take(
+                (("first_frame", "image", first_frame), ("last_frame", "image", last_frame))
+            ),
+        )
         return outputs
 
 

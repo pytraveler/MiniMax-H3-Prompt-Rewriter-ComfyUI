@@ -389,19 +389,15 @@ same prompt, the aspect ratio is the same aspect ratio, the duration is the same
 duration — so trying another adapter meant retyping all of it into a second node
 and then keeping them in step.
 
-![The Universal Rewriter on its 27B tab: two tabs across the top with "27B LoRA / text only" lit and "8B LoRA / sees frames" dark, a task strip with T2VA lit and I2VA, FL2VA and L2VA greyed out, six aspect-ratio rectangles drawn to proportion with 16:9 chosen, a duration slider at 8, the prompt, and below them model_27b pointing at an on-disk Qwen3.6-27B GGUF with quantization_27b set to nf4](docs/node_universal_rewriter_27b.png)
+![The Universal Rewriter on its Omni tab, running Ref2VA: four reference rows down the left — first_frame, last_frame, reference_video and reference_audio, each connected and switched on — and eight outputs on the right, the three every task fills first and the four Ref2VA adds after them. Three tabs across the top with "Omni LoRA / sees, hears" lit, a task strip with Ref2VA lit, eight aspect-ratio rectangles drawn to proportion from 48:9 to 9:16 with 16:9 chosen, a duration slider at 10, the prompt "A blue whale breaching at sunset, filmed from a drone", and below them model_omni pointing at an on-disk Qwen2.5-Omni-7B Q8_0 with quantization_omni set to bfloat16, then aspect_ratio, repeat_last and three buttons: Open model list, Save the last prompt and Prompt library. On the right the six-field answer, every reference marked fully_preserved in the retention analysis](docs/node_universal_rewriter.png)
 
-![The same node one click later, on its 8B tab: "8B LoRA / sees frames" lit and "27B LoRA" dark, all four tasks available with FL2VA chosen, the same 16:9, the same duration of 8 and the same prompt, and below them model_8b pointing at an on-disk Qwen3-VL-8B-Instruct with quantization_8b set to int8](docs/node_universal_rewriter_8b.png)
-
-![The Universal Rewriter on its Omni tab, running Ref2VA: four reference rows down the left - first_frame, last_frame, reference_video and reference_audio, each with a checkbox - and eight outputs on the right, the three every task fills first and the four Ref2VA adds after them. Three tabs across the top with Omni lit, a task strip with Ref2VA lit, 16:9 chosen among the ratio rectangles, a duration slider at 10, the prompt, and below them model_omni pointing at an on-disk Qwen2.5-Omni-7B Q8_0 with quantization_omni set to nf4. On the right the six-field answer, with Audio 1 marked partially_copy in the retention analysis](docs/node_universal_rewriter_omni.png)
-
-*The same node, three clicks apart. Nothing above the model rows moved — the
-ratio, the duration, the prompt are one set of values. Below them each tab is
-holding its own: a 27B GGUF at `nf4` on the first, a Qwen3-VL-8B at `int8` on the
-second, a Qwen2.5-Omni-7B at `nf4` on the third, all still where they were left.
-The task strip is the other difference — the 27B tab lights `T2VA` alone; the 8B
-tab has all four frame tasks, because both frame inputs are connected and
-switched on; and the Omni tab adds `Ref2VA`, which no other tab can reach.*
+*One node, three tabs. Nothing above the model rows belongs to a tab — the
+task, the ratio, the duration and the prompt are one set of values, whichever
+adapter is lit. Below them each tab holds its own model and quantization, still
+set to whatever you last chose, including across a save and load. The task strip
+is the other difference: the 27B tab lights `T2VA` alone, the 8B tab adds the
+three frame tasks, and the Omni tab adds `Ref2VA` on top of them, which no other
+tab can reach.*
 
 **So the tab carries what differs, and nothing else:**
 
@@ -485,7 +481,7 @@ the 27B tab, `models_8b` for the 8B one, `models_omni` for the Omni one.
 Everything you rarely touch, kept off the main node. Leave it unconnected and the
 rewriter uses the decoding parameters the adapter was published with.
 
-![The Rewriter Options node, one output socket and fifteen widgets: max_new_tokens, temperature, top_p, top_k, repetition_penalty, attn_implementation, the adapter to apply, use_lora, auto_download, gpu_layers, n_ctx, gguf_runtime, device, llama_backend and trust_remote_code](docs/node_options.png)
+![The Rewriter Options node, one output socket and seventeen widgets: max_new_tokens, temperature, top_p, top_k, repetition_penalty, attn_implementation, the adapter to apply, use_lora, merge_lora, auto_download, gpu_layers, n_ctx, gguf_runtime, device, llama_backend, trust_remote_code and prompt_file, with a New prompt file button under them](docs/node_options.png)
 
 | Input | Default | Purpose |
 |---|---|---|
@@ -499,6 +495,7 @@ rewriter uses the decoding parameters the adapter was published with.
 | `auto_download` | on | Turn off to fail loudly instead of fetching 52 GB |
 | `device` | `auto` | Which GPU runs the language model — see below |
 | `trust_remote_code` | **off** | Allow a checkpoint to run the Python it ships with — see below |
+| `prompt_file` | `global` | Which set of saved prompts the nodes wired to this one work in — see [the prompt library](#the-prompt-library) |
 
 The same options node feeds the writer nodes and the captioner; `adapter` and
 `use_lora` simply do not apply there.
@@ -740,12 +737,13 @@ now the only thing deciding which was which was the order the caption node
 happened to write them in, which came in turn from which slot each was plugged
 into. Real, load-bearing, and nowhere on screen.
 
-![The Universal Writer node: five reference slots each with a checkbox on its own row, then a strip of four coloured squares reading subj 1 over ref_1, pic 1 over ref_0, vid 1 over ref_3 and aud 1 over ref_2 with a line of help under them, a task switch with Ref2VA lit, six aspect-ratio rectangles drawn to proportion with 1:1 chosen, a duration slider at 7.2, and the prompt and both model dropdowns below](docs/node_universal_writer.png)
+![The Universal Writer node: five reference rows each with a checkbox, four of them connected, then a strip of four coloured squares reading subj 1 over ref_0, pic 1 over ref_1, vid 1 over ref_2 and aud 1 over ref_3, each with an "+ instr" button and a line of help under them, a task switch with Ref2VA lit, eight aspect-ratio rectangles drawn to proportion from 48:9 to 9:16 with 16:9 chosen, a duration slider at 10, the prompt, the captioner and writer dropdowns, and four buttons at the bottom: Open model list, Open guide folder, Save the last prompt and Prompt library. On the right the six-field answer, written around <Subject 1>, <Picture 1>, <Video 1> and <Audio 1>](docs/node_universal_writer.png)
 
 *Four references on one growing socket — an image used as a subject, an image
-used as a frame, a clip and a sound. The squares are not in slot order: `ref_1`
-was dragged to the front, so it is the one the block will call `Subject 1`. The
-number is a position and renumbers as things move; the slot name under it is
+used as a frame, a clip and a sound — and on the right an answer written around
+exactly those labels: `<Subject 1>`, `<Picture 1>`, `<Video 1>`, `<Audio 1>`. The
+squares are in slot order here because nothing has been dragged; the number is a
+position and renumbers the moment anything moves, while the slot name under it is
 what stays with a square.*
 
 **One socket takes an image, a clip or a sound**, and more slots appear as you
@@ -1149,6 +1147,96 @@ changed. `bypass` still wins over it.
 On the two caption nodes it is the caption that is kept, not the assembled block:
 the numbering belongs to the chain, so the line is written again around whatever
 arrives on `previous`, and an asset connected since is described for real.
+
+The node's own last answer is what the switch hands back by default, and
+[the prompt library](#the-prompt-library) is how you point it at something else
+instead. One switch either way: `repeat_last` decides whether a kept prompt is
+handed on at all, the library window decides which one.
+
+### The prompt library
+
+`repeat_last` holds one answer per node and forgets it when ComfyUI restarts. The
+library is the other half: prompts you name and keep, in a JSON file under the
+ComfyUI user directory, available to every workflow and every node.
+
+**Saving.** The **Save the last prompt** button on any writer or rewriter opens a
+box asking for a name, a description and any number of groups — the groups already
+in the file are offered as chips, and a new one is a word and Enter. What gets
+saved is the run itself: the text, the sections after it, the task, the model, the
+ratio, the duration, the seed, and a 50x50 thumbnail of every reference the node
+was shown.
+
+Those thumbnails are taken **during the run**, which is the only moment they can
+be. By the time the box opens the node has returned strings and the tensors are
+gone, so the picture, the first frame of the clip and the measurements are captured
+as the answer is produced and travel with it. What is measured is what genuinely
+exists: an image has a size; a clip that arrived as a real `VIDEO` has frames,
+seconds and a frame rate, while one that arrived as a batch of images has a frame
+count and nothing else, because a batch has no container to ask; a sound has a
+duration, a rate and a channel count. References are labelled by position —
+`ref1-image`, `ref2-audio` — rather than by file name, which a node cannot see
+anyway.
+
+**Using one.** The **Prompt library** button opens the list: this node's own last
+answer first, then everything in the file, newest first. Filter by group with the
+chips, or type in the search box to keep only the records whose name, description,
+prompt, groups, references or settings contain what you typed. **Use** points the
+node at a record; **Copy** puts the prompt on the clipboard without pointing the
+node at anything; **Delete** removes it from the file for good.
+
+![The prompt library window, titled “Prompt library” over the line “Hand a saved prompt straight to this node’s output. No model is loaded.”: a search box across the top reading “Search names, descriptions, prompts, references” with the file dropdown beside it on `global`, and four group chips under it — bakery, dinosaur, fish, joke. First the node’s own Last Prompt row, its Use and Copy greyed out beneath “Nothing kept yet. Run this node once and its answer is what gets saved.” Then two saved records: “Дино и пеламида”, three thumbnails down its left and the line Ref2VA · 16:9 · 10s · 3 images + 1 audio · joke, dinosaur, fish above its description and the opening of its subject_definitions; and “Дино”, one thumbnail and the line I2VA · 16:9 · 15s · 1 image · joke, bakery, dinosaur, its card tinted blue because that is the record this node is pointed at. Use, Copy and Delete run down the right of every row, and Write a new one and Close sit at the foot of the window](docs/prompt_library.png)
+
+*Everything on a card is searchable — the name, the description, the prompt, the
+groups, the settings and the references — which is what keeps a file of a hundred
+records usable. The line under the name ends with what the record was written for,
+`3 images + 1 audio`, in the same words the node uses when it warns that what it is
+being shown no longer matches; the thumbnails beside it say which pictures those
+were. The tinted card is the current choice. The Last Prompt row sits above the
+file because it is not in it — it is this session’s own answer, which is why it
+has no **Delete**.*
+
+A chosen prompt reaches `rewritten_prompt` and the section outputs exactly as a
+fresh one would — no model is loaded, nothing is generated, and the run takes about
+a tenth of a second. A record written by another kind of node works too: when the
+classes match the outputs come back verbatim, and otherwise the text is split into
+sections by the node reading it, the same way it splits an answer it wrote itself.
+
+**A record with references is pinned to them.** A T2VA prompt is self-contained
+and travels anywhere. A prompt for one of the frame tasks or for Ref2VA is not:
+it names its references and describes them — `<Subject 1>` *is* the blue dinosaur
+with the textured scaly skin — so giving that prompt a different set of assets
+hands the generator a description of something that is not in front of it. The
+thumbnails on the card are how you see what a record was written for, and the
+node checks as well: when the kinds and counts of what it is being shown no
+longer match what the record was written for, it says so on the node and in the
+console before handing the prompt on. It says it rather than refusing — reusing a
+description as a template is a legitimate thing to do, and only you know whether
+that is what you meant. What no check can catch is one picture swapped for
+another of the same kind; that is what the thumbnail is for.
+
+**One switch decides, the window decides what.** Choosing a record switches
+`repeat_last` on, because that switch is what hands a kept prompt on at all.
+Turning it off gives the node back to the model and leaves the choice waiting;
+**Write a new one** does both, forgetting the choice as well. The button says which
+it is — `Library: Storm at sea`, or the same with `(repeat_last is off)` after it —
+and the badge beside the node title reads `REPEAT` or `LIBRARY`.
+
+The choice itself lives in a hidden widget, so it is saved with the workflow and
+reaches an API run: a graph reopened tomorrow returns the same prompt. If the
+record has been deleted since, the run stops and says so rather than quietly
+writing a new one — the graph asked for a particular prompt.
+
+**Sets.** `prompt_file` on the Options node names the file the nodes wired to it
+save into and list, `global` unless you say otherwise, and **New prompt file**
+beside it makes another. One file is one working set, which is the cheapest way to
+keep a project's prompts apart from everything else. They live in
+
+```text
+ComfyUI/user/minimax_h3_rewriter/prompts/
+```
+
+as plain JSON, so they can be edited by hand, copied between machines or deleted.
+A record with one thumbnail and a full-length prompt is about 11 KB.
 
 ### The guides are fetched, not bundled
 

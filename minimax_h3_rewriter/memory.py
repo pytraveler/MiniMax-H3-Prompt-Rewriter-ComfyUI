@@ -23,16 +23,18 @@ log = logging.getLogger(__name__)
 EVENT = "minimax_h3_rewriter.memory"
 PREVIEW = 400
 
-SKIP = ("self", "cls", "unique_id", "repeat_last", "bypass")
+SKIP = ("self", "cls", "unique_id", "repeat_last", "library_pick", "bypass")
 
 REPEAT_TOOLTIP = (
-    "Hand back the last answer this node produced instead of running the model again.\n\n"
-    "With nothing kept yet the node runs once, keeps the answer and says so on the node; "
-    "from then on it returns that same answer for as long as the switch is on, whatever "
-    "else you change. Switch it off and the next run is a real one, which replaces what "
-    "is kept.\n\n"
-    "The store is in memory for this ComfyUI session only, one answer per node: it is not "
-    "saved with the workflow and does not survive a restart. 'bypass' still wins over it."
+    "Hand back a prompt this node already has instead of running the model again.\n\n"
+    "By default that is the node's own last answer: with nothing kept yet it runs once, "
+    "keeps what it wrote and says so, and from then on returns that same text for as long "
+    "as the switch is on, whatever else you change. Pick something in the library window "
+    "and this switch hands that saved prompt on instead -- the window chooses which "
+    "prompt, this switch is what makes it happen.\n\n"
+    "Off is always a real run. The session store is in memory only, one answer per node: "
+    "it is not saved with the workflow and does not survive a restart, while a saved "
+    "prompt does both. 'bypass' still wins over all of it."
 )
 
 REPEAT_CAPTION_TOOLTIP = (
@@ -56,6 +58,7 @@ class Record:
     signature: str
     about: dict
     at: float
+    task: str = ""
     references: list = field(default_factory=list)
 
     @property
@@ -118,6 +121,8 @@ def summary(record: Record | None, repeated: bool = False, changed: bool = False
         "chars": len(record.text),
         "preview": record.text[:PREVIEW],
         "node_class": record.node_class,
+        "task": record.task,
+        "references": len(record.references),
     }
 
 
@@ -141,7 +146,14 @@ def forget(node_id) -> None:
     LAST.pop(str(node_id), None)
 
 
-def keep(node_id, node_class: str, outputs, given: dict, references=None) -> Record | None:
+def keep(
+    node_id,
+    node_class: str,
+    outputs,
+    given: dict,
+    references=None,
+    task: str = "",
+) -> Record | None:
     """Remember what this node just produced."""
     if node_id is None:
         return None
@@ -151,6 +163,7 @@ def keep(node_id, node_class: str, outputs, given: dict, references=None) -> Rec
         signature=signature(given),
         about=about(given),
         at=time.time(),
+        task=task or str(given.get("task") or ""),
         references=list(references or ()),
     )
     LAST[str(node_id)] = record

@@ -6,6 +6,88 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.18.0 - 2026-08-29
+
+### Added
+
+- **A prompt library.** `repeat_last`, added in 0.17.3, holds one answer per node
+  and forgets it when ComfyUI restarts. This is the other half: prompts you name
+  and keep, in a JSON file under the ComfyUI user directory, available to every
+  workflow and every node.
+
+  **Save the last prompt** on any writer or rewriter opens a box asking for a
+  name, a description and any number of groups -- the groups already in the file
+  come back as chips, a new one is a word and Enter. What is saved is the run
+  itself: the text, the sections after it, the task, the model, the ratio, the
+  duration, the seed, and a 50x50 thumbnail of every reference the node was
+  shown.
+
+  Those thumbnails are taken **during the run**, which is the only moment they
+  can be: by the time a save box opens the node has returned strings and the
+  tensors are gone. So the session record and the library record are one shape,
+  and saving is a matter of naming something already complete. Only what
+  genuinely exists is measured -- an image has a size; a clip that arrived as a
+  real `VIDEO` has frames, seconds and a frame rate, while one that arrived as a
+  batch of images has a frame count and nothing else, having no container to
+  ask; a sound has a duration, a rate and a channel count. References are
+  labelled by position, `ref1-image` and `ref2-audio`, rather than by a file name
+  a node cannot see.
+
+  **Prompt library** opens the list: the node's own last answer first, then the
+  file, newest first. Filter by group with the chips, or search across names,
+  descriptions, prompts, groups, references and settings at once. **Use** points
+  the node at a record, **Delete** removes it for good.
+
+  A chosen prompt reaches `rewritten_prompt` and the section outputs exactly as a
+  fresh one would -- no model is loaded, nothing is generated, and the run takes
+  about a tenth of a second against the fifty a real rewrite costs. A record
+  written by another kind of node works too: matching classes hand the outputs
+  back verbatim, and otherwise the text is split into sections by the node
+  reading it, the same way it splits an answer it wrote itself.
+
+  The choice lives in a hidden widget, so it is saved with the workflow and
+  reaches an API run -- a graph reopened tomorrow returns the same prompt. A
+  record deleted since stops the run and says so rather than quietly writing a
+  new one: the graph asked for a particular prompt.
+
+- **A saved prompt is checked against the references the node is actually being
+  shown.** A T2VA prompt is self-contained, but a prompt for a frame task or for
+  Ref2VA names its references and describes them inside the text, so reusing one
+  over a different set of assets describes something that is not there. When the
+  kinds and counts no longer match what the record was written for, the node says
+  so -- on the node, in the console -- and hands the prompt on anyway, because
+  reusing a description as a template is a legitimate thing to do. The thumbnails
+  on the card cover what no check can: one picture swapped for another of the same
+  kind.
+
+- **Copy buttons in the library window**, on every record and on the Last Prompt
+  row, and beside Save in the save box. They put the prompt on the clipboard
+  without pointing the node at anything.
+
+- **`prompt_file` on the Options node, and a `New prompt file` button beside
+  it.** One file is one working set, `global` unless a workflow says otherwise,
+  and the nodes wired to that Options node save into it and list it. The files
+  are plain JSON in `ComfyUI/user/minimax_h3_rewriter/prompts/`, so they can be
+  edited by hand, copied between machines or deleted. A record with one thumbnail
+  and a full-length prompt is about 11 KB.
+
+- **A badge for `repeat_last`, next to the one `bypass` already had.** It reads
+  `REPEAT` when the node is handing back its own last answer and `LIBRARY` when a
+  saved prompt is driving it, shows the dim switch name on a collapsed node, and
+  toggles the switch when clicked -- the same behaviour as the bypass badge, which
+  it now shares its implementation with. It does not recolour the node: bypass
+  does that, the two appear together often, and one colour cannot mean both.
+
+### Changed
+
+- **`repeat_last` is the one switch, and the library window only chooses what it
+  hands back.** Picking a saved prompt switches it on; switching it off gives the
+  node back to the model and leaves the choice waiting, and `Write a new one` in
+  the window does both. Before this, a saved prompt applied whatever the switch
+  said, which left the visible control doing nothing while an invisible one
+  decided -- the button now reads `Library: <name>`, with `(repeat_last is off)`
+  after it when that is the case.
+
 ## 0.17.3 - 2026-08-29
 
 ### Added

@@ -35,7 +35,17 @@ from dataclasses import dataclass
 
 from comfy_api.latest import io
 
-from . import aspect, catalog, discovery, engine, media, memory, mtmd_engine
+from . import (
+    aspect,
+    catalog,
+    discovery,
+    engine,
+    library,
+    media,
+    memory,
+    mtmd_engine,
+    snapshot,
+)
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
 from .constants import (
     MERGE_AUTO,
@@ -737,6 +747,12 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
                     optional=True,
                     tooltip=memory.REPEAT_TOOLTIP,
                 ),
+                io.String.Input(
+                    "library_pick",
+                    default="",
+                    optional=True,
+                    tooltip=library.PICK_TOOLTIP,
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="rewritten_prompt"),
@@ -764,6 +780,7 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         bypass=False,
         aspect_ratio=None,
         repeat_last=False,
+        library_pick="",
     ) -> io.NodeOutput:
         given = dict(locals())
         progress = NodeProgress(cls.hidden.unique_id)
@@ -773,8 +790,17 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
             progress.finish("bypassed")
             return io.NodeOutput((prompt or "").strip(), *empty)
 
+        connected, switched_off = arrange(references, reference_layout)
+
+        chosen, saved = library.picked(
+            library_pick, repeat_last, "MiniMaxH3PromptWriterOmni", 1 + len(ALL_FIELDS),
+            cls.hidden.unique_id, having=[item.kind for item in connected],
+        )
+        if chosen is not None:
+            return io.NodeOutput(*chosen)
+
         kept = memory.repeat(
-            cls.hidden.unique_id, "MiniMaxH3PromptWriterOmni", repeat_last, given
+            cls.hidden.unique_id, "MiniMaxH3PromptWriterOmni", repeat_last and not saved, given
         )
         if kept is not None:
             return io.NodeOutput(*kept)
@@ -786,14 +812,13 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
             settings.update(options)
 
         wanted = normalize_task(task)
-        connected, switched_off = arrange(references, reference_layout)
         if switched_off:
             log.info(
                 "[minimax_h3_rewriter.writer_omni] %d reference(s) switched off on the strip",
                 switched_off,
             )
 
-        text = rewrite_omni(
+        text = saved or rewrite_omni(
             model=model,
             prompt=prompt,
             task=wanted,
@@ -811,10 +836,19 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
 
         names = FIELDS_FOR_TASK[wanted]
         _head, sections = split_sections(text, names, fallback=BODY_FIELD[wanted])
-        _report(progress, text, sections, names)
+        if not saved:
+            _report(progress, text, sections, names)
         fields = tuple(sections.get(name, "") for name in ALL_FIELDS)
         outputs = (text,) + fields
-        memory.keep(cls.hidden.unique_id, "MiniMaxH3PromptWriterOmni", outputs, given)
+        if saved:
+            return io.NodeOutput(*outputs)
+        memory.keep(
+            cls.hidden.unique_id, "MiniMaxH3PromptWriterOmni", outputs, given,
+            references=snapshot.take(
+                (item.slot, item.kind, item.value) for item in connected
+            ),
+            task=wanted,
+        )
         return io.NodeOutput(*outputs)
 
 

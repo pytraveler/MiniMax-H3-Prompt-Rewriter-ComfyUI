@@ -471,7 +471,8 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
 
         if described > 0 or len(reused) != len(assets):
             memory.keep(
-                cls.hidden.unique_id, "MiniMaxH3MultiReferenceCaption", tuple(captions), given
+                cls.hidden.unique_id, "MiniMaxH3MultiReferenceCaption", tuple(captions),
+                given, task="caption",
             )
 
         fresh = max(described, 0)

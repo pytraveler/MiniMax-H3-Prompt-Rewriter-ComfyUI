@@ -181,6 +181,9 @@ def _audio_parts(audio) -> tuple[object, object]:
     return getattr(audio, "waveform", None), getattr(audio, "sample_rate", None)
 
 
+audio_parts = _audio_parts
+
+
 def audio_file(audio, workspace: Workspace, name: str = "audio.wav") -> str:
     """Write a ComfyUI AUDIO input out as 16-bit PCM WAV. Returns the path."""
     numpy = _numpy()

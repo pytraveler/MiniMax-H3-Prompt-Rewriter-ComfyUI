@@ -21,6 +21,7 @@ from . import (
     gguf_engine,
     guide_prompt,
     guides,
+    library,
     llamacpp,
     media,
     memory,
@@ -80,6 +81,7 @@ DEFAULT_OPTIONS = {
     "llama_backend": "auto",
     "device": devices.AUTO,
     "trust_remote_code": False,
+    "prompt_file": library.DEFAULT_FILE,
 }
 
 BASE_SPEC = {
@@ -818,6 +820,21 @@ class MiniMaxH3RewriterOptions:
                         ),
                     },
                 ),
+                "prompt_file": (
+                    library.files(),
+                    {
+                        "default": library.DEFAULT_FILE,
+                        "tooltip": (
+                            "Which set of saved prompts the nodes connected to this one work in: the "
+                            "file the save dialog writes to and the library window lists. One file is "
+                            "one working set, so a workflow can keep its prompts apart from the rest.\n\n"
+                            "The button below makes a new one. The list is read when ComfyUI starts, so "
+                            "a file made by hand needs a browser refresh to appear here -- the same as "
+                            "the model list. Nothing in the run reads this: a prompt already chosen "
+                            "carries its own file name, so the pick keeps working whatever this says."
+                        ),
+                    },
+                ),
             },
         }
 
@@ -1050,6 +1067,7 @@ class MiniMaxH3PromptRewriter:
                 "options": (OPTIONS_TYPE,),
                 "bypass": ("BOOLEAN", {"default": False, "tooltip": BYPASS_TOOLTIP}),
                 "repeat_last": ("BOOLEAN", {"default": False, "tooltip": memory.REPEAT_TOOLTIP}),
+                "library_pick": ("STRING", {"default": "", "tooltip": library.PICK_TOOLTIP}),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
         }
@@ -1073,17 +1091,25 @@ class MiniMaxH3PromptRewriter:
         options=None,
         bypass=False,
         repeat_last=False,
+        library_pick="",
         unique_id=None,
     ):
         given = dict(locals())
         if bypass:
             return _bypassed(unique_id, prompt, OUTPUT_FIELDS)
 
-        kept = memory.repeat(unique_id, "MiniMaxH3PromptRewriter", repeat_last, given)
+        chosen, saved = library.picked(
+            library_pick, repeat_last, "MiniMaxH3PromptRewriter",
+            1 + len(OUTPUT_FIELDS), unique_id, having=(),
+        )
+        if chosen is not None:
+            return chosen
+
+        kept = memory.repeat(unique_id, "MiniMaxH3PromptRewriter", repeat_last and not saved, given)
         if kept is not None:
             return kept
 
-        if not (prompt or "").strip():
+        if not saved and not (prompt or "").strip():
             raise ValueError("prompt must not be empty")
 
         resolution = aspect.resolve(aspect_ratio, resolution)
@@ -1093,15 +1119,17 @@ class MiniMaxH3PromptRewriter:
             settings.update(options)
 
         progress = NodeProgress(unique_id)
-        text = rewrite_t2va(
+        text = saved or rewrite_t2va(
             model, prompt, resolution, duration, quantization,
             greedy, seed, keep_model_loaded, settings, progress,
         )
 
         fields = split_fields(text)
-        progress.text(text[-2000:] if text else "(empty rewrite)", force=True)
+        if not saved:
+            progress.text(text[-2000:] if text else "(empty rewrite)", force=True)
         outputs = (text,) + tuple(fields[name] for name in OUTPUT_FIELDS)
-        memory.keep(unique_id, "MiniMaxH3PromptRewriter", outputs, given)
+        if not saved:
+            memory.keep(unique_id, "MiniMaxH3PromptRewriter", outputs, given, task="T2VA")
         return outputs
 
 
@@ -1341,6 +1369,7 @@ class MiniMaxH3GuidedWriter:
                     {"multiline": True, "default": "", "tooltip": SYSTEM_PROMPT_TOOLTIP},
                 ),
                 "repeat_last": ("BOOLEAN", {"default": False, "tooltip": memory.REPEAT_TOOLTIP}),
+                "library_pick": ("STRING", {"default": "", "tooltip": library.PICK_TOOLTIP}),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
         }
@@ -1366,13 +1395,21 @@ class MiniMaxH3GuidedWriter:
         options=None,
         bypass=False,
         repeat_last=False,
+        library_pick="",
         unique_id=None,
     ):
         given = dict(locals())
         if bypass:
             return _bypassed(unique_id, prompt, OUTPUT_FIELDS)
 
-        kept = memory.repeat(unique_id, "MiniMaxH3GuidedWriter", repeat_last, given)
+        chosen, saved = library.picked(
+            library_pick, repeat_last, "MiniMaxH3GuidedWriter",
+            1 + len(OUTPUT_FIELDS), unique_id, having=(),
+        )
+        if chosen is not None:
+            return chosen
+
+        kept = memory.repeat(unique_id, "MiniMaxH3GuidedWriter", repeat_last and not saved, given)
         if kept is not None:
             return kept
 
@@ -1382,14 +1419,16 @@ class MiniMaxH3GuidedWriter:
             settings.update(options)
         progress = NodeProgress(unique_id)
 
-        text = _guided_text(
+        text = saved or _guided_text(
             task, model, prompt, resolution, duration, reference_material,
             greedy, seed, keep_model_loaded, settings, progress, system_prompt,
         )
         _head, sections = split_sections(text, OUTPUT_FIELDS)
-        _report(progress, text, sections, OUTPUT_FIELDS)
+        if not saved:
+            _report(progress, text, sections, OUTPUT_FIELDS)
         outputs = (text,) + tuple(sections[name] for name in OUTPUT_FIELDS)
-        memory.keep(unique_id, "MiniMaxH3GuidedWriter", outputs, given)
+        if not saved:
+            memory.keep(unique_id, "MiniMaxH3GuidedWriter", outputs, given)
         return outputs
 
 
@@ -1489,6 +1528,7 @@ class MiniMaxH3GuidedWriterRef:
                     {"multiline": True, "default": "", "tooltip": SYSTEM_PROMPT_TOOLTIP},
                 ),
                 "repeat_last": ("BOOLEAN", {"default": False, "tooltip": memory.REPEAT_TOOLTIP}),
+                "library_pick": ("STRING", {"default": "", "tooltip": library.PICK_TOOLTIP}),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
         }
@@ -1513,13 +1553,21 @@ class MiniMaxH3GuidedWriterRef:
         options=None,
         bypass=False,
         repeat_last=False,
+        library_pick="",
         unique_id=None,
     ):
         given = dict(locals())
         if bypass:
             return _bypassed(unique_id, prompt, REF_OUTPUT_FIELDS)
 
-        kept = memory.repeat(unique_id, "MiniMaxH3GuidedWriterRef", repeat_last, given)
+        chosen, saved = library.picked(
+            library_pick, repeat_last, "MiniMaxH3GuidedWriterRef",
+            1 + len(REF_OUTPUT_FIELDS), unique_id, having=(),
+        )
+        if chosen is not None:
+            return chosen
+
+        kept = memory.repeat(unique_id, "MiniMaxH3GuidedWriterRef", repeat_last and not saved, given)
         if kept is not None:
             return kept
 
@@ -1529,14 +1577,18 @@ class MiniMaxH3GuidedWriterRef:
             settings.update(options)
         progress = NodeProgress(unique_id)
 
-        text = _guided_text(
+        text = saved or _guided_text(
             guide_prompt.REF_MODE, model, prompt, resolution, duration, reference_assets,
             greedy, seed, keep_model_loaded, settings, progress, system_prompt,
         )
         _head, sections = split_sections(text, REF_OUTPUT_FIELDS, fallback="detailed_description")
-        _report(progress, text, sections, REF_OUTPUT_FIELDS)
+        if not saved:
+            _report(progress, text, sections, REF_OUTPUT_FIELDS)
         outputs = (text,) + tuple(sections[name] for name in REF_OUTPUT_FIELDS)
-        memory.keep(unique_id, "MiniMaxH3GuidedWriterRef", outputs, given)
+        if not saved:
+            memory.keep(
+                unique_id, "MiniMaxH3GuidedWriterRef", outputs, given, task="Ref2VA"
+            )
         return outputs
 
 
@@ -2052,7 +2104,9 @@ class MiniMaxH3ReferenceCaption:
                     auto_download=settings["auto_download"],
                     progress=progress,
                 )
-            memory.keep(unique_id, "MiniMaxH3ReferenceCaption", (caption,), given)
+            memory.keep(
+                unique_id, "MiniMaxH3ReferenceCaption", (caption,), given, task="caption"
+            )
 
         caption = " ".join(caption.split())
         line = f"{role} {next_index(previous, role)}: {caption}"
