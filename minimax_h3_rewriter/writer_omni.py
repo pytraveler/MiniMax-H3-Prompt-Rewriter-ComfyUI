@@ -35,7 +35,7 @@ from dataclasses import dataclass
 
 from comfy_api.latest import io
 
-from . import aspect, catalog, discovery, engine, media, mtmd_engine
+from . import aspect, catalog, discovery, engine, media, memory, mtmd_engine
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
 from .constants import (
     MERGE_AUTO,
@@ -731,6 +731,12 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
                     ),
                     types=[io.String, io.Combo],
                 ),
+                io.Boolean.Input(
+                    "repeat_last",
+                    default=False,
+                    optional=True,
+                    tooltip=memory.REPEAT_TOOLTIP,
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="rewritten_prompt"),
@@ -757,13 +763,21 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         max_frames=media.DEFAULT_MAX_FRAMES,
         bypass=False,
         aspect_ratio=None,
+        repeat_last=False,
     ) -> io.NodeOutput:
+        given = dict(locals())
         progress = NodeProgress(cls.hidden.unique_id)
         empty = ("",) * len(ALL_FIELDS)
 
         if bypass:
             progress.finish("bypassed")
             return io.NodeOutput((prompt or "").strip(), *empty)
+
+        kept = memory.repeat(
+            cls.hidden.unique_id, "MiniMaxH3PromptWriterOmni", repeat_last, given
+        )
+        if kept is not None:
+            return io.NodeOutput(*kept)
 
         resolution = aspect.resolve(aspect_ratio, resolution)
 
@@ -799,7 +813,9 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         _head, sections = split_sections(text, names, fallback=BODY_FIELD[wanted])
         _report(progress, text, sections, names)
         fields = tuple(sections.get(name, "") for name in ALL_FIELDS)
-        return io.NodeOutput(text, *fields)
+        outputs = (text,) + fields
+        memory.keep(cls.hidden.unique_id, "MiniMaxH3PromptWriterOmni", outputs, given)
+        return io.NodeOutput(*outputs)
 
 
 NODE_CLASS_MAPPINGS = {

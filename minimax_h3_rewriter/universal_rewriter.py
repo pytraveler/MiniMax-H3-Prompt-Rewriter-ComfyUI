@@ -55,7 +55,7 @@ import logging
 
 from comfy_api.latest import io
 
-from . import aspect, writer_8b, writer_omni
+from . import aspect, memory, writer_8b, writer_omni
 from .constants import (
     DURATION_MAX,
     DURATION_MIN,
@@ -442,6 +442,12 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
                     ),
                     types=[io.String, io.Combo],
                 ),
+                io.Boolean.Input(
+                    "repeat_last",
+                    default=False,
+                    optional=True,
+                    tooltip=memory.REPEAT_TOOLTIP,
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="rewritten_prompt"),
@@ -475,13 +481,21 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
         reference_video=None,
         reference_audio=None,
         aspect_ratio=None,
+        repeat_last=False,
     ) -> io.NodeOutput:
+        given = dict(locals())
         progress = NodeProgress(cls.hidden.unique_id)
         empty = ("",) * len(UNIVERSAL_FIELDS)
 
         if bypass:
             progress.finish("bypassed")
             return io.NodeOutput((prompt or "").strip(), *empty)
+
+        kept = memory.repeat(
+            cls.hidden.unique_id, "MiniMaxH3UniversalRewriter", repeat_last, given
+        )
+        if kept is not None:
+            return io.NodeOutput(*kept)
 
         if not (prompt or "").strip():
             raise ValueError("prompt must not be empty")
@@ -562,7 +576,9 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
 
         fields = split_fields(text, FIELDS_FOR_TASK[task], BODY_FIELD[task])
         progress.text(text[-2000:] if text else "(empty rewrite)", force=True)
-        return io.NodeOutput(text, *(fields.get(name, "") for name in UNIVERSAL_FIELDS))
+        outputs = (text,) + tuple(fields.get(name, "") for name in UNIVERSAL_FIELDS)
+        memory.keep(cls.hidden.unique_id, "MiniMaxH3UniversalRewriter", outputs, given)
+        return io.NodeOutput(*outputs)
 
 
 NODE_CLASS_MAPPINGS = {

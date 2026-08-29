@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from . import catalog, guides
+from . import catalog, guides, memory
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +40,13 @@ def register() -> None:
                 {"ok": False, "error": str(error), "path": guides.root()}, status=500
             )
         return web.json_response({"ok": True, "path": path})
+
+    @routes.get(f"{PREFIX}/memory")
+    async def prompt_memory(request):
+        """What every node still holds, so a reloaded page can label the switch."""
+        return web.json_response(
+            {node: memory.summary(record) for node, record in memory.LAST.items()}
+        )
 
     @routes.get(f"{PREFIX}/model_list")
     async def model_list(request):

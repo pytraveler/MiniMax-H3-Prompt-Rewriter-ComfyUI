@@ -1124,6 +1124,32 @@ system message. That branch also skips Qwen's thinking suppression, so the empty
 `<think>` block is written for you. It is Qwen-shaped by construction — on Gemma
 or anything else, stay on `plain`.
 
+### Repeating the last answer
+
+Every writer, rewriter and captioner has a `repeat_last` switch. Turn it on and
+the node hands back the answer it produced last instead of running the model
+again — with nothing kept yet it runs once, keeps what it wrote and says so, and
+from then on returns that same text for as long as the switch is on, whatever
+else you change. That is the point of it: a fifty-second rewrite is not something
+to pay for twice while you wire up everything downstream of it.
+
+ComfyUI's own cache cannot do this. A node's cache key is its class, its
+`IS_CHANGED` value and every input it received, so editing the prompt is exactly
+what drops the entry — and `IS_CHANGED` can only add invalidation, never mask it.
+So the answers are kept in a store of the pack's own, one per node.
+
+That store lives in memory for the ComfyUI session and nowhere else: it is not
+written to disk, it does not travel with the workflow, and a restart empties it.
+Every run says where its answer came from in three places — the caption under the
+node, the ComfyUI console, and the switch's own tooltip, which carries the time
+it was kept, its length and the opening of the text. When the inputs no longer
+match the ones that produced it, all three say so rather than pretending nothing
+changed. `bypass` still wins over it.
+
+On the two caption nodes it is the caption that is kept, not the assembled block:
+the numbering belongs to the chain, so the line is written again around whatever
+arrives on `previous`, and an asset connected since is described for real.
+
 ### The guides are fetched, not bundled
 
 The two guides are not shipped inside this pack. They are MiniMax's

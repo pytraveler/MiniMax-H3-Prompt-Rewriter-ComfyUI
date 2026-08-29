@@ -23,6 +23,7 @@ from . import (
     guides,
     llamacpp,
     media,
+    memory,
     mtmd_engine,
 )
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
@@ -1048,6 +1049,7 @@ class MiniMaxH3PromptRewriter:
                 ),
                 "options": (OPTIONS_TYPE,),
                 "bypass": ("BOOLEAN", {"default": False, "tooltip": BYPASS_TOOLTIP}),
+                "repeat_last": ("BOOLEAN", {"default": False, "tooltip": memory.REPEAT_TOOLTIP}),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
         }
@@ -1070,10 +1072,16 @@ class MiniMaxH3PromptRewriter:
         aspect_ratio=None,
         options=None,
         bypass=False,
+        repeat_last=False,
         unique_id=None,
     ):
+        given = dict(locals())
         if bypass:
             return _bypassed(unique_id, prompt, OUTPUT_FIELDS)
+
+        kept = memory.repeat(unique_id, "MiniMaxH3PromptRewriter", repeat_last, given)
+        if kept is not None:
+            return kept
 
         if not (prompt or "").strip():
             raise ValueError("prompt must not be empty")
@@ -1092,7 +1100,9 @@ class MiniMaxH3PromptRewriter:
 
         fields = split_fields(text)
         progress.text(text[-2000:] if text else "(empty rewrite)", force=True)
-        return (text,) + tuple(fields[name] for name in OUTPUT_FIELDS)
+        outputs = (text,) + tuple(fields[name] for name in OUTPUT_FIELDS)
+        memory.keep(unique_id, "MiniMaxH3PromptRewriter", outputs, given)
+        return outputs
 
 
 REFERENCE_PLACEHOLDER = (
@@ -1330,6 +1340,7 @@ class MiniMaxH3GuidedWriter:
                     "STRING",
                     {"multiline": True, "default": "", "tooltip": SYSTEM_PROMPT_TOOLTIP},
                 ),
+                "repeat_last": ("BOOLEAN", {"default": False, "tooltip": memory.REPEAT_TOOLTIP}),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
         }
@@ -1354,10 +1365,16 @@ class MiniMaxH3GuidedWriter:
         aspect_ratio=None,
         options=None,
         bypass=False,
+        repeat_last=False,
         unique_id=None,
     ):
+        given = dict(locals())
         if bypass:
             return _bypassed(unique_id, prompt, OUTPUT_FIELDS)
+
+        kept = memory.repeat(unique_id, "MiniMaxH3GuidedWriter", repeat_last, given)
+        if kept is not None:
+            return kept
 
         resolution = aspect.resolve(aspect_ratio, resolution)
         settings = dict(DEFAULT_OPTIONS)
@@ -1371,7 +1388,9 @@ class MiniMaxH3GuidedWriter:
         )
         _head, sections = split_sections(text, OUTPUT_FIELDS)
         _report(progress, text, sections, OUTPUT_FIELDS)
-        return (text,) + tuple(sections[name] for name in OUTPUT_FIELDS)
+        outputs = (text,) + tuple(sections[name] for name in OUTPUT_FIELDS)
+        memory.keep(unique_id, "MiniMaxH3GuidedWriter", outputs, given)
+        return outputs
 
 
 class MiniMaxH3GuidedWriterRef:
@@ -1469,6 +1488,7 @@ class MiniMaxH3GuidedWriterRef:
                     "STRING",
                     {"multiline": True, "default": "", "tooltip": SYSTEM_PROMPT_TOOLTIP},
                 ),
+                "repeat_last": ("BOOLEAN", {"default": False, "tooltip": memory.REPEAT_TOOLTIP}),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
         }
@@ -1492,10 +1512,16 @@ class MiniMaxH3GuidedWriterRef:
         aspect_ratio=None,
         options=None,
         bypass=False,
+        repeat_last=False,
         unique_id=None,
     ):
+        given = dict(locals())
         if bypass:
             return _bypassed(unique_id, prompt, REF_OUTPUT_FIELDS)
+
+        kept = memory.repeat(unique_id, "MiniMaxH3GuidedWriterRef", repeat_last, given)
+        if kept is not None:
+            return kept
 
         resolution = aspect.resolve(aspect_ratio, resolution)
         settings = dict(DEFAULT_OPTIONS)
@@ -1509,7 +1535,9 @@ class MiniMaxH3GuidedWriterRef:
         )
         _head, sections = split_sections(text, REF_OUTPUT_FIELDS, fallback="detailed_description")
         _report(progress, text, sections, REF_OUTPUT_FIELDS)
-        return (text,) + tuple(sections[name] for name in REF_OUTPUT_FIELDS)
+        outputs = (text,) + tuple(sections[name] for name in REF_OUTPUT_FIELDS)
+        memory.keep(unique_id, "MiniMaxH3GuidedWriterRef", outputs, given)
+        return outputs
 
 
 GUIDE_PROMPT_FORMATS = ("plain", "chatml")
@@ -1901,6 +1929,10 @@ class MiniMaxH3ReferenceCaption:
                 ),
                 "options": (OPTIONS_TYPE,),
                 "bypass": ("BOOLEAN", {"default": False, "tooltip": BYPASS_CAPTION_TOOLTIP}),
+                "repeat_last": (
+                    "BOOLEAN",
+                    {"default": False, "tooltip": memory.REPEAT_CAPTION_TOOLTIP},
+                ),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
         }
@@ -1927,8 +1959,10 @@ class MiniMaxH3ReferenceCaption:
         context_size=mtmd_engine.CONTEXT_FROM_MODEL,
         options=None,
         bypass=False,
+        repeat_last=False,
         unique_id=None,
     ):
+        given = dict(locals())
         if bypass:
             NodeProgress(unique_id).finish("bypassed")
             return ((previous or "").strip(), "")
@@ -1939,6 +1973,12 @@ class MiniMaxH3ReferenceCaption:
         progress = NodeProgress(unique_id)
 
         caption = (description or "").strip()
+        kept = None if caption else memory.repeat(
+            unique_id, "MiniMaxH3ReferenceCaption", repeat_last, given
+        )
+        if kept is not None:
+            caption = str(kept[0])
+
         if not caption:
             if image is None and audio is None and video is None:
                 raise ValueError(
@@ -2012,11 +2052,12 @@ class MiniMaxH3ReferenceCaption:
                     auto_download=settings["auto_download"],
                     progress=progress,
                 )
+            memory.keep(unique_id, "MiniMaxH3ReferenceCaption", (caption,), given)
 
         caption = " ".join(caption.split())
         line = f"{role} {next_index(previous, role)}: {caption}"
         block = f"{(previous or '').rstrip()}\n{line}".strip()
-        progress.finish(line)
+        progress.finish(("repeat_last: " if kept is not None else "") + line)
         return (block, caption)
 
 

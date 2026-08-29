@@ -6,6 +6,44 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.17.3 - 2026-08-29
+
+### Added
+
+- **`repeat_last`, on every writer, rewriter and captioner.** A switch that hands
+  back the answer the node produced last instead of running the model again. With
+  nothing kept yet the node runs once, keeps what it wrote and says so; from then
+  on it returns that same text for as long as the switch is on, whatever else
+  changes. That is the point of it: a fifty-second rewrite is not something to pay
+  for twice while wiring up everything downstream of it.
+
+  ComfyUI's own cache cannot do this. A node's cache key is its class, its
+  `IS_CHANGED` value and every input it received, so editing the prompt is exactly
+  what drops the entry, and `IS_CHANGED` can only add invalidation, never mask it.
+  So the answers are kept in a store of the pack's own, one per node.
+
+  The store lives in memory for the ComfyUI session and nowhere else: it is not
+  written to disk, it does not travel with the workflow, and a restart empties it.
+  Every run says where its answer came from in three places -- the caption under
+  the node, the ComfyUI console, and the switch's own tooltip, which carries the
+  time it was kept, its length and the opening of the text. When the inputs no
+  longer match the ones that produced it, all three say so rather than pretending
+  nothing changed. `bypass` still wins over it.
+
+  On the two caption nodes it is the caption that is kept, not the assembled
+  block: the numbering belongs to the chain, so the line is written again around
+  whatever arrives on `previous`, and an asset connected since is described for
+  real.
+
+### Fixed
+
+- **The `bypass` badge and tint were missing from three nodes.** The purple
+  colour and the BYPASSED chip that mark a switched-off node come from an
+  extension with a list of node types in it, and that list was never extended
+  when the 8B rewriter, the Omni rewriter and the Universal Rewriter were added.
+  All nine nodes with a `bypass` switch now look alike, collapsed or not, and the
+  chip on a collapsed node toggles the switch as it does everywhere else.
+
 ## 0.17.2 - 2026-08-29
 
 ### Added

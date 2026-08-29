@@ -3,11 +3,14 @@ import { app } from "../../scripts/app.js";
 
 const BYPASS_NODES = [
     "MiniMaxH3PromptRewriter",
+    "MiniMaxH3PromptWriter8B",
+    "MiniMaxH3PromptWriterOmni",
     "MiniMaxH3GuidedWriter",
     "MiniMaxH3GuidedWriterRef",
     "MiniMaxH3ReferenceCaption",
     "MiniMaxH3MultiReferenceCaption",
     "MiniMaxH3UniversalWriter",
+    "MiniMaxH3UniversalRewriter",
 ];
 
 const WIDGET = "bypass";

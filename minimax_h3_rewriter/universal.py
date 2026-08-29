@@ -34,7 +34,7 @@ from dataclasses import dataclass
 
 from comfy_api.latest import io
 
-from . import aspect, clip_caption, guide_prompt, media, mtmd_engine
+from . import aspect, clip_caption, guide_prompt, media, memory, mtmd_engine
 from .constants import OUTPUT_FIELDS, REF_OUTPUT_FIELDS, RESOLUTIONS
 from .fields import split_sections
 from .nodes import (
@@ -461,6 +461,12 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                     ),
                     types=[io.String, io.Combo],
                 ),
+                io.Boolean.Input(
+                    "repeat_last",
+                    default=False,
+                    optional=True,
+                    tooltip=memory.REPEAT_TOOLTIP,
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="rewritten_prompt"),
@@ -495,7 +501,9 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         context_size=mtmd_engine.CONTEXT_FROM_MODEL,
         bypass=False,
         aspect_ratio=None,
+        repeat_last=False,
     ) -> io.NodeOutput:
+        given = dict(locals())
         progress = NodeProgress(cls.hidden.unique_id)
         block = (previous or "").strip()
         empty = ("",) * len(ALL_FIELDS)
@@ -503,6 +511,12 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         if bypass:
             progress.finish("bypassed")
             return io.NodeOutput((prompt or "").strip(), *empty, block, "")
+
+        kept = memory.repeat(
+            cls.hidden.unique_id, "MiniMaxH3UniversalWriter", repeat_last, given
+        )
+        if kept is not None:
+            return io.NodeOutput(*kept)
 
         resolution = aspect.resolve(aspect_ratio, resolution)
 
@@ -630,7 +644,9 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         _report(progress, text, sections, names)
 
         fields = tuple(sections.get(name, "") for name in ALL_FIELDS)
-        return io.NodeOutput(text, *fields, block, "\n".join(captions))
+        outputs = (text,) + fields + (block, "\n".join(captions))
+        memory.keep(cls.hidden.unique_id, "MiniMaxH3UniversalWriter", outputs, given)
+        return io.NodeOutput(*outputs)
 
 
 NODE_CLASS_MAPPINGS = {
