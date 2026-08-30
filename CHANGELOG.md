@@ -6,6 +6,41 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.18.2 - 2026-08-30
+
+### Added
+
+- **The answer is checked.** Every fresh answer is read back against the rules
+  of MiniMax's own writing guides before it leaves the node: shot numbering and
+  cut times against the requested duration, dialogue markup and its language
+  tags, reference tags against both what the task can carry and what is
+  actually connected, retention entries for every defined subject, the
+  350-500-word guidance, and the fixed alignment line of the frame tasks. What
+  it finds is said in three places -- a toast in the ComfyUI window with the
+  first few findings, the node's caption with the full list above the answer,
+  and the console -- and nothing is ever blocked: the model is sometimes right
+  to bend a rule, and only you know whether this is that time. A clean answer
+  adds not a single line. Prompts handed on from the library are not
+  re-checked; they were checked when they were written.
+
+  The rules live in one pure module, `minimax_h3_rewriter/checks.py`, with a
+  test suite under `tests/` that runs without ComfyUI:
+  `cd tests && ../.venv/Scripts/python.exe -m pytest`.
+
+- **The `bypass` and `repeat_last` badges are always on the title bar**, not
+  only when the node is collapsed or the switch is on. On the tall writers the
+  widget itself is a screenful away, and a badge that appears and disappears
+  moves its neighbour around; two badges in a stable row are a switch you can
+  hit without scrolling, expanded or not.
+
+- **The nodes' own warnings became toasts too**, under "Heads-up" instead of
+  "Self-check": a reference the chosen task will not read (the 8B's spare
+  frame, the 27B tab's unread frames, the Universal Writer's ignored T2VA
+  references), a saved prompt whose references no longer match what the node
+  is shown, and a captioner that came back with nothing for a connected asset.
+  All of these were already said on the node and in the console; now they are
+  also impossible to miss.
+
 ## 0.18.1 - 2026-08-30
 
 ### Added

@@ -54,10 +54,11 @@ from .nodes import (
     _ensure_present,
     _gguf_text,
     _refuse_problem,
+    _report,
     _resolve_adapter,
     _verify_base_model,
 )
-from .progress import NodeProgress
+from .progress import NodeProgress, announce
 from .prompt_template_8b import build_messages, expected_image_count, normalize_task
 
 log = logging.getLogger(__name__)
@@ -136,11 +137,13 @@ def render(messages: list[dict]) -> tuple[str, str]:
     return system, "".join(parts)
 
 
-def frames_for(task: str, first_frame, last_frame) -> list[tuple[str, object]]:
+def frames_for(task: str, first_frame, last_frame, progress=None) -> list[tuple[str, object]]:
     """The frames this task needs, in order, or a message saying which is missing.
 
     Checked before anything loads, because the alternative is a five-gigabyte
-    download followed by llama.cpp counting media markers and refusing.
+    download followed by llama.cpp counting media markers and refusing. Given a
+    ``progress``, a connected frame the task does not read is also announced as
+    a toast rather than only logged.
     """
     connected = {"first_frame": first_frame, "last_frame": last_frame}
     wanted = FRAMES_FOR_TASK[task]
@@ -154,11 +157,13 @@ def frames_for(task: str, first_frame, last_frame) -> list[tuple[str, object]]:
 
     spare = [name for name, value in connected.items() if value is not None and name not in wanted]
     if spare:
-        log.warning(
-            "[minimax_h3_rewriter.writer_8b] task %s does not use %s, so it is ignored; "
-            "pick the task that matches the frames you connected",
-            task.upper(), " or ".join(spare),
+        unread = (
+            f"task {task.upper()} does not use {' or '.join(spare)}, so it is ignored; "
+            f"pick the task that matches the frames you connected"
         )
+        log.warning("[minimax_h3_rewriter.writer_8b] %s", unread)
+        if progress is not None:
+            announce(progress.node_id, [("warn", unread)])
 
     frames = [(name, connected[name]) for name in wanted]
     expected = expected_image_count(task)
@@ -366,7 +371,7 @@ def rewrite_8b(
     three engines is not something worth having two copies of.
     """
     wanted = normalize_task(task)
-    frames = frames_for(wanted, first_frame, last_frame)
+    frames = frames_for(wanted, first_frame, last_frame, progress)
     choice = _resolve_model_choice(model)
 
     if choice.fmt == FORMAT_TRANSFORMERS:
@@ -608,7 +613,11 @@ class MiniMaxH3PromptWriter8B:
 
         fields = split_fields(text)
         if not saved:
-            progress.text(text[-2000:] if text else "(empty rewrite)", force=True)
+            _report(
+                progress, text, fields, OUTPUT_FIELDS,
+                task=task, duration=duration,
+                having=["image" for frame in (first_frame, last_frame) if frame is not None],
+            )
         outputs = (text,) + tuple(fields[name] for name in OUTPUT_FIELDS)
         if saved:
             return outputs

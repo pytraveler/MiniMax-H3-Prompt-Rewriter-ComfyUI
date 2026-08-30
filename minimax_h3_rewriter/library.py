@@ -263,13 +263,18 @@ def picked(
     if having is not None:
         wanted, found = shape(record.get("references")), shape(having)
         if wanted != found:
-            note = (
-                f"WARNING: '{label}' was written for {spell(wanted)}, and this node has "
+            mismatch = (
+                f"'{label}' was written for {spell(wanted)}, and this node has "
                 f"{spell(found)}. A prompt for a task with references describes them by "
                 f"name inside the text, so what it says about them is now about "
                 f"something else."
             )
+            note = "WARNING: " + mismatch
             log.warning("[minimax_h3_rewriter.library] %s", note)
+            if node_id is not None:
+                from .progress import announce
+
+                announce(node_id, [("warn", mismatch)])
     if node_id is not None:
         from .progress import NodeProgress
 

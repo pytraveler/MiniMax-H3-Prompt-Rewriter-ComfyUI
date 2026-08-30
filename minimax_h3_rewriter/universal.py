@@ -65,7 +65,7 @@ from .nodes import (
     writer_choices,
 )
 from .multi_caption import _check_encoders
-from .progress import NodeProgress
+from .progress import NodeProgress, announce
 
 log = logging.getLogger(__name__)
 
@@ -568,6 +568,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                 )
                 log.info("[minimax_h3_rewriter.universal] %s", note)
                 progress.text(note, force=True)
+                announce(cls.hidden.unique_id, [("warn", note)])
             assets = []
         else:
             refuse_mismatch(task, assets)
@@ -660,11 +661,13 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
             if skipped:
                 described += f", {skipped} switched off"
             if empty:
-                described = (
-                    f"WARNING: nothing came back for {', '.join(empty)}. Those labels are in "
+                silence = (
+                    f"nothing came back for {', '.join(empty)}. Those labels are in "
                     f"the block with nothing after them, so the writer has been told an asset "
-                    f"exists and not what it is -- try another captioner.\n" + described
+                    f"exists and not what it is -- try another captioner."
                 )
+                described = f"WARNING: {silence}\n{described}"
+                announce(cls.hidden.unique_id, [("warn", silence)])
             progress.update(len(assets), f"{described}\n{block}")
 
         material = "" if task == TEXT_TASK else block
@@ -675,7 +678,11 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
 
         names = guide_prompt.FIELDS_FOR_MODE[task]
         _head, sections = split_sections(text, names, fallback=guide_prompt.BODY_FIELD[task])
-        _report(progress, text, sections, names)
+        _report(
+            progress, text, sections, names,
+            task=task, duration=duration,
+            having=[item.kind for item in assets],
+        )
 
         fields = tuple(sections.get(name, "") for name in ALL_FIELDS)
         outputs = (text,) + fields + (block, "\n".join(captions))

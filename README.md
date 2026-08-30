@@ -1169,6 +1169,55 @@ The node's own last answer is what the switch hands back by default, and
 instead. One switch either way: `repeat_last` decides whether a kept prompt is
 handed on at all, the library window decides which one.
 
+### The answer is checked
+
+Every fresh answer is read back against the rules of MiniMax's own writing
+guides before it leaves the node — a self-check, silent when it finds nothing.
+When it does find something, it says so in three places: a toast in the ComfyUI
+window with the first few findings, because the caption under a node is easy
+to miss from the other end of the graph; the caption itself, which holds the
+full list above the answer; and the console, for runs nobody is watching. What
+it looks at:
+
+- **Shot structure.** `[Shot 1]` opens the description and carries no cut time;
+  later shots are numbered in order, each with an `At MM:SS.mmm` timestamp that
+  is later than the one before it and inside the requested duration.
+- **Dialogue markup.** `<d>` and `</d>` come in pairs, and every block starts
+  with its `[Language]` tag.
+- **Reference tags, both ways.** A tag the task cannot carry — `<Video 1>` in a
+  frame task, any tag at all in T2VA — is flagged, and so is the opposite: a
+  reference that reached the node but is never cited, which the generator still
+  receives with no say in what it is for. The nodes that see their references
+  check the numbers against what is actually connected; the text-only writers
+  skip that half rather than guess.
+- **Full-reference bookkeeping.** Every `<Subject N>` that
+  `subject_definitions` introduces owes `retention_analysis` a line, and the
+  guide's 350–500 words for `detailed_description` is noted when missed.
+- **The alignment line.** I2VA, FL2VA and L2VA open with a fixed sentence
+  telling H3 where the reference frames land; its absence is worth knowing
+  about before a render finds out.
+
+![A warning toast titled "Self-check: MiniMax-H3 Universal Writer", listing three warnings marked with an exclamation point — 5 fields missing from the answer, naming subject_definitions, summary, retention_analysis, overall_soundscape and non_diegetic_music with the advice to lower the temperature or try a larger writer model; the description has no Shot 1, shots being how H3 reads structure; Picture 1 and Picture 2 connected but never cited, the model still receiving them with no say in what they are for — and one note marked with a dash: detailed_description is 1286 words where the guide suggests 350–500](docs/self_check_alert.png)
+
+*One deliberately bad run, read back. The `!` lines are warnings — things H3
+will likely misread; the `-` line is a note — something the guide merely
+suggests. The toast shows the first few findings; the full list sits in the
+caption under the node and in the console, where it survives the toast's eight
+seconds.*
+
+Findings are said, never enforced: the answer ships exactly as written, because
+the model is sometimes right to bend a rule and only you know whether this is
+that time. Warnings (`!`) are things H3 will likely misread; notes (`-`) are
+things the guide merely suggests. A prompt handed on from the library is not
+re-checked — it was checked when it was written, and the caption stays with the
+record's name instead.
+
+The same toast carries the nodes' own warnings, under **Heads-up** instead of
+**Self-check**: a reference the chosen task will not read, a saved prompt whose
+references no longer match what the node is shown, a captioner that came back
+with nothing for a connected asset. These were always said on the node and in
+the console; now they are also impossible to miss.
+
 ### The prompt library
 
 `repeat_last` holds one answer per node and forgets it when ComfyUI restarts. The

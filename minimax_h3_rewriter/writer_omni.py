@@ -837,7 +837,11 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         names = FIELDS_FOR_TASK[wanted]
         _head, sections = split_sections(text, names, fallback=BODY_FIELD[wanted])
         if not saved:
-            _report(progress, text, sections, names)
+            _report(
+                progress, text, sections, names,
+                task=wanted, duration=duration,
+                having=[item.kind for item in connected],
+            )
         fields = tuple(sections.get(name, "") for name in ALL_FIELDS)
         outputs = (text,) + fields
         if saved:

@@ -12,6 +12,7 @@ import re
 from . import (
     aspect,
     catalog,
+    checks,
     cli_engine,
     clip_caption,
     devices,
@@ -48,7 +49,7 @@ from .constants import (
     RUNTIME_BINARY,
     RUNTIME_WHEEL,
 )
-from .fields import missing, split_fields, split_sections
+from .fields import split_fields, split_sections
 from .paths import (
     adapter_is_complete,
     base_model_is_complete,
@@ -56,7 +57,7 @@ from .paths import (
     models_root,
     resolve_source,
 )
-from .progress import NodeProgress, TransferReporter
+from .progress import NodeProgress, TransferReporter, announce
 from .prompt_template import build_messages
 
 log = logging.getLogger(__name__)
@@ -1126,7 +1127,10 @@ class MiniMaxH3PromptRewriter:
 
         fields = split_fields(text)
         if not saved:
-            progress.text(text[-2000:] if text else "(empty rewrite)", force=True)
+            _report(
+                progress, text, fields, OUTPUT_FIELDS,
+                task="T2VA", duration=duration, having=(),
+            )
         outputs = (text,) + tuple(fields[name] for name in OUTPUT_FIELDS)
         if not saved:
             memory.keep(unique_id, "MiniMaxH3PromptRewriter", outputs, given, task="T2VA")
@@ -1240,17 +1244,37 @@ def _guided_text(
     )
 
 
-def _report(progress: NodeProgress, text: str, sections: dict, names: tuple[str, ...]) -> None:
-    """Leave the answer on the node, and say so when it is not the right shape."""
-    absent = missing(sections, names)
-    note = ""
-    if absent:
-        note = (
-            f"⚠ {len(absent)} field(s) not found in the answer: {', '.join(absent)}\n"
-            f"Lower the temperature, or try a larger writer model.\n\n"
+def _report(
+    progress: NodeProgress,
+    text: str,
+    sections: dict,
+    names: tuple[str, ...],
+    task: str = "",
+    duration=None,
+    having=None,
+) -> None:
+    """Leave the answer on the node, with what the self-check found above it.
+
+    The check needs what the caller already has: which task was asked for, how
+    long the video is, and what references the node was shown -- ``having`` is
+    the same list the library's shape warning is made of, and None means the
+    node cannot know (the text-only writers), which skips the connected-versus-
+    cited rules rather than reporting nonsense.
+    """
+    issues = checks.review(
+        text, sections, names, task=task, duration=duration, having=having
+    )
+    note = checks.describe(issues)
+    if note:
+        log.warning(
+            "[minimax_h3_rewriter.checks] %s",
+            "; ".join(issue.message for issue in issues),
         )
-        log.warning("[minimax_h3_rewriter._report] fields missing from the rewrite: %s", absent)
-    progress.text(note + (text[-2000:] if text else "(empty rewrite)"), force=True)
+        announce(progress.node_id, issues, kind="check")
+    progress.text(
+        ((note + "\n\n") if note else "") + (text[-2000:] if text else "(empty rewrite)"),
+        force=True,
+    )
 
 
 class MiniMaxH3GuidedWriter:
@@ -1425,7 +1449,7 @@ class MiniMaxH3GuidedWriter:
         )
         _head, sections = split_sections(text, OUTPUT_FIELDS)
         if not saved:
-            _report(progress, text, sections, OUTPUT_FIELDS)
+            _report(progress, text, sections, OUTPUT_FIELDS, task=task, duration=duration)
         outputs = (text,) + tuple(sections[name] for name in OUTPUT_FIELDS)
         if not saved:
             memory.keep(unique_id, "MiniMaxH3GuidedWriter", outputs, given)
@@ -1583,7 +1607,10 @@ class MiniMaxH3GuidedWriterRef:
         )
         _head, sections = split_sections(text, REF_OUTPUT_FIELDS, fallback="detailed_description")
         if not saved:
-            _report(progress, text, sections, REF_OUTPUT_FIELDS)
+            _report(
+                progress, text, sections, REF_OUTPUT_FIELDS,
+                task=guide_prompt.REF_MODE, duration=duration,
+            )
         outputs = (text,) + tuple(sections[name] for name in REF_OUTPUT_FIELDS)
         if not saved:
             memory.keep(

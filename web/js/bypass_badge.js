@@ -38,7 +38,7 @@ const BADGES = [
         off: "bypass",
         onBg: "#7A3FA0",
         onFg: "#FFFFFF",
-        tint: true,
+        tint: true, always: true,
     },
     {
         widget: "repeat_last",
@@ -47,7 +47,7 @@ const BADGES = [
         off: "repeat_last",
         onBg: "#3B7DD8",
         onFg: "#FFFFFF",
-        tint: false,
+        tint: false, always: true,
     },
 ];
 
@@ -109,7 +109,7 @@ function refresh(node, spec) {
     const widget = widgetOf(node, spec.widget);
     const on = !!widget?.value;
 
-    if (!widget || (!on && !node.flags?.collapsed)) {
+    if (!widget || (!on && !node.flags?.collapsed && !spec.always)) {
         badge.text = "";
         badge.onClick = undefined;
         return badge;

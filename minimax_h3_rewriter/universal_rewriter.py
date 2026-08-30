@@ -72,10 +72,11 @@ from .nodes import (
     CATEGORY,
     DEFAULT_OPTIONS,
     OPTIONS_TYPE,
+    _report,
     model_choices,
     rewrite_t2va,
 )
-from .progress import NodeProgress
+from .progress import NodeProgress, announce
 
 log = logging.getLogger(__name__)
 
@@ -301,6 +302,7 @@ def _unread(progress: NodeProgress, slots: list[str], why: str) -> None:
     )
     log.info("[minimax_h3_rewriter.universal_rewriter] %s", note)
     progress.text(note, force=True)
+    announce(progress.node_id, [("warn", note)])
 
 
 class MiniMaxH3UniversalRewriter(io.ComfyNode):
@@ -591,6 +593,7 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
                 )
                 log.info("[minimax_h3_rewriter.universal_rewriter] %s", note)
                 progress.text(note, force=True)
+                announce(progress.node_id, [("warn", note)])
 
             text = rewrite_t2va(
                 model_27b, prompt, resolution, duration, quantization_27b,
@@ -598,7 +601,11 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
             )
 
         fields = split_fields(text, FIELDS_FOR_TASK[task], BODY_FIELD[task])
-        progress.text(text[-2000:] if text else "(empty rewrite)", force=True)
+        _report(
+            progress, text, fields, FIELDS_FOR_TASK[task],
+            task=task, duration=duration,
+            having=[KIND_OF_SLOT.get(name) for name in connected],
+        )
         outputs = (text,) + tuple(fields.get(name, "") for name in UNIVERSAL_FIELDS)
         memory.keep(
             cls.hidden.unique_id, "MiniMaxH3UniversalRewriter", outputs, given,
