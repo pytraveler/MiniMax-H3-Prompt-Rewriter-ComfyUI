@@ -26,7 +26,7 @@ Requirements:
 - Do not add explanations, Markdown fences, safety commentary, or fields other than the three requested fields."""
 
 
-def build_messages(prompt: str, resolution: str, duration: int) -> list[dict[str, str]]:
+def build_messages(prompt: str, resolution: str, duration: float) -> list[dict[str, str]]:
     """Build the chat messages used during LoRA training and inference."""
     prompt = prompt.strip()
     if not prompt:
@@ -38,7 +38,7 @@ def build_messages(prompt: str, resolution: str, duration: int) -> list[dict[str
             "role": "user",
             "content": (
                 f"resolution: {resolution}\n"
-                f"duration: {duration}s\n"
+                f"duration: {float(duration):g}s\n"
                 f"original_prompt: {prompt}"
             ),
         },

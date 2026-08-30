@@ -107,13 +107,13 @@ def normalize_task(task: str | None) -> str:
     return normalized
 
 
-def format_request(prompt: str, task: str, resolution: str, duration: int) -> str:
+def format_request(prompt: str, task: str, resolution: str, duration: float) -> str:
     """Build the textual request appended after any reference images."""
 
     return (
         f"task: {task}\n"
         f"resolution: {resolution}\n"
-        f"duration: {int(duration)}s\n"
+        f"duration: {float(duration):g}s\n"
         f"original_prompt: {prompt.strip()}"
     )
 
@@ -122,7 +122,7 @@ def build_messages(
     prompt: str,
     task: str = "t2av",
     resolution: str = "16:9",
-    duration: int = 10,
+    duration: float = 10,
 ) -> list[dict]:
     """Build the system and task-aware user messages expected by the LoRA."""
 

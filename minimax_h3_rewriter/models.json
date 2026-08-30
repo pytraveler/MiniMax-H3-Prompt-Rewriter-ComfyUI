@@ -1,5 +1,5 @@
 {
-  "seed_version": "0.14.1",
+  "seed_version": "0.18.1",
   "_comment": [
     "Base models offered by the MiniMax-H3 Prompt Rewriter node.",
     "",
@@ -349,6 +349,42 @@
       "download_gb": 13.4,
       "vram": "~17 GB with the guide in context",
       "note": "for a 16 GB card and up, when the 9B's prose is not enough"
+    },
+    {
+      "name": "Qwen3.8-27B Q2_K_XL",
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "file": "Qwen3.8-27B-UD-Q2_K_XL.gguf",
+      "format": "gguf",
+      "download_gb": 9.2,
+      "vram": "~13 GB with the guide in context",
+      "note": "the 27B's prose on a 16 GB card; unsloth's dynamic 2-bit, rougher than the Q4 but still the biggest writer this side of it"
+    },
+    {
+      "name": "Qwen3.8-27B Q3_K_XL",
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "file": "Qwen3.8-27B-UD-Q3_K_XL.gguf",
+      "format": "gguf",
+      "download_gb": 12.2,
+      "vram": "~16 GB with the guide in context",
+      "note": "the middle road: most of the Q4's quality, three gigabytes less to hold"
+    },
+    {
+      "name": "Qwen3.8-27B Q4_K_M",
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "file": "Qwen3.8-27B-UD-Q4_K_M.gguf",
+      "format": "gguf",
+      "download_gb": 15.3,
+      "vram": "~19 GB with the guide in context",
+      "note": "the strongest prose in the list, for a 24 GB card; newer than the rewriter's own base, but its extra layer is why the 27B LoRA cannot ride it"
+    },
+    {
+      "name": "Qwen3.8-27B Q6_K_XL",
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "file": "Qwen3.8-27B-UD-Q6_K_XL.gguf",
+      "format": "gguf",
+      "download_gb": 23.6,
+      "vram": "~27 GB with the guide in context",
+      "note": "near-lossless, for a 32 GB card - and little room for the video model beside it; lower gpu_layers if it will not fit"
     }
   ],
   "captioners": [

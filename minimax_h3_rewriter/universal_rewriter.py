@@ -350,12 +350,13 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
                     socketless=True,
                     tooltip=aspect.PICKER_TOOLTIP,
                 ),
-                io.Int.Input(
+                io.Float.Input(
                     "duration",
-                    default=10,
+                    default=10.0,
                     min=DURATION_MIN,
                     max=DURATION_MAX,
-                    step=1,
+                    step=0.1,
+                    round=0.1,
                     display_mode=io.NumberDisplay.slider,
                     tooltip=DURATION_TOOLTIP,
                 ),

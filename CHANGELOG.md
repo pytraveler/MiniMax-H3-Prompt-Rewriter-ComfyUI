@@ -6,6 +6,63 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.18.1 - 2026-08-30
+
+### Added
+
+- **A bundled example workflow** (issue #10). `example_workflows/` ships a
+  ready graph that ComfyUI's template browser lists under this pack's name:
+  the stock MiniMax-H3 Ref2VA and FL2VA templates with a Universal Rewriter
+  and a Universal Writer wired in ahead of each branch. The checkpoints it
+  names are the stock ones, offered for download when missing.
+
+- **Qwen3.8-27B in the writer catalog.** `unsloth/Qwen3.8-27B-GGUF` joins the
+  guided writers' list in four of unsloth's dynamic quants - Q2_K_XL (9.2 GB,
+  a 16 GB card), Q3_K_XL (12.2 GB), Q4_K_M (15.3 GB, a 24 GB card) and the
+  near-lossless Q6_K_XL (23.6 GB, a 32 GB card) - the strongest prose the list
+  offers at every one of those sizes. The writers are where it belongs:
+  Qwen3.8-27B has 65 layers where the 27B rewriter's LoRA was trained on
+  Qwen3.6-27B's 64, so the adapter cannot ride it - as a rewriter base it
+  would run as a plain model. The entries are merged into existing
+  installations' `models.json` the usual way; nothing you edited is touched.
+
+- **The model scans look in `text_encoders` and `clip` now, and the adapter
+  scan in `loras`.** ComfyUI's own GGUF loaders file Qwen-VL encoders under
+  `text_encoders` and `clip`, so that is where people already keep the files -
+  and a scan that skipped those folders read as "can't find any models"
+  (issue #11 and more than one report since). `models/LLM` stays the
+  recommended home; the wider scan is for the files already living elsewhere.
+  The architecture and shape filters still apply, so the new folders add the
+  models that fit rather than everything they hold - and the guided writers,
+  which accept any architecture, now skip the encoder halves of image
+  pipelines and embedding models (`t5`, `t5encoder`, `bert`, `nomic-bert`,
+  `nomic-bert-moe`, `clip`): no chat template, nothing to say, and every
+  `text_encoders` folder has one.
+
+### Fixed
+
+- **Workflows saved before 0.17.2 load with the right Options values again**
+  (issue #11). ComfyUI restores a node's widget values by position, and 0.17.2
+  put `merge_lora` into the middle of the list, between `use_lora` and
+  `auto_download`. Every Options node saved before that came back one slot
+  askew: `merge_lora` showed a boolean, `gpu_layers` got `n_ctx`'s 8192,
+  `n_ctx` read `auto` as NaN -- and validation refused the whole graph with
+  four errors that named none of this.
+
+  The node now recognizes the old layout on load -- a boolean in
+  `merge_lora`'s slot, which a combo never saves -- and deals the values back
+  onto the widgets they were written from, with `merge_lora` at its `auto`
+  default. Nothing to redo by hand; reloading the workflow is enough.
+
+- **The Universal Rewriter's `duration` is a `FLOAT` now, like the Universal
+  Writer's.** As an `INT` it refused the wire from any float seconds source
+  that the writer accepted. The value also stays fractional all the way down:
+  the 8B path used to truncate it on the way into the request, and now `7.5`
+  arrives as `duration: 7.5s` while whole numbers keep rendering exactly as
+  before -- `10s`, not `10.0s`. The Omni tab already took fractions and snaps
+  them to the frame grid; the standalone rewriter nodes keep their integer
+  widget.
+
 ## 0.18.0 - 2026-08-29
 
 ### Added

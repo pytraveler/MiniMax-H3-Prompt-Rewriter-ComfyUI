@@ -67,8 +67,24 @@ SHAPE_OMNI = Shape(
     152064,
 )
 
-SCAN_FOLDERS = ("LLM", "transformers", "diffusers")
-GGUF_FOLDERS = ("LLM", "unet_gguf", "transformers")
+#: Where the scans look, as ComfyUI folder names. ``text_encoders`` and
+#: ``clip`` are late additions: ComfyUI's own GGUF loaders file Qwen-VL
+#: encoders there, so that is where people already keep the files, and a scan
+#: that skipped them read as "can't find any models" (issue #11). The
+#: architecture and shape filters below are what keep those folders from
+#: flooding the lists with models that cannot carry the adapters.
+SCAN_FOLDERS = ("LLM", "transformers", "diffusers", "text_encoders", "clip")
+GGUF_FOLDERS = ("LLM", "unet_gguf", "transformers", "text_encoders", "clip")
+
+#: A converted LoRA is a LoRA, so the adapter scan also checks ``loras``.
+ADAPTER_FOLDERS = GGUF_FOLDERS + ("loras",)
+
+#: Architectures that live beside the Qwens and are not language models:
+#: encoder halves of image pipelines and embedding models, with no chat
+#: template and nothing to say. The guided writers accept any architecture, so
+#: without this the t5xxl next to somebody's Qwen would be offered as a writer.
+ENCODER_ARCHS = ("t5", "t5encoder", "bert", "nomic-bert", "nomic-bert-moe", "clip")
+
 CONFIG_NAME = "config.json"
 
 #: what llama.cpp calls this architecture in general.architecture
@@ -626,17 +642,24 @@ def _gguf_candidates(root: str, depth: int) -> list[str]:
     return found
 
 
-def _scan_gguf(kind: str, arch: str | None = GGUF_ARCH) -> list[tuple[str, str]]:
+def _scan_gguf(
+    kind: str,
+    arch: str | None = GGUF_ARCH,
+    folders: tuple[str, ...] = GGUF_FOLDERS,
+    skip: tuple[str, ...] = (),
+) -> list[tuple[str, str]]:
     """``(label, path)`` for local GGUFs of one kind, optionally one architecture.
 
     ``arch=None`` accepts anything readable, which is what the guided writers
     want: they carry the format in the prompt rather than in an adapter, so any
     instruction-following model will do and the label says which one it is.
+    ``skip`` is the counterweight -- architectures accepted by ``arch=None``
+    that are known not to be language models at all.
     """
     found: list[tuple[str, str]] = []
     seen: set[str] = set()
 
-    for root in _comfy_roots(GGUF_FOLDERS):
+    for root in _comfy_roots(folders):
         for path in _gguf_candidates(root, GGUF_SCAN_DEPTH):
             key = os.path.normcase(os.path.abspath(path))
             if key in seen:
@@ -646,6 +669,8 @@ def _scan_gguf(kind: str, arch: str | None = GGUF_ARCH) -> list[tuple[str, str]]
             if not header["arch"] or header["kind"] != kind:
                 continue
             if arch is not None and header["arch"] != arch:
+                continue
+            if header["arch"] in skip:
                 continue
             try:
                 size = os.path.getsize(path) / 1024 ** 3
@@ -678,12 +703,12 @@ def scan_local_gguf_adapters() -> list[tuple[str, str]]:
     glance. A mismatched pair is refused by llama.cpp, by name -- which is more
     than a scan that silently left the file out of the list could manage.
     """
-    return _scan_gguf("adapter", arch=None)
+    return _scan_gguf("adapter", arch=None, folders=ADAPTER_FOLDERS)
 
 
 def scan_writer_gguf() -> list[tuple[str, str]]:
     """Return ``(label, path)`` for every local GGUF base model, any architecture."""
-    return _scan_gguf("model", arch=None)
+    return _scan_gguf("model", arch=None, skip=ENCODER_ARCHS)
 
 
 def _pair_mmproj(model: str, projectors: list[str], models: int = 1) -> str:

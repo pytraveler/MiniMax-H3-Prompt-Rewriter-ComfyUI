@@ -889,7 +889,7 @@ def rewrite_t2va(
     model: str,
     prompt: str,
     resolution: str,
-    duration: int,
+    duration: float,
     quantization: str,
     greedy: bool,
     seed: int,

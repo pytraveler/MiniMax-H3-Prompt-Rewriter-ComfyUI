@@ -246,7 +246,7 @@ def _with_transformers(
     prompt: str,
     task: str,
     resolution: str,
-    duration: int,
+    duration: float,
     quantization: str,
     settings: dict,
     seed: int,
@@ -349,7 +349,7 @@ def rewrite_8b(
     prompt: str,
     task: str,
     resolution: str,
-    duration: int,
+    duration: float,
     quantization: str,
     greedy: bool,
     seed: int,
@@ -371,7 +371,7 @@ def rewrite_8b(
 
     if choice.fmt == FORMAT_TRANSFORMERS:
         return _with_transformers(
-            choice, frames, prompt, wanted, resolution, int(duration),
+            choice, frames, prompt, wanted, resolution, duration,
             quantization, settings, seed, greedy, keep_loaded, progress,
         )
 
@@ -398,7 +398,7 @@ def rewrite_8b(
             catalog.ADAPTERS_8B,
         )
 
-    system, user = render(build_messages(prompt, wanted, resolution, int(duration)))
+    system, user = render(build_messages(prompt, wanted, resolution, duration))
 
     if frames:
         return _with_frames(
