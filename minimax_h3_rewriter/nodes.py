@@ -27,6 +27,7 @@ from . import (
     media,
     memory,
     mtmd_engine,
+    repair,
 )
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
 from .constants import (
@@ -83,6 +84,8 @@ DEFAULT_OPTIONS = {
     "device": devices.AUTO,
     "trust_remote_code": False,
     "prompt_file": library.DEFAULT_FILE,
+    "self_check": checks.REPORT_ALL,
+    "fix_once": False,
 }
 
 BASE_SPEC = {
@@ -836,6 +839,49 @@ class MiniMaxH3RewriterOptions:
                         ),
                     },
                 ),
+                "self_check": (
+                    list(checks.REPORT_LEVELS),
+                    {
+                        "default": checks.REPORT_ALL,
+                        "tooltip": (
+                            "How much of the self-check the nodes connected to this one say out "
+                            "loud. Every fresh answer is read back against the rules of MiniMax's "
+                            "own writing guides -- shot numbering and cut times against the "
+                            "duration, dialogue markup, reference tags against what the task takes "
+                            "and what is connected, retention entries, the alignment line.\n\n"
+                            "'warnings and notes' says everything. 'warnings only' drops the "
+                            "guide's softer suggestions, such as the 350-500 word length, and "
+                            "keeps what H3 will likely misread. 'off' says nothing.\n\n"
+                            "The reading itself is regexes over text already in memory and costs "
+                            "nothing, so this decides what is reported, not what is looked at -- "
+                            "'fix_once' keeps working with this off. It does not cover the nodes' "
+                            "own warnings about their inputs, which are about your wiring rather "
+                            "than the model's prose and are always said."
+                        ),
+                    },
+                ),
+                "fix_once": (
+                    "BOOLEAN",
+                    {
+                        "default": False,
+                        "tooltip": (
+                            "Let the nodes act on what the self-check found, instead of only "
+                            "saying it. Off -- the default -- means the answer you get is exactly "
+                            "what the model wrote.\n\n"
+                            "Two things happen when it is on. The alignment line of the frame "
+                            "tasks is a fixed sentence the node already knows, so a model that "
+                            "dropped it simply gets it back: no model, no risk. And for the "
+                            "mechanical findings -- a cut time past the end, an unbalanced <d>, a "
+                            "tag pointing at a reference that is not there -- the writer is asked "
+                            "once more with those findings folded into the prompt as rules.\n\n"
+                            "Once, never a loop: a model that ignored a rule twice will ignore it "
+                            "a third time, and every attempt costs a full generation. The re-run "
+                            "is skipped on an answer too broken to rescue, and its result is kept "
+                            "only if it is genuinely better -- otherwise the first answer stands. "
+                            "Whatever happens is said on the node."
+                        ),
+                    },
+                ),
             },
         }
 
@@ -1125,11 +1171,20 @@ class MiniMaxH3PromptRewriter:
             greedy, seed, keep_model_loaded, settings, progress,
         )
 
+        if not saved:
+            text = _fix_once(
+                text, progress,
+                lambda extra: rewrite_t2va(
+                    model, prompt + extra, resolution, duration, quantization,
+                    greedy, seed, keep_model_loaded, settings, progress,
+                ),
+                OUTPUT_FIELDS, task="T2VA", duration=duration, having=(), settings=settings,
+            )
         fields = split_fields(text)
         if not saved:
             _report(
                 progress, text, fields, OUTPUT_FIELDS,
-                task="T2VA", duration=duration, having=(),
+                task="T2VA", duration=duration, having=(), settings=settings,
             )
         outputs = (text,) + tuple(fields[name] for name in OUTPUT_FIELDS)
         if not saved:
@@ -1244,6 +1299,102 @@ def _guided_text(
     )
 
 
+def _alignment_line(task: str, duration, body: str) -> str:
+    """The fixed opening sentence this task's answer should carry, formatted.
+
+    Single-sourced from ``guide_prompt`` so a wording change reaches the repair
+    too. FL2VA and L2VA name the final shot, which the guide leaves as a literal
+    ``N`` for the model to fill; restoring the line deterministically means
+    filling it here, from the description that came back.
+    """
+    mode = {
+        "i2va": "I2VA", "fl2va": "FL2VA", "l2va": "L2VA",
+    }.get(checks.normalize(task), "")
+    template = guide_prompt.ALIGNMENT_LINE.get(mode)
+    if not template:
+        return ""
+    line = template.format(seconds=f"{float(duration or 0):.2f}")
+    return line.replace("Shot N", f"Shot {repair.final_shot(body)}")
+
+
+def _fix_once(
+    text: str,
+    progress: NodeProgress,
+    regenerate,
+    names: tuple[str, ...],
+    task: str = "",
+    duration=None,
+    having=None,
+    fallback: str = "",
+    settings=None,
+) -> str:
+    """Act on the self-check, if the Options node asked for it.
+
+    Returns the text to use. With 'fix_once' off this is the model's own answer,
+    untouched -- that promise is the reason the switch exists. With it on, the
+    alignment line is restored for free where it is missing, and the mechanical
+    findings buy exactly one more generation through ``regenerate``, which takes
+    the constraints to append to the prompt and returns a fresh answer.
+
+    The second answer is kept only when ``repair.better`` says so, so the worst
+    case is a minute spent rather than a worse prompt.
+    """
+    if not (settings or {}).get("fix_once") or not (text or "").strip():
+        return text
+
+    sections = split_fields(text, names, fallback)
+    issues = checks.review(text, sections, names, task=task, duration=duration, having=having)
+    if not issues:
+        return text
+
+    done = []
+    if any(issue.code == "alignment" for issue in issues):
+        line = _alignment_line(task, duration, str(sections.get(fallback or names[0]) or ""))
+        if line:
+            text = repair.restore_alignment(text, line)
+            done.append("the alignment line was put back")
+            sections = split_fields(text, names, fallback)
+            issues = checks.review(
+                text, sections, names, task=task, duration=duration, having=having
+            )
+
+    wanted = repair.fixable(issues)
+    if wanted and repair.hopeless(issues, sections, names):
+        done.append(
+            "the answer was too far from the format to be worth writing again -- "
+            "try a larger writer model"
+        )
+    elif wanted:
+        log.info(
+            "[minimax_h3_rewriter.repair] writing again once to fix: %s",
+            "; ".join(issue.message for issue in wanted),
+        )
+        progress.text(
+            f"self-check found {len(wanted)} thing(s) to fix -- writing once more", force=True
+        )
+        try:
+            second = regenerate(repair.instruct(issues))
+        except Exception:
+            log.warning("[minimax_h3_rewriter.repair] the second attempt failed", exc_info=True)
+            second = ""
+        if (second or "").strip():
+            after = checks.review(
+                second, split_fields(second, names, fallback), names,
+                task=task, duration=duration, having=having,
+            )
+            if repair.better(issues, after):
+                text = second
+                done.append(f"written again once, {len(issues) - len(after)} finding(s) fewer")
+            else:
+                done.append("written again once, and the first answer was better, so it stands")
+
+    if done:
+        said = "fix_once: " + "; ".join(done)
+        log.info("[minimax_h3_rewriter.repair] %s", said)
+        announce(progress.node_id, [(checks.INFO, said)])
+    return text
+
+
 def _report(
     progress: NodeProgress,
     text: str,
@@ -1252,6 +1403,7 @@ def _report(
     task: str = "",
     duration=None,
     having=None,
+    settings=None,
 ) -> None:
     """Leave the answer on the node, with what the self-check found above it.
 
@@ -1260,17 +1412,22 @@ def _report(
     the same list the library's shape warning is made of, and None means the
     node cannot know (the text-only writers), which skips the connected-versus-
     cited rules rather than reporting nonsense.
+
+    ``settings`` carries the Options node's 'self_check', which decides how much
+    of what was found is said. The reading happens either way: it costs nothing,
+    and 'fix_once' reads the same findings whatever this says.
     """
     issues = checks.review(
         text, sections, names, task=task, duration=duration, having=having
     )
-    note = checks.describe(issues)
+    told = checks.reportable(issues, (settings or {}).get("self_check", checks.REPORT_ALL))
+    note = checks.describe(told)
     if note:
         log.warning(
             "[minimax_h3_rewriter.checks] %s",
-            "; ".join(issue.message for issue in issues),
+            "; ".join(issue.message for issue in told),
         )
-        announce(progress.node_id, issues, kind="check")
+        announce(progress.node_id, told, kind="check")
     progress.text(
         ((note + "\n\n") if note else "") + (text[-2000:] if text else "(empty rewrite)"),
         force=True,
@@ -1447,9 +1604,21 @@ class MiniMaxH3GuidedWriter:
             task, model, prompt, resolution, duration, reference_material,
             greedy, seed, keep_model_loaded, settings, progress, system_prompt,
         )
+        if not saved:
+            text = _fix_once(
+                text, progress,
+                lambda extra: _guided_text(
+                    task, model, prompt + extra, resolution, duration, reference_material,
+                    greedy, seed, keep_model_loaded, settings, progress, system_prompt,
+                ),
+                OUTPUT_FIELDS, task=task, duration=duration, settings=settings,
+            )
         _head, sections = split_sections(text, OUTPUT_FIELDS)
         if not saved:
-            _report(progress, text, sections, OUTPUT_FIELDS, task=task, duration=duration)
+            _report(
+                progress, text, sections, OUTPUT_FIELDS,
+                task=task, duration=duration, settings=settings,
+            )
         outputs = (text,) + tuple(sections[name] for name in OUTPUT_FIELDS)
         if not saved:
             memory.keep(unique_id, "MiniMaxH3GuidedWriter", outputs, given)
@@ -1605,11 +1774,22 @@ class MiniMaxH3GuidedWriterRef:
             guide_prompt.REF_MODE, model, prompt, resolution, duration, reference_assets,
             greedy, seed, keep_model_loaded, settings, progress, system_prompt,
         )
+        if not saved:
+            text = _fix_once(
+                text, progress,
+                lambda extra: _guided_text(
+                    guide_prompt.REF_MODE, model, prompt + extra, resolution, duration,
+                    reference_assets, greedy, seed, keep_model_loaded, settings, progress,
+                    system_prompt,
+                ),
+                REF_OUTPUT_FIELDS, task=guide_prompt.REF_MODE, duration=duration,
+                fallback="detailed_description", settings=settings,
+            )
         _head, sections = split_sections(text, REF_OUTPUT_FIELDS, fallback="detailed_description")
         if not saved:
             _report(
                 progress, text, sections, REF_OUTPUT_FIELDS,
-                task=guide_prompt.REF_MODE, duration=duration,
+                task=guide_prompt.REF_MODE, duration=duration, settings=settings,
             )
         outputs = (text,) + tuple(sections[name] for name in REF_OUTPUT_FIELDS)
         if not saved:

@@ -69,6 +69,7 @@ from .nodes import (
     _ensure_present,
     _gguf_text,
     _refuse_problem,
+    _fix_once,
     _report,
     _resolve_adapter,
     _verify_base_model,
@@ -835,12 +836,26 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         )
 
         names = FIELDS_FOR_TASK[wanted]
+        if not saved:
+            text = _fix_once(
+                text, progress,
+                lambda extra: rewrite_omni(
+                    model=model, prompt=prompt + extra, task=wanted, resolution=resolution,
+                    duration=float(duration), quantization=quantization, greedy=greedy,
+                    seed=int(seed), keep_loaded=keep_model_loaded, settings=settings,
+                    progress=progress, references=connected, max_frames=int(max_frames),
+                ),
+                names, task=wanted, duration=duration,
+                having=[item.kind for item in connected],
+                fallback=BODY_FIELD[wanted], settings=settings,
+            )
         _head, sections = split_sections(text, names, fallback=BODY_FIELD[wanted])
         if not saved:
             _report(
                 progress, text, sections, names,
                 task=wanted, duration=duration,
                 having=[item.kind for item in connected],
+                settings=settings,
             )
         fields = tuple(sections.get(name, "") for name in ALL_FIELDS)
         outputs = (text,) + fields

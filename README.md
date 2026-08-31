@@ -512,6 +512,8 @@ rewriter uses the decoding parameters the adapter was published with.
 | `device` | `auto` | Which GPU runs the language model — see below |
 | `trust_remote_code` | **off** | Allow a checkpoint to run the Python it ships with — see below |
 | `prompt_file` | `global` | Which set of saved prompts the nodes wired to this one work in — see [the prompt library](#the-prompt-library) |
+| `self_check` | `warnings and notes` | How much of [the self-check](#the-answer-is-checked) is said out loud: everything, warnings only, or nothing |
+| `fix_once` | `false` | Let the nodes act on what the check found — [one re-run, never a loop](#acting-on-what-it-found) |
 
 The same options node feeds the writer nodes and the captioner; `adapter` and
 `use_lora` simply do not apply there.
@@ -1212,11 +1214,54 @@ things the guide merely suggests. A prompt handed on from the library is not
 re-checked — it was checked when it was written, and the caption stays with the
 record's name instead.
 
+**How much is said** is `self_check` on the Options node: `warnings and notes`
+is everything; `warnings only` drops the guide's softer suggestions, such as the
+350–500 words, and keeps what H3 will likely misread; `off` says nothing. The
+reading itself always happens — it is regexes over text already in memory and
+costs nothing — so this decides what is reported, not what is looked at. An
+unreadable setting reports everything: a stale workflow should leave the check
+louder than intended, never silent.
+
 The same toast carries the nodes' own warnings, under **Heads-up** instead of
 **Self-check**: a reference the chosen task will not read, a saved prompt whose
 references no longer match what the node is shown, a captioner that came back
-with nothing for a connected asset. These were always said on the node and in
-the console; now they are also impossible to miss.
+with nothing for a connected asset. Those are about your wiring rather than the
+model's prose, so `self_check` does not cover them and they are always said.
+They were always in the caption and the console; now they are also impossible to
+miss.
+
+### Acting on what it found
+
+`fix_once` on the Options node lets the nodes do something about the findings
+rather than only report them. It is **off by default**, and off means a promise:
+the answer you get is exactly what the model wrote, with nothing edited on the
+way out.
+
+Turned on, two things happen. **The alignment line goes back on** where it is
+missing — that sentence is fixed text the node already formats when it builds
+the prompt, so a model that dropped it has not made a judgement worth
+respecting. No model runs, nothing can regress. Then, for the mechanical
+findings — a cut time past the end, an unbalanced `<d>`, a tag pointing at a
+reference that is not there — **the writer is asked once more**, with those
+findings folded into the prompt as rules to obey.
+
+Once, never a loop. A model that ignored a rule twice will ignore it a third
+time, and every attempt costs a full generation. Three things keep the single
+retry safe:
+
+- **It is refused on a hopeless answer.** Half the fields missing means the
+  model is not holding the format at all, and a second pass will not change
+  that; the node says to try a larger writer instead of spending another
+  minute.
+- **The constraints travel inside the prompt**, not as a second conversational
+  turn. That keeps the single-turn shape the LoRAs were trained on, so the
+  re-run behaves the same on a trained adapter as on a guided model.
+- **The second answer is kept only if it is better** — fewer warnings, or the
+  same warnings and fewer findings overall. A tie keeps the first. So the worst
+  case is a minute spent, never a worse prompt.
+
+Whatever it did is said on the node: the line restored, the re-run and how much
+it gained, or that the first answer stood.
 
 ### The prompt library
 
@@ -1740,6 +1785,43 @@ so nothing breaks when the ComfyUI frontend updates.
 |---|---|
 | `HF_TOKEN` | Access token for gated or private repositories |
 | `HF_ENDPOINT` | Mirror to download from instead of `huggingface.co` |
+
+### Languages
+
+Set ComfyUI to Russian (Settings → Comfy → Locale) and the nodes come up in
+Russian: what each node is, and every widget's tooltip — the long explanations
+are the point of the translation, since they are what you actually read.
+
+**Widget names stay English on purpose.** `repeat_last`, `fix_once`,
+`prompt_file` are identifiers, not prose: they are the keys in the workflow
+JSON and in an API call, they are what this README and the issue tracker call
+things, and the tooltips name widgets by them. Translating the label would
+leave every one of those references pointing at nothing, so a Russian tooltip
+can say `repeat_last` and it matches what is written on the node.
+
+One tooltip is left in English deliberately — `device` on the Options node,
+which is built at run time and ends with the machine's own GPU list. A static
+file cannot carry that without shipping one person's hardware to everyone.
+
+Translations live in `locales/<lang>/nodeDefs.json` at the root of the pack,
+which is where ComfyUI looks. Adding a language is adding a folder; nothing in
+the Python needs to know. Two things help keep one honest:
+
+```text
+python tools/locales.py report ru     what is missing, and what has gone stale
+python tools/locales.py fill ru       add the missing keys, in English, to translate over
+```
+
+`report` asks a running ComfyUI what the nodes actually are, so it cannot drift
+from the code the way a checked-in copy would; `fill` never overwrites a key
+that already has a translation. The test suite covers the rest — that a file is
+valid JSON, that it names only this pack's nodes, and that every key is one
+ComfyUI actually reads, since a misspelled key fails silently and simply never
+appears.
+
+**A node already on the canvas keeps the title it was created with.** Switching
+language does not rename it, because that title is saved in the workflow. Add
+the node afresh to see the translated name.
 
 ## Notes
 

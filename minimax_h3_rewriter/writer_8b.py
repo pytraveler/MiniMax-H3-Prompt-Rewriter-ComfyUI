@@ -53,6 +53,7 @@ from .nodes import (
     _ensure_pair,
     _ensure_present,
     _gguf_text,
+    _fix_once,
     _refuse_problem,
     _report,
     _resolve_adapter,
@@ -611,12 +612,23 @@ class MiniMaxH3PromptWriter8B:
             first_frame, last_frame,
         )
 
+        having = ["image" for frame in (first_frame, last_frame) if frame is not None]
+        if not saved:
+            text = _fix_once(
+                text, progress,
+                lambda extra: rewrite_8b(
+                    model, prompt + extra, task, resolution, duration, quantization,
+                    greedy, seed, keep_model_loaded, settings, progress,
+                    first_frame, last_frame,
+                ),
+                OUTPUT_FIELDS, task=task, duration=duration, having=having, settings=settings,
+            )
         fields = split_fields(text)
         if not saved:
             _report(
                 progress, text, fields, OUTPUT_FIELDS,
                 task=task, duration=duration,
-                having=["image" for frame in (first_frame, last_frame) if frame is not None],
+                having=having, settings=settings,
             )
         outputs = (text,) + tuple(fields[name] for name in OUTPUT_FIELDS)
         if saved:

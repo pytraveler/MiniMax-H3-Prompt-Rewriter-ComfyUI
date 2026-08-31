@@ -72,6 +72,7 @@ from .nodes import (
     CATEGORY,
     DEFAULT_OPTIONS,
     OPTIONS_TYPE,
+    _fix_once,
     _report,
     model_choices,
     rewrite_t2va,
@@ -553,30 +554,36 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
                 f"it. Switch to the Omni tab, or pick one of {', '.join(BASE_MODES)}."
             )
 
-        if lora == LORA_OMNI:
-            text = writer_omni.rewrite_omni(
-                model=first_base(model_omni, writer_omni.model_choices()),
-                prompt=prompt,
-                task=task,
-                resolution=resolution,
-                duration=float(duration),
-                quantization=quantization_omni,
-                greedy=greedy,
-                seed=seed,
-                keep_loaded=keep_model_loaded,
-                settings=settings,
-                progress=progress,
-                references=omni_references(task, connected),
-            )
-        elif lora == LORA_8B:
-            text = writer_8b.rewrite_8b(
-                model_8b, prompt, task, resolution, duration, quantization_8b,
+        def write(extra: str = "") -> str:
+            if lora == LORA_OMNI:
+                return writer_omni.rewrite_omni(
+                    model=first_base(model_omni, writer_omni.model_choices()),
+                    prompt=prompt + extra,
+                    task=task,
+                    resolution=resolution,
+                    duration=float(duration),
+                    quantization=quantization_omni,
+                    greedy=greedy,
+                    seed=seed,
+                    keep_loaded=keep_model_loaded,
+                    settings=settings,
+                    progress=progress,
+                    references=omni_references(task, connected),
+                )
+            if lora == LORA_8B:
+                return writer_8b.rewrite_8b(
+                    model_8b, prompt + extra, task, resolution, duration, quantization_8b,
+                    greedy, seed, keep_model_loaded, settings, progress,
+                    frames.get("first_frame"), frames.get("last_frame"),
+                )
+            return rewrite_t2va(
+                model_27b, prompt + extra, resolution, duration, quantization_27b,
                 greedy, seed, keep_model_loaded, settings, progress,
-                frames.get("first_frame"), frames.get("last_frame"),
             )
-            if heard:
-                _unread(progress, heard, "the 8B LoRA has neither ear nor a clip task")
-        else:
+
+        if lora == LORA_8B and heard:
+            _unread(progress, heard, "the 8B LoRA has neither ear nor a clip task")
+        elif lora == LORA_27B:
             unread = sorted(connected)
             if task != TEXT_TASK or unread:
                 note = (
@@ -595,16 +602,20 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
                 progress.text(note, force=True)
                 announce(progress.node_id, [("warn", note)])
 
-            text = rewrite_t2va(
-                model_27b, prompt, resolution, duration, quantization_27b,
-                greedy, seed, keep_model_loaded, settings, progress,
-            )
+        text = write()
+        text = _fix_once(
+            text, progress, write, FIELDS_FOR_TASK[task],
+            task=task, duration=duration,
+            having=[KIND_OF_SLOT.get(name) for name in connected],
+            fallback=BODY_FIELD[task], settings=settings,
+        )
 
         fields = split_fields(text, FIELDS_FOR_TASK[task], BODY_FIELD[task])
         _report(
             progress, text, fields, FIELDS_FOR_TASK[task],
             task=task, duration=duration,
             having=[KIND_OF_SLOT.get(name) for name in connected],
+            settings=settings,
         )
         outputs = (text,) + tuple(fields.get(name, "") for name in UNIVERSAL_FIELDS)
         memory.keep(

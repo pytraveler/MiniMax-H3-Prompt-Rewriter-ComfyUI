@@ -56,6 +56,7 @@ from .nodes import (
     SYSTEM_PROMPT_TOOLTIP,
     _ensure_pair,
     _guided_text,
+    _fix_once,
     _report,
     _resolve_captioner_choice,
     caption_question,
@@ -677,11 +678,22 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         )
 
         names = guide_prompt.FIELDS_FOR_MODE[task]
+        text = _fix_once(
+            text, progress,
+            lambda extra: _guided_text(
+                task, writer_model, prompt + extra, resolution, duration, material,
+                greedy, seed, keep_model_loaded, settings, progress, system_prompt,
+            ),
+            names, task=task, duration=duration,
+            having=[item.kind for item in assets],
+            fallback=guide_prompt.BODY_FIELD[task], settings=settings,
+        )
         _head, sections = split_sections(text, names, fallback=guide_prompt.BODY_FIELD[task])
         _report(
             progress, text, sections, names,
             task=task, duration=duration,
             having=[item.kind for item in assets],
+            settings=settings,
         )
 
         fields = tuple(sections.get(name, "") for name in ALL_FIELDS)

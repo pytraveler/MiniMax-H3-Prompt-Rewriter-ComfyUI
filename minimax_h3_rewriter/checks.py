@@ -21,11 +21,30 @@ from dataclasses import dataclass
 WARN = "warn"
 INFO = "info"
 
+REPORT_ALL = "warnings and notes"
+REPORT_WARNINGS = "warnings only"
+REPORT_NONE = "off"
+REPORT_LEVELS = (REPORT_ALL, REPORT_WARNINGS, REPORT_NONE)
+
+
+def reportable(issues, setting: str = REPORT_ALL) -> list:
+    """The findings this setting wants said. Unknown settings report everything.
+
+    An unreadable setting reporting everything is deliberate: a stale workflow
+    or a typo should leave the check louder than intended, never silent.
+    """
+    if setting == REPORT_NONE:
+        return []
+    if setting == REPORT_WARNINGS:
+        return [issue for issue in issues if issue.level == WARN]
+    return list(issues)
+
 
 @dataclass(frozen=True)
 class Issue:
     level: str
     message: str
+    code: str = ""
 
 
 TASK_ALIASES = {
@@ -81,7 +100,7 @@ def review(
     connected-versus-cited rules but not the task-capacity ones).
     """
     if not (text or "").strip():
-        return [Issue(WARN, "the answer is empty")]
+        return [Issue(WARN, "the answer is empty", "empty")]
 
     wanted = normalize(task)
     body_field = (
@@ -134,6 +153,7 @@ def _fields(sections, names) -> list:
             WARN,
             f"{len(absent)} field(s) missing from the answer: {', '.join(absent)} -- "
             "lower the temperature, or try a larger writer model",
+            "fields",
         )
     ]
 
@@ -146,7 +166,9 @@ def _alignment(text, wanted) -> list:
                 WARN,
                 f"no alignment line -- {wanted.upper()} prompts open with the fixed "
                 "sentence telling H3 where the reference frames land",
-            )
+   
+            "alignment",
+        )
         ]
     return []
 
@@ -162,7 +184,7 @@ def _shots(body, duration) -> list:
     issues = []
     if "[Shot 1]" not in body:
         issues.append(
-            Issue(WARN, "the description has no [Shot 1] -- shots are how H3 reads structure")
+            Issue(WARN, "the description has no [Shot 1] -- shots are how H3 reads structure", "shots")
         )
         return issues
 
@@ -181,7 +203,7 @@ def _shots(body, duration) -> list:
             continue
         if number > highest + 1:
             issues.append(
-                Issue(WARN, f"shot numbering jumps from {highest} to {number}")
+                Issue(WARN, f"shot numbering jumps from {highest} to {number}", "shots")
             )
         highest = number
 
@@ -189,7 +211,7 @@ def _shots(body, duration) -> list:
         if number == 1:
             if stamped:
                 issues.append(
-                    Issue(WARN, "[Shot 1] carries a cut time -- the guide leaves the first shot unstamped")
+                    Issue(WARN, "[Shot 1] carries a cut time -- the guide leaves the first shot unstamped", "shots")
                 )
             continue
         if not stamped:
@@ -198,18 +220,18 @@ def _shots(body, duration) -> list:
         cut = int(match.group(2)) * 60 + float(match.group(3))
         if cut <= last_cut:
             issues.append(
-                Issue(WARN, f"[Shot {number}] cut time is not later than the previous one")
+                Issue(WARN, f"[Shot {number}] cut time is not later than the previous one", "shots")
             )
         if limit and cut >= limit:
             issues.append(
-                Issue(WARN, f"[Shot {number}] cuts at {cut:g}s, past the {limit:g}s end")
+                Issue(WARN, f"[Shot {number}] cuts at {cut:g}s, past the {limit:g}s end", "shots")
             )
         last_cut = max(last_cut, cut)
 
     if unstamped:
         listed = ", ".join(f"[Shot {n}]" for n in unstamped)
         issues.append(
-            Issue(WARN, f"{listed} missing the 'At MM:SS.mmm' cut time a later shot opens with")
+            Issue(WARN, f"{listed} missing the 'At MM:SS.mmm' cut time a later shot opens with", "shots")
         )
     return issues
 
@@ -220,13 +242,13 @@ def _dialogue(body) -> list:
     closed = body.count("</d>")
     if opened != closed:
         issues.append(
-            Issue(WARN, f"<d> tags are unbalanced: {opened} opened, {closed} closed")
+            Issue(WARN, f"<d> tags are unbalanced: {opened} opened, {closed} closed", "dialogue")
         )
     for match in DIALOGUE.finditer(body):
         if not LANGUAGE.match(match.group(1)):
             spoken = " ".join(match.group(1).split())[:40]
             issues.append(
-                Issue(WARN, f"a <d> block has no [Language] tag: \"{spoken}...\"")
+                Issue(WARN, f"a <d> block has no [Language] tag: \"{spoken}...\"", "dialogue")
             )
     return issues
 
@@ -249,6 +271,7 @@ def _tags(text, wanted, having) -> list:
                         WARN,
                         f"<{word} {top}> is cited, but {wanted.upper()} has no "
                         f"{word.lower()} references",
+                         "tags",
                     )
                 )
             elif top > allowed:
@@ -258,6 +281,7 @@ def _tags(text, wanted, having) -> list:
                         WARN,
                         f"<{word} {top}> is cited, but {wanted.upper()} only takes "
                         f"{word.lower()} {span}",
+                         "tags",
                     )
                 )
 
@@ -278,6 +302,7 @@ def _tags(text, wanted, having) -> list:
                     WARN,
                     f"<{word} {top}> is cited, but only {shown.get(word, 0)} "
                     f"{word.lower()}(s) reached this node",
+                     "tags",
                 )
             )
 
@@ -293,6 +318,7 @@ def _tags(text, wanted, having) -> list:
                 WARN,
                 f"{', '.join(uncited)} connected but never cited -- the model still "
                 "receives it, with no say in what it is for",
+                 "tags",
             )
         )
     return issues
@@ -306,7 +332,7 @@ def _subjects(sections) -> list:
     if not missing:
         return []
     listed = ", ".join(f"<Subject {n}>" for n in missing)
-    return [Issue(WARN, f"{listed} defined but absent from retention_analysis")]
+    return [Issue(WARN, f"{listed} defined but absent from retention_analysis", "subjects")]
 
 
 def _length(body) -> list:
@@ -317,6 +343,7 @@ def _length(body) -> list:
             Issue(
                 INFO,
                 f"detailed_description is {words} words; the guide suggests {low}-{high}",
+                 "length",
             )
         ]
     return []

@@ -6,6 +6,66 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.18.3 - 2026-08-30
+
+### Added
+
+- **`self_check` on the Options node decides how much the check says out
+  loud**: `warnings and notes` (the default), `warnings only` -- which drops
+  the guide's softer suggestions, such as the 350-500 words -- or `off`. The
+  reading always happens, since it costs nothing, so the setting decides what
+  is reported rather than what is looked at, and an unreadable value reports
+  everything: a stale workflow should leave the check louder than intended,
+  never silent. It does not cover the nodes' own warnings about their inputs,
+  which are about your wiring rather than the model's prose.
+
+- **`fix_once` on the Options node acts on what the check found**, instead of
+  only reporting it. Off by default, and off is a promise: the answer you get
+  is exactly what the model wrote.
+
+  On, the alignment line of the frame tasks goes back where it is missing --
+  fixed text the node already formats, so no model runs and nothing can
+  regress -- and the mechanical findings buy exactly one more generation, with
+  those findings folded into the prompt as rules. Once, never a loop. The
+  re-run is refused outright on an answer missing half its fields, because a
+  model that cannot hold the format will not hold it on the second pass; the
+  constraints travel inside the prompt rather than as a second conversational
+  turn, keeping the single-turn shape the LoRAs were trained on; and the second
+  answer is kept only if it is genuinely better, ties going to the first. The
+  worst case is a minute spent, never a worse prompt. Whatever it did is said
+  on the node.
+
+  What is looked for lives in `minimax_h3_rewriter/checks.py` and what is done
+  about it in `minimax_h3_rewriter/repair.py`, both free of ComfyUI, with the
+  test suite under `tests/` covering them:
+  `cd tests && ../.venv/Scripts/python.exe -m pytest`.
+
+Both widgets are appended after `prompt_file`, so a workflow saved before this
+release keeps every other value where it was.
+
+- **A Russian locale.** Set ComfyUI to Russian and the nodes come up in
+  Russian: what each node is, and all 153 widget tooltips -- the long
+  explanations, which are what you actually read.
+
+  Widget names stay English on purpose. They are identifiers rather than
+  prose: the keys in the workflow JSON and in an API call, what the READMEs
+  and the issue tracker call things, and what the tooltips name widgets by.
+  Translating the label would leave every one of those references pointing at
+  nothing, so a Russian tooltip says `repeat_last` and it matches the node.
+  `device` is left English as well -- it is built at run time and ends with the
+  machine's own GPU list, which a static file must not carry.
+
+  Translations live in `locales/<lang>/nodeDefs.json` at the root of the pack;
+  adding a language is adding a folder. `python tools/locales.py report ru`
+  says what is missing and what has gone stale, asking a running ComfyUI what
+  the nodes are rather than a checked-in copy that could drift; `fill` adds the
+  missing keys in English to translate over, never touching one already done.
+  The tests cover what fails silently: a key ComfyUI does not read, a node from
+  another pack, an empty string, a file that is not JSON.
+
+  A node already on a canvas keeps the title it was created with -- that title
+  is saved in the workflow, so switching language does not rename it.
+
 ## 0.18.2 - 2026-08-30
 
 ### Added
