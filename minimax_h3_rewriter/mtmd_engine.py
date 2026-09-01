@@ -27,14 +27,21 @@ Two differences from ``cli_engine`` are worth knowing:
 Which models actually work here is a much shorter list than the set of
 multimodal GGUFs on the Hub: the projector format has to be one ``mtmd``
 understands. See ``models.json`` for the ones this pack has been run against.
+
+A run with several references to read does not want a process each. ``session``
+holds one model open for the whole loop -- see ``server_engine`` -- and hands
+``describe`` something to ask instead of something to start. Everything below
+behaves identically either way; a machine where the server cannot start keeps
+the one-process-per-asset behaviour and loses only the time.
 """
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 
-from . import devices, discovery, llamacpp, media, runner
+from . import devices, discovery, llamacpp, media, runner, server_engine
 from .constants import answer_only, normalize_seed
 from .progress import NodeProgress
 
@@ -71,6 +78,8 @@ CONTEXT_EXCEEDED = (
     "n_batch",
     "find a memory slot",
 )
+
+DEFAULT_SYSTEM = "You are a helpful assistant"
 
 
 def _size_of(path: str) -> int:
@@ -267,6 +276,86 @@ def attachments_from(
     return attachments, notes, note
 
 
+def busiest(kinds, max_frames: int = media.DEFAULT_MAX_FRAMES) -> int:
+    """The most attachments any one description in this batch will carry.
+
+    A server sizes its context once and then serves every request from it, so
+    the number that matters is the largest single ask, not the total: eight
+    frames of one clip have to fit at once, six separate photographs never do.
+    """
+    counts = [max(int(max_frames), 1) if kind == "video" else 1 for kind in kinds]
+    return max(counts) if counts else 1
+
+
+@contextlib.contextmanager
+def session(
+    model_path: str,
+    mmproj_path: str,
+    assets: int,
+    attachments: int = 1,
+    gpu_layers: int = -1,
+    n_ctx: int = CONTEXT_FROM_MODEL,
+    device: str = devices.AUTO,
+    backend: str = "auto",
+    auto_download: bool = True,
+    adapter_path: str | None = None,
+    progress: NodeProgress | None = None,
+):
+    """Hold one model open for ``assets`` descriptions, when that is worth it.
+
+    Yields something to pass to :func:`describe` as ``server``, or ``None``.
+    ``None`` is not an error and is not rare -- one asset, a build with no
+    server in it, a machine where the port would not bind -- so callers do not
+    branch on it: ``describe(..., server=None)`` is exactly what they did
+    before this existed.
+
+    The eviction of ComfyUI's own models moves in here for the same reason the
+    loading does. Doing it per description would unload the diffusion model six
+    times over, and the second through sixth would each find nothing to unload
+    and cost a round trip to say so.
+    """
+    device = devices.validate(device)
+    if not model_path or not mmproj_path or not server_engine.wanted(int(assets)):
+        yield None
+        return
+
+    try:
+        captioner = llamacpp.ensure_mtmd(backend, auto_download, progress)
+    except Exception:
+        log.info(
+            "[minimax_h3_rewriter.mtmd_engine.session] no runtime to hold open",
+            exc_info=True,
+        )
+        yield None
+        return
+
+    binary = llamacpp.server_beside(captioner)
+    if not binary:
+        yield None
+        return
+
+    if progress is not None:
+        progress.text(
+            f"Loading {os.path.basename(model_path)} once for {assets} references",
+            force=True,
+        )
+    runner.free_comfy_vram(device)
+    server = server_engine.open_server(
+        binary,
+        model_path,
+        mmproj_path,
+        gpu_layers,
+        fit_context(model_path, mmproj_path, attachments, device, n_ctx),
+        device,
+        adapter_path,
+    )
+    try:
+        yield server
+    finally:
+        if server is not None:
+            server.close()
+
+
 def describe(
     model_path: str,
     mmproj_path: str,
@@ -288,8 +377,9 @@ def describe(
     backend: str = "auto",
     auto_download: bool = True,
     adapter_path: str | None = None,
-    system_prompt: str = "",
+    system_prompt: str | None = None,
     progress: NodeProgress | None = None,
+    server=None,
 ) -> str:
     """Fetch the runtime if needed, describe the attachments once, and return the text.
 
@@ -303,8 +393,18 @@ def describe(
     model is told which is the first frame and which is the last, and the two
     can be different sizes. So that caller writes its own files and states the
     order, rather than handing over one IMAGE for this to take apart.
+
+    ``server`` is a model :func:`session` already has open. Given one, this
+    asks it rather than starting ``llama-mtmd-cli``; given ``None``, which is
+    the default and what every caller did before sessions existed, nothing
+    about the run changes. The two paths are held to the same sampling, the
+    same seed, the same instruction and the same system turn -- see
+    ``DEFAULT_SYSTEM``, which is the one of those four that had to be stated
+    rather than assumed -- so which one ran is not visible in the answer.
     """
     device = devices.validate(device)
+    if system_prompt is None:
+        system_prompt = DEFAULT_SYSTEM
     if attachments is None and image is None and audio is None and video is None:
         raise ValueError(
             "nothing to describe: connect an image, an audio clip or a video, or type the "
@@ -313,7 +413,9 @@ def describe(
     if attachments is not None and not attachments:
         raise ValueError("nothing to describe: 'attachments' is empty.")
 
-    binary = llamacpp.ensure_mtmd(backend, auto_download, progress)
+    binary = server.binary if server is not None else llamacpp.ensure_mtmd(
+        backend, auto_download, progress
+    )
 
     with media.Workspace() as workspace:
         note = ""
@@ -329,14 +431,17 @@ def describe(
             ]
         if note:
             instruction = f"{note}\n\n{instruction}"
-        n_ctx = fit_context(model_path, mmproj_path, len(attachments), device, n_ctx)
-        command = build_command(
-            binary, model_path, mmproj_path, instruction, attachments,
-            gpu_layers, n_ctx, seed, greedy, max_new_tokens, temperature, top_p, top_k, device,
-            adapter_path, system_prompt,
-        )
 
-        runner.free_comfy_vram(device)
+        command = None
+        if server is None:
+            n_ctx = fit_context(model_path, mmproj_path, len(attachments), device, n_ctx)
+            command = build_command(
+                binary, model_path, mmproj_path, instruction, attachments,
+                gpu_layers, n_ctx, seed, greedy, max_new_tokens, temperature, top_p,
+                top_k, device, adapter_path, system_prompt,
+            )
+            runner.free_comfy_vram(device)
+
         if progress is not None:
             where = "" if device == devices.AUTO else f" on {device}"
             lora = f" + {os.path.basename(adapter_path)}" if adapter_path else ""
@@ -354,7 +459,14 @@ def describe(
                 )
 
         try:
-            text, stderr_text = runner.run(command, binary, report)
+            if server is not None:
+                n_ctx = server.n_ctx
+                text, stderr_text = server.ask(
+                    instruction, attachments, seed, greedy, max_new_tokens,
+                    temperature, top_p, top_k, system_prompt, report,
+                ), ""
+            else:
+                text, stderr_text = runner.run(command, binary, report)
         except runner.ChildFailed as error:
             raise RuntimeError(f"{error}\n\n{_failure_hint(str(error), n_ctx)}") from error
 

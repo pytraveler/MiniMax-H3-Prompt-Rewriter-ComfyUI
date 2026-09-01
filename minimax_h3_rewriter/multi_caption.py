@@ -412,62 +412,76 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
 
         asked_for = slot_instructions(reference_instructions)
 
-        progress.set_total(len(assets))
-        captions = []
-        for done, asset in enumerate(assets):
-            index = next_index(block, asset.role)
-            caption = reused[done] if done < len(reused) else ""
-            frames = asset.kind == "video" and _is_frames(asset.value)
-            verb = "reusing the kept caption for" if caption else "reading"
-            progress.update(
-                done,
-                f"{asset.role} {index}: {verb} {asset.slot} ({done + 1} of {len(assets)})",
-            )
+        with mtmd_engine.session(
+            model_path or "", mmproj_path or "",
+            assets=described,
+            attachments=mtmd_engine.busiest(
+                (asset.kind for asset in assets), int(max_frames)
+            ),
+            gpu_layers=int(settings["gpu_layers"]),
+            n_ctx=int(context_size),
+            device=settings["device"],
+            backend=settings["llama_backend"],
+            auto_download=settings["auto_download"],
+            progress=progress,
+        ) as batch:
+            progress.set_total(len(assets))
+            captions = []
+            for done, asset in enumerate(assets):
+                index = next_index(block, asset.role)
+                caption = reused[done] if done < len(reused) else ""
+                frames = asset.kind == "video" and _is_frames(asset.value)
+                verb = "reusing the kept caption for" if caption else "reading"
+                progress.update(
+                    done,
+                    f"{asset.role} {index}: {verb} {asset.slot} ({done + 1} of {len(assets)})",
+                )
 
-            if not caption:
-                asked = caption_question(asset.role, length, asked_for.get(asset.slot))
-                as_image = asset.value if asset.kind == "image" or frames else None
-                as_audio = asset.value if asset.kind == "audio" else None
-                as_video = None if frames else (asset.value if asset.kind == "video" else None)
+                if not caption:
+                    asked = caption_question(asset.role, length, asked_for.get(asset.slot))
+                    as_image = asset.value if asset.kind == "image" or frames else None
+                    as_audio = asset.value if asset.kind == "audio" else None
+                    as_video = None if frames else (asset.value if asset.kind == "video" else None)
 
-                if clip is not None:
-                    caption = clip_caption.describe(
-                        clip,
-                        instruction=asked,
-                        image=as_image,
-                        audio=as_audio,
-                        video=as_video,
-                        max_frames=int(max_frames),
-                        seed=int(seed),
-                        settings=settings,
-                        progress=progress,
-                    )
-                else:
-                    caption = mtmd_engine.describe(
-                        model_path=model_path,
-                        mmproj_path=mmproj_path,
-                        instruction=asked,
-                        image=as_image,
-                        audio=as_audio,
-                        video=as_video,
-                        max_frames=int(max_frames),
-                        gpu_layers=int(settings["gpu_layers"]),
-                        n_ctx=int(context_size),
-                        seed=int(seed),
-                        greedy=True,
-                        max_new_tokens=min(int(settings["max_new_tokens"]), 1024),
-                        temperature=float(settings["temperature"]),
-                        top_p=float(settings["top_p"]),
-                        top_k=int(settings["top_k"]),
-                        device=settings["device"],
-                        backend=settings["llama_backend"],
-                        auto_download=settings["auto_download"],
-                        progress=progress,
-                    )
+                    if clip is not None:
+                        caption = clip_caption.describe(
+                            clip,
+                            instruction=asked,
+                            image=as_image,
+                            audio=as_audio,
+                            video=as_video,
+                            max_frames=int(max_frames),
+                            seed=int(seed),
+                            settings=settings,
+                            progress=progress,
+                        )
+                    else:
+                        caption = mtmd_engine.describe(
+                            model_path=model_path,
+                            mmproj_path=mmproj_path,
+                            instruction=asked,
+                            image=as_image,
+                            audio=as_audio,
+                            video=as_video,
+                            max_frames=int(max_frames),
+                            gpu_layers=int(settings["gpu_layers"]),
+                            n_ctx=int(context_size),
+                            seed=int(seed),
+                            greedy=True,
+                            max_new_tokens=min(int(settings["max_new_tokens"]), 1024),
+                            temperature=float(settings["temperature"]),
+                            top_p=float(settings["top_p"]),
+                            top_k=int(settings["top_k"]),
+                            device=settings["device"],
+                            backend=settings["llama_backend"],
+                            auto_download=settings["auto_download"],
+                            progress=progress,
+                            server=batch,
+                        )
 
-            caption = " ".join(caption.split())
-            captions.append(caption)
-            block = f"{block}\n{asset.role} {index}: {caption}".strip()
+                caption = " ".join(caption.split())
+                captions.append(caption)
+                block = f"{block}\n{asset.role} {index}: {caption}".strip()
 
         if described > 0 or len(reused) != len(assets):
             memory.keep(

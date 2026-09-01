@@ -81,8 +81,10 @@ If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2va
   - [MiniMax-H3 Reference Caption](#minimax-h3-reference-caption)
   - [MiniMax-H3 Multi Reference Caption](#minimax-h3-multi-reference-caption)
   - [Captioning with a model ComfyUI already has loaded](#captioning-with-a-model-comfyui-already-has-loaded)
+  - [The captioner is loaded once, not once per reference](#the-captioner-is-loaded-once-not-once-per-reference)
   - [MiniMax-H3 Guide Prompt (any LLM)](#minimax-h3-guide-prompt-any-llm)
   - [MiniMax-H3 Prompt Check](#minimax-h3-prompt-check)
+  - [MiniMax-H3 Reference Adapter](#minimax-h3-reference-adapter)
   - [Repeating the last answer](#repeating-the-last-answer)
   - [The answer is checked](#the-answer-is-checked)
   - [Acting on what it found](#acting-on-what-it-found)
@@ -1137,6 +1139,41 @@ The GGUF route is not going anywhere: it reaches models ComfyUI has no encoder
 for, and it needs nothing loaded in advance. Leave `clip` unconnected and nothing
 about either node changes.
 
+### The captioner is loaded once, not once per reference
+
+A strip of six references used to be six model loads. `llama-mtmd-cli` runs one
+description and exits, which is right for a single picture and wasteful for a
+strip: the model and its projector were read from disk again for every asset,
+before a pixel was looked at.
+
+Now the whole loop is served by one `llama-server`, started before the first
+reference and stopped after the last. The model, the projector, the sampling,
+the seed and the system turn are the same either way, and only the loading
+changes. Three references on an 8B captioner with a warm file cache: 8.7 seconds
+before, 3.6 after, and the gap widens with every reference you add and with
+every gigabyte the captioner weighs.
+
+Each path repeats itself exactly — the same graph at the same seed gives the
+same caption every time. Between the two, a caption can still land a word apart,
+*a blue circle centered on* against *a blue circle is centered on*, where two
+tokens are near-tied and the two runtimes' batching breaks the tie differently.
+That is float arithmetic rather than a different question being asked, and it is
+why the system turn is stated rather than left out: left out, the difference was
+not a word but a different description.
+
+You do not switch this on, and nothing is downloaded for it: `llama-server`
+ships in the same release archive as `llama-mtmd-cli`, so it is looked for
+beside the captioner that has already been found — and only beside it, since a
+server from another build could pair the model with an older mtmd that cannot
+read the projector this one just accepted.
+
+It is an optimisation and never a requirement. A build without it, a port that
+will not bind, a server that never reports healthy: each is written to the log
+and the run carries on one process at a time, slower and otherwise identical.
+One reference does not start a server at all, there being no second load to
+save. `MINIMAX_H3_MTMD_SERVER` takes `never` to keep the old behaviour and
+`always` to use a server even for a single asset.
+
 ### MiniMax-H3 Guide Prompt (any LLM)
 
 Builds the guide-based `system_prompt` and `user_prompt` and returns them as
@@ -1216,6 +1253,45 @@ no field labels, no shot list, no tags. Read as `T2VA` such a text is reported
 as missing its fields and its `[Shot 1]`, and that is a true reading rather than
 a fault — a prompt like that is an *instruction to a rewriter*, not a finished
 H3 answer. Feed it to one of the writers and check what comes back instead.
+
+### MiniMax-H3 Reference Adapter
+
+The writers take one reference per slot, and that is what makes the strip under
+them work: every asset gets a square, a role and a switch. It is also what puts
+them out of reach of a node that hands its references over *together* — an image
+batch, a list from a directory loader, a bundle assembled by another pack. One
+value holding many has no slot shape to go into.
+
+This node is the join. Collected in on one socket, separated out on nine picture
+sockets, three clip sockets and three sound sockets — which is what the writers
+take, so the strip carries on working exactly as it did.
+
+![The MiniMax-H3 Reference Adapter node. Two inputs down the left: items, unconnected, and bundle, wired to something off the edge of the frame. Sixteen outputs down the right: picture_1 to picture_9, video_1 to video_3, audio_1 to audio_3, and summary. The first three picture outputs run to three preview nodes showing three unrelated photographs. One widget, split_batches, reads true; under it a line of text reads "3 picture(s), 0 clip(s), 0 sound(s)". The node's run time is 0.014s](docs/node_ref_adapter.png)
+
+*One wire in, three out — and thirteen outputs sitting idle, which is the ordinary case rather than a sign of something unfinished. The run cost 14 milliseconds because nothing here is loaded, decoded or described: the three photographs were carried through as they arrived. The line under the widget is the same text as the `summary` output, so what came in and where it went is readable off the node without wiring anything to a preview.*
+
+| Input | What it is for |
+| --- | --- |
+| `items` | References arriving together. Takes any type, because the nodes that produce collections mostly declare none; what each item is gets worked out from the value itself rather than from the wire, and anything that is not an image, a clip or a sound is skipped and counted. |
+| `bundle` | A reference bundle from another pack, if you have one. Its pictures, clips and sounds are read out ahead of anything on `items`, and the audio tracks that come with clips are treated as sounds in their own right. |
+| `split_batches` | Whether an image batch becomes one reference per frame, or stays one reference made of several frames. |
+
+That last switch is a real choice rather than a formality. Split, six frames are
+six things the video reuses, each described and numbered on its own. Kept, they
+are one thing seen six times, described once — which is what a clip is. Turn it
+off when the batch is frames of a single shot.
+
+Nine, three and three are what Ref2VA can hold, so that is the room there is.
+Anything past it is reported on the `summary` output rather than dropped in
+silence, along with anything skipped. Outputs left over hand on nothing, and a
+writer skips those already, so there is no harm in wiring a socket that turns out
+empty — plug in all nine and let the ones you did not fill sit idle.
+
+It is a node of its own for a reason worth knowing, because it is not a choice.
+Receiving a real ComfyUI list means declaring `is_input_list`, and that flag is
+not per input: it rewrites the shape of *every* argument the node receives. On a
+writer it would change how the prompt, the duration and the options arrive. So it
+lives here, on a node that has nothing else to lose by it.
 
 ### Repeating the last answer
 
@@ -1929,6 +2005,8 @@ so nothing breaks when the ComfyUI frontend updates.
 |---|---|
 | `HF_TOKEN` | Access token for gated or private repositories |
 | `HF_ENDPOINT` | Mirror to download from instead of `huggingface.co` |
+| `MINIMAX_H3_LLAMA_BIN` | An llama.cpp already on this machine: the executable, or the folder holding it |
+| `MINIMAX_H3_MTMD_SERVER` | `auto`, `never` or `always`: whether a caption run holds one model open instead of loading it per reference |
 
 ### Languages
 

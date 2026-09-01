@@ -628,69 +628,83 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
 
             asked_for = slot_instructions(reference_instructions)
 
-            progress.set_total(len(assets))
-            for done, asset in enumerate(assets):
-                index = next_index(block, asset.role)
-                progress.update(
-                    done,
-                    f"{asset.role} {index}: reading {asset.slot} ({done + 1} of {len(assets)})",
-                )
-
-                asked = caption_question(
-                    asset.role, caption_length, asked_for.get(asset.slot)
-                )
-                note = _clip_note(asset, max_frames)
-                if note:
-                    asked = f"{note}\n\n{asked}"
-
-                as_image = asset.value if asset.kind == "image" else None
-                as_audio = asset.value if asset.kind == "audio" else None
-                as_video = asset.value if asset.kind == "video" else None
-
-                if clip is not None:
-                    caption = clip_caption.describe(
-                        clip,
-                        instruction=asked,
-                        image=as_image,
-                        audio=as_audio,
-                        video=as_video,
-                        max_frames=int(max_frames),
-                        seed=int(seed),
-                        settings=settings,
-                        progress=progress,
-                    )
-                else:
-                    caption = mtmd_engine.describe(
-                        model_path=model_path,
-                        mmproj_path=mmproj_path,
-                        instruction=asked,
-                        image=as_image,
-                        audio=as_audio,
-                        video=as_video,
-                        max_frames=int(max_frames),
-                        gpu_layers=int(settings["gpu_layers"]),
-                        n_ctx=int(context_size),
-                        seed=int(seed),
-                        greedy=True,
-                        max_new_tokens=min(int(settings["max_new_tokens"]), 1024),
-                        temperature=float(settings["temperature"]),
-                        top_p=float(settings["top_p"]),
-                        top_k=int(settings["top_k"]),
-                        device=settings["device"],
-                        backend=settings["llama_backend"],
-                        auto_download=settings["auto_download"],
-                        progress=progress,
+            with mtmd_engine.session(
+                model_path or "", mmproj_path or "",
+                assets=len(assets),
+                attachments=mtmd_engine.busiest(
+                    (asset.kind for asset in assets), int(max_frames)
+                ),
+                gpu_layers=int(settings["gpu_layers"]),
+                n_ctx=int(context_size),
+                device=settings["device"],
+                backend=settings["llama_backend"],
+                auto_download=settings["auto_download"],
+                progress=progress,
+            ) as batch:
+                progress.set_total(len(assets))
+                for done, asset in enumerate(assets):
+                    index = next_index(block, asset.role)
+                    progress.update(
+                        done,
+                        f"{asset.role} {index}: reading {asset.slot} ({done + 1} of {len(assets)})",
                     )
 
-                caption = " ".join(caption.split())
-                if not caption:
-                    empty.append(f"{asset.role} {index} ({asset.slot})")
-                    log.warning(
-                        "[minimax_h3_rewriter.universal] %s came back with an empty caption",
-                        asset.slot,
+                    asked = caption_question(
+                        asset.role, caption_length, asked_for.get(asset.slot)
                     )
-                captions.append(caption)
-                block = f"{block}\n{asset.role} {index}: {caption}".strip()
+                    note = _clip_note(asset, max_frames)
+                    if note:
+                        asked = f"{note}\n\n{asked}"
+
+                    as_image = asset.value if asset.kind == "image" else None
+                    as_audio = asset.value if asset.kind == "audio" else None
+                    as_video = asset.value if asset.kind == "video" else None
+
+                    if clip is not None:
+                        caption = clip_caption.describe(
+                            clip,
+                            instruction=asked,
+                            image=as_image,
+                            audio=as_audio,
+                            video=as_video,
+                            max_frames=int(max_frames),
+                            seed=int(seed),
+                            settings=settings,
+                            progress=progress,
+                        )
+                    else:
+                        caption = mtmd_engine.describe(
+                            model_path=model_path,
+                            mmproj_path=mmproj_path,
+                            instruction=asked,
+                            image=as_image,
+                            audio=as_audio,
+                            video=as_video,
+                            max_frames=int(max_frames),
+                            gpu_layers=int(settings["gpu_layers"]),
+                            n_ctx=int(context_size),
+                            seed=int(seed),
+                            greedy=True,
+                            max_new_tokens=min(int(settings["max_new_tokens"]), 1024),
+                            temperature=float(settings["temperature"]),
+                            top_p=float(settings["top_p"]),
+                            top_k=int(settings["top_k"]),
+                            device=settings["device"],
+                            backend=settings["llama_backend"],
+                            auto_download=settings["auto_download"],
+                            progress=progress,
+                            server=batch,
+                        )
+
+                    caption = " ".join(caption.split())
+                    if not caption:
+                        empty.append(f"{asset.role} {index} ({asset.slot})")
+                        log.warning(
+                            "[minimax_h3_rewriter.universal] %s came back with an empty caption",
+                            asset.slot,
+                        )
+                    captions.append(caption)
+                    block = f"{block}\n{asset.role} {index}: {caption}".strip()
 
             described = f"{len(assets)} described"
             if skipped:

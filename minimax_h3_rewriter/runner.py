@@ -17,7 +17,9 @@ Four things are load-bearing:
   not going to resume. Either way the node fails with a message instead of
   wedging the ComfyUI queue, which is what a subprocess that never exits does.
 - **No child outlives the interpreter.** Every process started here is
-  registered, and an ``atexit`` hook kills whatever is still holding VRAM.
+  registered, and an ``atexit`` hook kills whatever is still holding VRAM --
+  backed by the operating system, since ``atexit`` only runs on a tidy exit and
+  a crashed ComfyUI would otherwise leave a model resident on the card.
 """
 
 from __future__ import annotations
@@ -59,6 +61,119 @@ def _kill_all() -> None:
 
 
 atexit.register(_kill_all)
+
+
+_KILL_ON_JOB_CLOSE = 0x00002000
+_JOB_EXTENDED_LIMIT = 9
+
+_PR_SET_PDEATHSIG = 1
+
+_JOB = None
+_JOB_TRIED = False
+
+
+def _job_handle():
+    """A Windows job object holding every child, created once.
+
+    ``atexit`` is not enough on its own. It runs when the interpreter exits
+    tidily and not when ComfyUI is killed from a task manager, segfaults in a
+    CUDA kernel, or is stopped from the console -- and a llama.cpp child that
+    survives that keeps whole gigabytes of VRAM until someone notices. A
+    one-shot binary exits within seconds and mostly gets away with it; a server
+    started for a caption run does not, so the guarantee is moved to the kernel:
+    the job dies with this process because the last handle to it closes, and
+    everything in the job dies with the job.
+    """
+    global _JOB, _JOB_TRIED
+
+    if _JOB_TRIED:
+        return _JOB
+    _JOB_TRIED = True
+
+    import ctypes
+    from ctypes import wintypes
+
+    class _Limits(ctypes.Structure):
+        _fields_ = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.POINTER(ctypes.c_ulong)),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.DWORD),
+        ]
+
+    class _Counters(ctypes.Structure):
+        _fields_ = [(name, ctypes.c_uint64) for name in (
+            "ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
+            "ReadTransferCount", "WriteTransferCount", "OtherTransferCount",
+        )]
+
+    class _Extended(ctypes.Structure):
+        _fields_ = [
+            ("BasicLimitInformation", _Limits),
+            ("IoInfo", _Counters),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        ]
+
+    try:
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel.CreateJobObjectW(None, None)
+        if not handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+        information = _Extended()
+        information.BasicLimitInformation.LimitFlags = _KILL_ON_JOB_CLOSE
+        if not kernel.SetInformationJobObject(
+            handle, _JOB_EXTENDED_LIMIT, ctypes.byref(information),
+            ctypes.sizeof(information),
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+    except Exception:
+        log.debug("[minimax_h3_rewriter.runner._job_handle] no job object", exc_info=True)
+        return None
+
+    _JOB = handle
+    return _JOB
+
+
+def _adopt(process: subprocess.Popen) -> None:
+    """Tie a child's lifetime to this process at the operating-system level.
+
+    Best effort by design. Every platform this does not know keeps exactly the
+    behaviour it had before, which is the ``atexit`` hook above: a missing
+    belt is no reason to drop the braces.
+    """
+    if sys.platform != "win32":
+        return
+    job = _job_handle()
+    if not job:
+        return
+    import ctypes
+
+    try:
+        if not ctypes.WinDLL("kernel32", use_last_error=True).AssignProcessToJobObject(
+            job, int(process._handle)
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+    except Exception:
+        log.debug("[minimax_h3_rewriter.runner._adopt] not adopted", exc_info=True)
+
+
+def _die_with_parent() -> None:
+    """``preexec_fn`` for the same guarantee on Linux."""
+    try:
+        import ctypes
+        import signal
+
+        ctypes.CDLL("libc.so.6", use_errno=True).prctl(_PR_SET_PDEATHSIG, signal.SIGKILL)
+    except Exception:
+        pass
 
 
 class ChildFailed(RuntimeError):
@@ -120,8 +235,10 @@ def spawn(command: list[str], binary: str) -> subprocess.Popen:
         env=environment,
         creationflags=creation,
         bufsize=0,
+        preexec_fn=_die_with_parent if sys.platform.startswith("linux") else None,
     )
     _LIVE.add(process)
+    _adopt(process)
     return process
 
 

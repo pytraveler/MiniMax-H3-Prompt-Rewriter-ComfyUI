@@ -6,6 +6,84 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.18.6 - 2026-09-01
+
+### Added
+
+- **A run with several references loads the captioner once, not once each.**
+  `llama-mtmd-cli` starts a process per description, which is right for one
+  picture and wasteful for six: the loop reloaded the model and the projector
+  from scratch every time. It now holds one `llama-server` open for the whole
+  loop and asks it per asset. Same model, same projector, same sampling, same
+  seed and the same system turn, with the loading done once. Three references on
+  an 8B captioner with a warm file cache went from 8.7 s to 3.6 s, and the
+  saving grows with the strip.
+
+  Each path is exactly repeatable: the same graph at the same seed gives the
+  same caption every time, on either. Between the two, a caption can still come
+  out a word apart -- "a blue circle centered on" against "a blue circle is
+  centered on" -- where two tokens are near-tied and the runtimes' batching
+  decides it differently. That is float arithmetic, not a different question.
+
+  It is an optimisation and never a requirement. A build with no `llama-server`
+  beside the captioner, a port that will not bind, a server that never reports
+  healthy: each of those is written to the log and the run carries on one
+  process at a time. A single reference does not start one at all, since there
+  is no second load to save. `MINIMAX_H3_MTMD_SERVER` takes `auto`, `never` or
+  `always` for a machine where this misbehaves.
+
+  Nothing is downloaded for it. `llama-server` ships in the same release
+  archive as `llama-mtmd-cli`, so it is looked for beside the captioner already
+  resolved -- and only there, since a server from a different build could pair
+  the model with an older mtmd that cannot read the projector this one just
+  accepted.
+
+- **A new node takes references that arrive together and hands them back one to
+  a socket.** "MiniMax-H3 Reference Adapter" reads an image batch, a list from
+  another node, or a reference bundle from another pack, works out what each
+  item is from the value itself, and puts it on a picture, clip or sound output
+  -- which is the shape the writers take, so the reference strip below them
+  keeps working exactly as it does.
+
+  That was previously not possible at all: a node handing over its references
+  collected has nothing a per-slot input can accept, and receiving a real
+  ComfyUI list means declaring `is_input_list`, a flag that rewrites the shape
+  of every input on the node it is set on. So it lives on a node of its own,
+  which is the whole reason this is a separate node rather than an input.
+
+  Nine pictures, three clips and three sounds are what Ref2VA can hold, so that
+  is the room there is; anything past it is reported on the summary output
+  rather than dropped in silence. Outputs left over hand on nothing, and a
+  writer already skips those, so wiring a socket that turns out empty costs
+  nothing. An image batch is split into one reference per frame by default,
+  which `split_batches` turns off when the frames are one shot seen several
+  times.
+
+### Changed
+
+- **A description now states its system turn instead of leaving it out**, which
+  changes the captions an upgrade produces. Left out, it is not one thing: asked
+  with no system turn, `llama-mtmd-cli` and `llama-server` build different
+  conversations and answer differently. On Qwen2.5-Omni-3B at the same seed and
+  sampling, one described a sine sweep as "a variety of synthesized sounds,
+  including a sine wave, square wave, and a sweeping tone" and the other as "a
+  descending sweep" -- the second being the true one. No value of the system
+  prompt reproduces either program's own default in the other; what agrees is a
+  turn given to both, so both are given one.
+
+  It also takes the answer out of the hands of two programs' defaults, which are
+  free to move in a llama.cpp release without either calling it a change. The
+  8B and Omni rewriters pass a system prompt of their own and are untouched, as
+  is captioning through a model ComfyUI has already loaded.
+
+- **No llama.cpp child outlives ComfyUI any more, however ComfyUI ends.** The
+  `atexit` hook only runs on a tidy exit, so a crash, a kill from a task
+  manager or a stop from the console left a child holding whole gigabytes of
+  VRAM. Every child is now also in a job object that dies with this process, on
+  Windows, and gets `PR_SET_PDEATHSIG` on Linux. Verified by killing the parent
+  the way a crash does: the child is gone within a second, and survives past
+  fifteen without it.
+
 ## 0.18.5 - 2026-09-01
 
 ### Added
