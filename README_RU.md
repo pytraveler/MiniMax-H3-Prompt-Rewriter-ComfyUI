@@ -15,7 +15,8 @@
   <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-GGUF"><img alt="GGUF adapter, 27B" src="docs/badges/gguf-27b.svg"></a>
   <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-8B-GGUF"><img alt="GGUF adapter, 8B" src="docs/badges/gguf-8b.svg"></a>
   <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-Omni-GGUF"><img alt="GGUF adapter, Omni" src="docs/badges/gguf-omni.svg"></a>
-  <a href="https://www.youtube.com/watch?v=h3rZTIRB_G8"><img alt="YouTube" src="https://img.shields.io/badge/YouTube-review-FF0000?logo=youtube&logoColor=white"></a>
+  <a href="https://www.youtube.com/watch?v=h3rZTIRB_G8"><img alt="Video review, in English" src="https://img.shields.io/badge/YouTube-review%20(EN)-FF0000?logo=youtube&logoColor=white"></a>
+  <a href="https://www.youtube.com/watch?v=PZd9fWX15VA"><img alt="Video review, in Russian" src="https://img.shields.io/badge/YouTube-review%20(RU)-FF0000?logo=youtube&logoColor=white"></a>
 </p>
 
 ![Нода ререйтера в ComfyUI: короткий промпт слева, справа — структурированное покадровое описание, звуковой ландшафт и музыка](docs/node_preview.png)
@@ -2090,6 +2091,10 @@ python tools/locales.py fill ru       дописать недостающие к
 этих нод —
 [«Stop Struggling With MiniMax H3 Prompts. Do This Instead.»](https://www.youtube.com/watch?v=h3rZTIRB_G8) —
 и за народные воркфлоу, на которые есть ссылка выше.
+
+Спасибо [ЭйАй Генератьон](https://www.youtube.com/@AyiTheDeer) за второй, гораздо более подробный, — в нём
+эти ноды показаны не сами по себе, а рядом с остальными паками для MiniMax-H3 —
+[«MiniMax H3 - как создать непрерывное длинное видео. Обзор наборов нод для ComfyUI + рерайтер промта»](https://www.youtube.com/watch?v=PZd9fWX15VA).
 
 ## Лицензия
 

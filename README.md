@@ -15,7 +15,8 @@ for [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) comes out — enti
   <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-GGUF"><img alt="GGUF adapter, 27B" src="docs/badges/gguf-27b.svg"></a>
   <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-8B-GGUF"><img alt="GGUF adapter, 8B" src="docs/badges/gguf-8b.svg"></a>
   <a href="https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-LoRA-Omni-GGUF"><img alt="GGUF adapter, Omni" src="docs/badges/gguf-omni.svg"></a>
-  <a href="https://www.youtube.com/watch?v=h3rZTIRB_G8"><img alt="YouTube" src="https://img.shields.io/badge/YouTube-review-FF0000?logo=youtube&logoColor=white"></a>
+  <a href="https://www.youtube.com/watch?v=h3rZTIRB_G8"><img alt="Video review, in English" src="https://img.shields.io/badge/YouTube-review%20(EN)-FF0000?logo=youtube&logoColor=white"></a>
+  <a href="https://www.youtube.com/watch?v=PZd9fWX15VA"><img alt="Video review, in Russian" src="https://img.shields.io/badge/YouTube-review%20(RU)-FF0000?logo=youtube&logoColor=white"></a>
 </p>
 
 ![The rewriter node in ComfyUI: a short prompt on the left, the structured shot-by-shot description, soundscape and music fields on the right](docs/node_preview.png)
@@ -2115,6 +2116,11 @@ Thanks to [AxiomGraph](https://www.youtube.com/@AxiomGraph) for the first video
 review of these nodes —
 [«Stop Struggling With MiniMax H3 Prompts. Do This Instead.»](https://www.youtube.com/watch?v=h3rZTIRB_G8) —
 and for the community workflows linked above.
+
+Thanks to [ЭйАй Генератьон](https://www.youtube.com/@AyiTheDeer) for a second and more detailed one, in
+Russian, which places these nodes among the other MiniMax-H3 packs rather than
+on their own —
+[«MiniMax H3 - как создать непрерывное длинное видео. Обзор наборов нод для ComfyUI + рерайтер промта»](https://www.youtube.com/watch?v=PZd9fWX15VA).
 
 ## Licence
 
