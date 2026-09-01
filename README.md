@@ -1292,7 +1292,8 @@ answer first, then everything in the file, newest first. Filter by group with th
 chips, or type in the search box to keep only the records whose name, description,
 prompt, groups, references or settings contain what you typed. **Use** points the
 node at a record; **Copy** puts the prompt on the clipboard without pointing the
-node at anything; **Delete** removes it from the file for good.
+node at anything; **Edit** opens it for changing; **Delete** removes it from the
+file for good.
 
 ![The prompt library window, titled “Prompt library” over the line “Hand a saved prompt straight to this node’s output. No model is loaded.”: a search box across the top reading “Search names, descriptions, prompts, references” with the file dropdown beside it on `global`, and four group chips under it — bakery, dinosaur, fish, joke. First the node’s own Last Prompt row, its Use and Copy greyed out beneath “Nothing kept yet. Run this node once and its answer is what gets saved.” Then two saved records: “Дино и пеламида”, three thumbnails down its left and the line Ref2VA · 16:9 · 10s · 3 images + 1 audio · joke, dinosaur, fish above its description and the opening of its subject_definitions; and “Дино”, one thumbnail and the line I2VA · 16:9 · 15s · 1 image · joke, bakery, dinosaur, its card tinted blue because that is the record this node is pointed at. Use, Copy and Delete run down the right of every row, and Write a new one and Close sit at the foot of the window](docs/prompt_library.png)
 
@@ -1310,6 +1311,37 @@ fresh one would — no model is loaded, nothing is generated, and the run takes 
 a tenth of a second. A record written by another kind of node works too: when the
 classes match the outputs come back verbatim, and otherwise the text is split into
 sections by the node reading it, the same way it splits an answer it wrote itself.
+
+**Editing one.** **Edit** opens the record: its name, its description, its groups,
+and the prompt itself in a box you can write in. What *produced* the record — the
+writer, the settings, the duration, the reference thumbnails — is shown but not
+editable, and does not change. That half is the account of a run, and a card that
+misreported its own provenance would be worse than no card.
+
+The prompt is checked as you type, by the same rules the writers run over a model's
+answer and out of the same module, and against this record's own task, duration and
+references: a cut time that has drifted past the end of the video is named while you
+are still looking at it. That is the reason to edit here rather than in the JSON
+file — the file will take anything.
+
+![The edit window, titled “Edit a saved prompt” over the line “The prompt itself, and what the card says about it. What produced this record -- the writer, the settings, the references -- stays as it was.”: a Name box reading “Дино и пеламида (changed)”, a Description under it, then four group chips with joke, dinosaur and fish lit and bakery not, an empty “New group, then Enter” box, and the prompt itself in a monospaced box open at subject_definitions and summary. Beneath it the self-check — “Self-check: 2 warning(s), 1 note(s)” over two amber lines, one saying &lt;Video 1&gt; is cited but no video reached this node and one saying &lt;Picture 2&gt; and &lt;Picture 3&gt; are connected but never cited, and a grey one saying detailed_description is 147 words where the guide suggests 350-500. At the foot the record’s own account, MiniMaxH3UniversalWriter · Ref2VA · 16:9 · 10s · 3 images + 1 audio · saved 29.08.2026, 15:07:10 · edited 01.09.2026, 11:07:04, with the four reference thumbnails below it, and Cancel and Save changes in the corner](docs/prompt_library_edit.png)
+
+*The findings are read from the record rather than guessed at: the task is Ref2VA, the duration ten seconds, and the references are the four at the foot — which is how it knows that `<Video 1>` is named in a prompt no video ever reached, and that two of the connected pictures are never cited. Amber is a warning, grey a note the guide merely suggests. `self_check` on the Options node governs what the nodes say during a run; the editor always shows both, since you asked for them by opening the box. Everything below the line is the half that cannot be edited.*
+
+Changing the text drops the writer's own split of that answer into fields, because
+the split was made from the text as it was. Without it the node reading the record
+splits the text itself, which is exactly what it already does with a prompt written
+by a different kind of node, so the section outputs stay in step with what you
+wrote. Everything else about the record survives, and its card gains the time of
+the edit beside the time it was saved.
+
+A node already pointed at the record hands on the new text at its next run.
+ComfyUI decides whether to run a node at all from its inputs, and an edit changes
+none of them — the pick is still the same id in the same file — so each writer
+reports the record's own content as its `IS_CHANGED` and the run happens. Nothing
+else about caching moves: with no saved prompt in play the value is constant, and
+a record renamed rather than rewritten does not make every node holding it run
+again.
 
 **A record with references is pinned to them.** A T2VA prompt is self-contained
 and travels anywhere. A prompt for one of the frame tasks or for Ref2VA is not:

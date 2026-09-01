@@ -116,6 +116,53 @@ def register() -> None:
             return web.json_response({"ok": False, "error": str(error)}, status=500)
         return web.json_response({"ok": True, "record": saved})
 
+    @routes.post(f"{PREFIX}/library/update")
+    async def library_update(request):
+        """Change a saved record's own text, name, description or groups."""
+        body = await request.json()
+        try:
+            saved = library.edit(
+                body.get("file") or library.DEFAULT_FILE,
+                body.get("id") or "",
+                body.get("changes") or {},
+            )
+        except OSError as error:
+            return web.json_response({"ok": False, "error": str(error)}, status=500)
+        if saved is None:
+            return web.json_response(
+                {"ok": False, "error": "that record is not in this set any more"}, status=404
+            )
+        return web.json_response({"ok": True, "record": saved})
+
+    @routes.post(f"{PREFIX}/library/check")
+    async def library_check(request):
+        """The self-check over text being edited, read against its own record.
+
+        The record supplies the task, the duration and the references it was
+        written for, so an edit is judged by the same rules the run was. An id
+        that no longer resolves still gets the rules that need no context.
+        """
+        body = await request.json()
+        record = library.find(body.get("file") or library.DEFAULT_FILE, body.get("id") or "")
+        about = (record or {}).get("about") or {}
+        having = None
+        if record is not None:
+            having = [
+                reference.get("kind")
+                for reference in record.get("references") or ()
+                if isinstance(reference, dict)
+            ]
+        return web.json_response(
+            {
+                "issues": library.inspect(
+                    body.get("text") or "",
+                    task=(record or {}).get("task") or "",
+                    duration=about.get("duration"),
+                    having=having,
+                )
+            }
+        )
+
     @routes.post(f"{PREFIX}/library/delete")
     async def library_delete(request):
         body = await request.json()

@@ -6,6 +6,65 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.18.4 - 2026-09-01
+
+### Added
+
+- **A saved prompt can now be edited where it is kept.** Every card in the
+  library window has an **Edit** button beside Use, Copy and Delete: it opens
+  the record's name, description and groups, and the prompt itself in a box you
+  can write in. What produced the record -- the writer, the settings, the
+  duration, the reference thumbnails -- is shown but not editable, and does not
+  change: that half is the account of a run, and a card that misreported its own
+  provenance would be worse than no card.
+
+- **The self-check reads what you type, as you type it.** The editor runs the
+  same rules the writers run over a model's answer, out of the same module, and
+  against the record's own task, duration and references -- so a cut time that
+  has drifted past the end of the video is named while you are still looking at
+  it. It is the reason to edit here rather than in the JSON file, which will
+  take anything. `self_check` on the Options node governs what the nodes say
+  during a run; the editor always shows everything it found, since you asked
+  for it by opening the box.
+
+  Changing the text drops the writer's own split of that answer into fields,
+  because the split was made from the text as it was. Without it the node
+  reading the record splits the text itself -- exactly what it already does with
+  a prompt written by a different kind of node -- so the section outputs stay in
+  step with what you wrote. A change that changes nothing is not written at all,
+  and a real one stamps the record with the time of the edit, which the card
+  shows beside the time it was saved.
+
+  `library.edit` and `library.inspect` back it, over the routes
+  `library/update` and `library/check`, with the test suite under `tests/`
+  covering both: `cd tests && ../.venv/Scripts/python.exe -m pytest`.
+
+### Fixed
+
+- **A node pointed at a saved prompt now notices when that prompt changes.**
+  ComfyUI decides whether to run a node at all from its inputs, and editing a
+  record changes none of them -- the pick is still the same id in the same
+  file -- so the answer came straight back out of the execution cache, still
+  saying what it said before the edit, with nothing on screen to explain it.
+  The writers now report the picked record's own content from `IS_CHANGED`
+  (`fingerprint_inputs` on the v3 nodes), so an edit makes the node run and
+  hand on what it now says. Nothing else about caching moves: with no saved
+  prompt in play the value is constant, and renaming a record or rewording its
+  description does not make every node holding it run again. A pick whose
+  record has been deleted from elsewhere now runs and raises, rather than
+  quietly serving the answer from a record that is gone.
+
+- **The "New prompt file" box left a promise unsettled when it was dismissed**
+  rather than answered -- closed with Escape or by a click beside it. Nothing
+  visible came of it, but the caller waited forever. Dismissing any of these
+  windows now answers the caller the same way Cancel does.
+
+- **Escape reached every open window at once.** With one window on screen that
+  never showed; the editor opens over the library, and would have closed both.
+  The panels now track their own order, and Escape closes the top one only. A
+  click beside the editor does not close it at all, since a prompt is worth
+  hundreds of words of typing and a backdrop is easy to hit.
+
 ## 0.18.3 - 2026-08-30
 
 ### Added

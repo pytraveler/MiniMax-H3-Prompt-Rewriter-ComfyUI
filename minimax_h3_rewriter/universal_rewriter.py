@@ -467,6 +467,16 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
         )
 
     @classmethod
+    def fingerprint_inputs(cls, library_pick="", repeat_last=False, **kwargs):
+        """Whether the saved prompt this node is pointed at has changed since.
+
+        A record edited in the library window changes none of this node's
+        inputs, so without this the answer would come back out of ComfyUI's
+        execution cache, still saying what it said before the edit.
+        """
+        return library.stamp(library_pick, repeat_last)
+
+    @classmethod
     def execute(
         cls,
         lora,

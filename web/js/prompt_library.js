@@ -117,6 +117,17 @@ const STYLE = `
 .mmxlib-acts button.mmxlib-drop { color: #E08A8A; }
 .mmxlib-none { padding: 24px 4px; text-align: center; font-size: 12px;
     color: var(--descrip-text, #999); }
+
+.mmxlib-scroll { flex: 1 1 auto; overflow: auto; padding-right: 6px; }
+.mmxlib-panel textarea.mmxlib-prompt { min-height: 220px; line-height: 1.5;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+.mmxlib-found { margin-top: 8px; font-size: 11px; line-height: 1.5; }
+.mmxlib-found .mmxlib-warn, .mmxlib-found .mmxlib-note {
+    text-indent: -1.05em; padding-left: 1.05em; }
+.mmxlib-warn { color: #E0A45A; }
+.mmxlib-note { color: var(--descrip-text, #999); }
+.mmxlib-clean { color: #7FB77F; }
+.mmxlib-kept { margin-top: 10px; font-size: 11px; color: var(--descrip-text, #999); }
 `;
 
 const KIND_MARK = { image: "IMG", video: "VID", audio: "SND" };
@@ -143,28 +154,34 @@ function element(tag, className, text) {
     return made;
 }
 
-function frame(wide) {
+const OPEN = [];
+
+function frame(wide, { onClose, sticky } = {}) {
     installStyle(STYLE_ID, STYLE);
     const back = element("div", "mmxlib-back");
     const panel = element("div", "mmxlib-panel" + (wide ? " mmxlib-wide" : ""));
     back.appendChild(panel);
+    const me = { close };
+    OPEN.push(me);
 
     function close() {
+        const at = OPEN.indexOf(me);
+        if (at >= 0) OPEN.splice(at, 1);
         document.removeEventListener("keydown", onKey, true);
         back.remove();
+        onClose?.();
     }
 
     function onKey(event) {
-        if (event.key === "Escape") {
-            event.stopPropagation();
-            close();
-        }
+        if (event.key !== "Escape" || OPEN[OPEN.length - 1] !== me) return;
+        event.stopPropagation();
+        close();
     }
 
     panel.addEventListener("keydown", (event) => event.stopPropagation());
     document.addEventListener("keydown", onKey, true);
     back.addEventListener("pointerdown", (event) => {
-        if (event.target === back) close();
+        if (event.target === back && !sticky) close();
     });
     document.body.appendChild(back);
     return { back, panel, close };
@@ -290,7 +307,7 @@ function referenceCards(references) {
 
 function askName(title, note, placeholder) {
     return new Promise((resolve) => {
-        const { panel, close } = frame(false);
+        const { panel, close } = frame(false, { onClose: () => resolve(null) });
         panel.appendChild(element("h3", "mmxlib-title", title));
         panel.appendChild(element("p", "mmxlib-sub", note));
 
@@ -306,8 +323,8 @@ function askName(title, note, placeholder) {
         panel.appendChild(row);
 
         function done(value) {
-            close();
             resolve(value);
+            close();
         }
 
         cancel.addEventListener("click", () => done(null));
@@ -317,6 +334,47 @@ function askName(title, note, placeholder) {
         });
         box.focus();
     });
+}
+
+function groupEditor(chosen) {
+    const chips = element("div", "mmxlib-groups");
+    const known = new Set();
+
+    function addChip(label) {
+        known.add(label);
+        const chip = element("span", "mmxlib-chip", label);
+        chip.classList.toggle("mmxlib-on", chosen.has(label));
+        chip.addEventListener("click", () => {
+            if (chosen.has(label)) chosen.delete(label);
+            else chosen.add(label);
+            chip.classList.toggle("mmxlib-on", chosen.has(label));
+        });
+        chips.appendChild(chip);
+        return chip;
+    }
+
+    const box = document.createElement("input");
+    box.type = "text";
+    box.placeholder = "New group, then Enter";
+    box.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        const label = box.value.trim();
+        box.value = "";
+        if (!label || known.has(label)) return;
+        chosen.add(label);
+        addChip(label);
+    });
+
+    for (const label of chosen) addChip(label);
+
+    return {
+        chips,
+        box,
+        offer(labels) {
+            for (const label of labels || []) if (!known.has(label)) addChip(label);
+        },
+    };
 }
 
 function openSave(node, button) {
@@ -344,36 +402,9 @@ function openSave(node, button) {
     panel.appendChild(description);
 
     panel.appendChild(element("label", "mmxlib-field", "Groups"));
-    const chips = element("div", "mmxlib-groups");
-    panel.appendChild(chips);
     const chosen = new Set();
-    const known = new Set();
-
-    function addChip(label) {
-        known.add(label);
-        const chip = element("span", "mmxlib-chip", label);
-        chip.addEventListener("click", () => {
-            if (chosen.has(label)) chosen.delete(label);
-            else chosen.add(label);
-            chip.classList.toggle("mmxlib-on", chosen.has(label));
-        });
-        chips.appendChild(chip);
-        return chip;
-    }
-
-    const newGroup = document.createElement("input");
-    newGroup.type = "text";
-    newGroup.placeholder = "New group, then Enter";
-    newGroup.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter") return;
-        event.preventDefault();
-        const label = newGroup.value.trim();
-        newGroup.value = "";
-        if (!label || known.has(label)) return;
-        chosen.add(label);
-        addChip(label).classList.add("mmxlib-on");
-    });
-    panel.appendChild(newGroup);
+    const groups = groupEditor(chosen);
+    panel.append(groups.chips, groups.box);
 
     panel.appendChild(element("label", "mmxlib-field", "Save in"));
     const file = document.createElement("select");
@@ -434,11 +465,9 @@ function openSave(node, button) {
         for (const entry of files) file.appendChild(new Option(entry, entry));
         file.value = files.includes(wanted) ? wanted : files[0];
     });
-    ask(`/minimax_h3_rewriter/library?file=${encodeURIComponent(wanted)}`).then(({ payload }) => {
-        for (const label of payload.groups || []) {
-            if (!known.has(label)) addChip(label);
-        }
-    });
+    ask(`/minimax_h3_rewriter/library?file=${encodeURIComponent(wanted)}`).then(({ payload }) =>
+        groups.offer(payload.groups)
+    );
 
     if (summary?.stored && summary.references) {
         ask(`/minimax_h3_rewriter/references?node=${encodeURIComponent(node.id)}`).then(
@@ -448,6 +477,182 @@ function openSave(node, button) {
             }
         );
     }
+}
+
+function clockOf(stamp) {
+    return stamp ? new Date(stamp * 1000).toLocaleString() : "";
+}
+
+function provenance(record) {
+    const about = record.about || {};
+    return [
+        record.node_class,
+        record.task,
+        about.resolution,
+        about.duration ? `${about.duration}s` : "",
+        spellShape(record.references),
+        `saved ${clockOf(record.saved_at)}`,
+        record.edited_at ? `edited ${clockOf(record.edited_at)}` : "",
+    ]
+        .filter(Boolean)
+        .join("  ·  ");
+}
+
+function openEdit(record, fileName) {
+    return new Promise((resolve) => {
+        let settled = false;
+
+        function finish(answer) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(pending);
+            close();
+            resolve(answer);
+        }
+
+        const { panel, close } = frame(true, {
+            sticky: true,
+            onClose: () => finish(false),
+        });
+        panel.appendChild(element("h3", "mmxlib-title", "Edit a saved prompt"));
+        panel.appendChild(
+            element(
+                "p",
+                "mmxlib-sub",
+                "The prompt itself, and what the card says about it. What produced this " +
+                    "record -- the writer, the settings, the references -- stays as it was."
+            )
+        );
+
+        const scroll = element("div", "mmxlib-scroll");
+        panel.appendChild(scroll);
+
+        scroll.appendChild(element("label", "mmxlib-field", "Name"));
+        const name = document.createElement("input");
+        name.type = "text";
+        name.value = record.name || "";
+        scroll.appendChild(name);
+
+        scroll.appendChild(element("label", "mmxlib-field", "Description"));
+        const description = document.createElement("textarea");
+        description.placeholder = "What it is for, what to watch out for -- searched later";
+        description.value = record.description || "";
+        scroll.appendChild(description);
+
+        scroll.appendChild(element("label", "mmxlib-field", "Groups"));
+        const chosen = new Set(record.groups || []);
+        const groups = groupEditor(chosen);
+        scroll.append(groups.chips, groups.box);
+
+        scroll.appendChild(element("label", "mmxlib-field", "Prompt"));
+        const text = document.createElement("textarea");
+        text.className = "mmxlib-prompt";
+        text.spellcheck = false;
+        text.value = record.text || "";
+        scroll.appendChild(text);
+
+        const found = element("div", "mmxlib-found");
+        scroll.appendChild(found);
+
+        if ((record.sections || []).length) {
+            scroll.appendChild(
+                element(
+                    "div",
+                    "mmxlib-kept",
+                    "This record also carries the writer's own split of that text into " +
+                        "fields. Changing the text drops it, and a node given this record " +
+                        "splits the text itself instead -- the same thing it already does " +
+                        "with a prompt from a different writer."
+                )
+            );
+        }
+
+        const about = element("div", "mmxlib-about");
+        about.appendChild(element("div", "", provenance(record)));
+        if ((record.references || []).length) {
+            about.appendChild(referenceCards(record.references));
+        }
+        scroll.appendChild(about);
+
+        const row = element("div", "mmxlib-row");
+        const problem = element("div", "mmxlib-problem");
+        const cancel = element("button", "", "Cancel");
+        const save = element("button", "mmxlib-go", "Save changes");
+        row.append(problem, cancel, save);
+        panel.appendChild(row);
+
+        let pending = null;
+
+        async function look() {
+            const { payload } = await ask("/minimax_h3_rewriter/library/check", {
+                file: fileName,
+                id: record.id,
+                text: text.value,
+            });
+            if (settled) return;
+            const issues = payload.issues || [];
+            found.replaceChildren();
+            if (!issues.length) {
+                found.appendChild(
+                    element("div", "mmxlib-clean", "Self-check: nothing to report.")
+                );
+                return;
+            }
+            const warnings = issues.filter((issue) => issue.level === "warn").length;
+            found.appendChild(
+                element(
+                    "div",
+                    "",
+                    `Self-check: ${warnings} warning(s), ${issues.length - warnings} note(s)`
+                )
+            );
+            for (const issue of issues) {
+                found.appendChild(
+                    element(
+                        "div",
+                        issue.level === "warn" ? "mmxlib-warn" : "mmxlib-note",
+                        (issue.level === "warn" ? "! " : "- ") + issue.message
+                    )
+                );
+            }
+        }
+
+        text.addEventListener("input", () => {
+            clearTimeout(pending);
+            pending = setTimeout(look, 500);
+        });
+
+        cancel.addEventListener("click", () => finish(false));
+        save.addEventListener("click", async () => {
+            save.disabled = true;
+            problem.textContent = "";
+            const result = await ask("/minimax_h3_rewriter/library/update", {
+                file: fileName,
+                id: record.id,
+                changes: {
+                    name: name.value,
+                    description: description.value,
+                    groups: [...chosen],
+                    text: text.value,
+                },
+            });
+            if (!result.ok || !result.payload.ok) {
+                problem.textContent = result.payload.error || `HTTP ${result.status}`;
+                save.disabled = false;
+                return;
+            }
+            console.log(
+                `[MiniMax-H3 Prompt Rewriter] '${result.payload.record.name}' edited in ${fileName}`
+            );
+            finish(result.payload.record);
+        });
+
+        ask(`/minimax_h3_rewriter/library?file=${encodeURIComponent(fileName)}`).then(
+            ({ payload }) => groups.offer(payload.groups)
+        );
+        look();
+        name.focus();
+    });
 }
 
 function haystack(record) {
@@ -541,6 +746,18 @@ function openLibrary(node, button) {
         take.addEventListener("click", () =>
             use({ file: file.value, id: record.id, name: record.name })
         );
+        const change = element("button", "", "Edit");
+        change.title = "Change the prompt itself, and what this card says about it";
+        change.addEventListener("click", async () => {
+            const saved = await openEdit(record, file.value);
+            if (!saved) return;
+            const pick = pickOf(node);
+            if (pick?.id === record.id && pick.name !== saved.name) {
+                setWidgetValue(node, PICK, JSON.stringify({ ...pick, name: saved.name }));
+                relabel(node);
+            }
+            load();
+        });
         const hand = element("button", "", "Copy");
         hand.title = "Put the prompt on the clipboard, without pointing the node at it";
         hand.addEventListener("click", () => copy(record.text || "", hand));
@@ -563,7 +780,7 @@ function openLibrary(node, button) {
             }
             load();
         });
-        acts.append(take, hand, drop);
+        acts.append(take, change, hand, drop);
         holder.appendChild(acts);
 
         if (pickOf(node)?.id === record.id) holder.classList.add("mmxlib-on");
