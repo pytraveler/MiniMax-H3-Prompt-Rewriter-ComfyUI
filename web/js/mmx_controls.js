@@ -30,6 +30,16 @@ const BASE_STYLE = `
 .mmx-note { font-size: 11px; color: var(--descrip-text, #999);
     font-family: system-ui, sans-serif; }
 
+.mmx-buttons { display: flex; width: 100%; height: 100%; gap: 6px;
+    font-family: system-ui, sans-serif; }
+.mmx-buttons button { flex: 1 1 0; min-width: 0; font: inherit; font-size: 12px;
+    padding: 0 8px; border-radius: 6px; cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--input-text, #ddd); background: var(--comfy-input-bg, #2b2b2b);
+    border: 1px solid var(--border-color, #4e4e4e); }
+.mmx-buttons button:hover { background: var(--comfy-menu-bg, #353535); }
+.mmx-buttons button:active { background: #3B7DD8; border-color: #3B7DD8; color: #fff; }
+
 .mmx-seg-row { display: flex; width: 100%; height: 100%; overflow: hidden;
     border: 1px solid var(--border-color, #4e4e4e); border-radius: 6px;
     font-family: system-ui, sans-serif; }
@@ -95,6 +105,46 @@ export function installStyle(id, css) {
 
 export function installBaseStyle() {
     installStyle(BASE_STYLE_ID, BASE_STYLE);
+}
+
+export const BUTTON_H = 24;
+const BUTTON_MARGIN = 4;
+
+export function buttonRow(node, name, buttons) {
+    installBaseStyle();
+
+    const row = document.createElement("div");
+    row.className = "mmx-buttons";
+    const made = buttons.map((spec) => {
+        const button = document.createElement("button");
+        button.textContent = spec.label;
+        if (spec.tooltip) button.title = spec.tooltip;
+        button.addEventListener("click", () => spec.onClick(button));
+        row.appendChild(button);
+        return button;
+    });
+
+    const widget = node.addDOMWidget(name, "minimaxh3_buttons", row, {
+        hideOnZoom: false,
+        margin: BUTTON_MARGIN,
+        hideInPanel: true,
+        getValue: () => undefined,
+        setValue: () => {},
+        getMinHeight: () => BUTTON_H + 2 * BUTTON_MARGIN,
+        getMaxHeight: () => BUTTON_H + 2 * BUTTON_MARGIN,
+    });
+    widget.serialize = false;
+    widget.serializeValue = () => undefined;
+    return { widget, buttons: made };
+}
+
+export function told(button, text, seconds = 2.5) {
+    if (!button) return;
+    const before = button.textContent;
+    button.textContent = text;
+    setTimeout(() => {
+        button.textContent = before;
+    }, seconds * 1000);
 }
 
 export function widgetNamed(node, name) {

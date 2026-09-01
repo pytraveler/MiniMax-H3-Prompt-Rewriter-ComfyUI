@@ -1,6 +1,6 @@
 [project]
 name = "minimax-h3-prompt-rewriter"
-version = "0.18.4"
+version = "0.18.5"
 description = "ComfyUI nodes that rewrite a short prompt into a structured MiniMax-H3 audio-video description, fully local: the LightX2V Prompt Rewriter LoRAs on Qwen3.6-27B or on multimodal Qwen3-VL-8B, which reads the reference frames itself, or MiniMax's own writing guide on any small GGUF for T2VA, I2VA, FL2VA, L2VA and Ref2VA, with a multimodal captioner for the reference assets - or one universal node that describes the references and writes the prompt together, with their order a widget."
 readme = "README.md"
 license = { file = "LICENSE" }

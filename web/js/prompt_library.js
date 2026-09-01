@@ -1,7 +1,15 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
-import { installStyle, setWidgetValue, showWidget, widgetNamed } from "./mmx_controls.js";
+import {
+    buttonRow,
+    installStyle,
+    setWidgetValue,
+    showWidget,
+    told,
+    widgetNamed,
+} from "./mmx_controls.js";
 import { recordFor } from "./repeat_last.js";
+import { toast } from "./self_check.js";
 
 const NODES = [
     "MiniMaxH3PromptRewriter",
@@ -13,6 +21,7 @@ const NODES = [
     "MiniMaxH3UniversalRewriter",
 ];
 const OPTIONS_NODE = "MiniMaxH3RewriterOptions";
+const CHECK_NODE = "MiniMaxH3PromptCheck";
 
 const PICK = "library_pick";
 const REPEAT = "repeat_last";
@@ -20,6 +29,7 @@ const FILE_WIDGET = "prompt_file";
 const DEFAULT_FILE = "global";
 
 const SAVE_LABEL = "Save the last prompt";
+const EDIT_LABEL = "Edit the last prompt";
 const BROWSE_LABEL = "Prompt library";
 const NEW_FILE_LABEL = "New prompt file";
 
@@ -29,6 +39,12 @@ const SAVE_TOOLTIP =
     "user directory, so a prompt saved here is available to every workflow and survives " +
     "a restart -- unlike 'repeat_last', which only holds one answer per node for this " +
     "session.\n\nRun the node once first: what gets saved is what it wrote.";
+const EDIT_TOOLTIP =
+    "Open the answer this node last produced and change it, with the self-check reading "  +
+    "what you type as you type it. The fields are split out of the text again when you "  +
+    "save, so the section outputs stay in step with the prose.\n\nIt edits what the node "  +
+    "is holding for this session, which is what 'repeat_last' hands on and what 'Save the "  +
+    "last prompt' would keep. Nothing reaches disk until you save it to the library.";
 const BROWSE_TOOLTIP =
     "Choose which kept prompt 'repeat_last' hands to this node's output. The list starts " +
     "with the node's own last answer, then everything in the library, filtered by group " +
@@ -128,6 +144,10 @@ const STYLE = `
 .mmxlib-note { color: var(--descrip-text, #999); }
 .mmxlib-clean { color: #7FB77F; }
 .mmxlib-kept { margin-top: 10px; font-size: 11px; color: var(--descrip-text, #999); }
+.mmxlib-caution { margin: 0 0 14px; padding: 8px 11px; font-size: 11px;
+    line-height: 1.5; color: #E0A45A; border-radius: 4px;
+    border: 1px solid rgba(224, 164, 90, 0.4);
+    background: rgba(224, 164, 90, 0.08); }
 `;
 
 const KIND_MARK = { image: "IMG", video: "VID", audio: "SND" };
@@ -213,21 +233,13 @@ function labelFor(node) {
 }
 
 function relabel(node) {
-    const widget = node.widgets?.find((entry) => entry.mmxlibBrowse);
-    if (!widget) return;
-    widget.label = labelFor(node);
-    node.setDirtyCanvas?.(true, true);
+    const button = node.widgets?.find((entry) => entry.mmxlibBrowse)?.mmxlibBrowse;
+    if (!button) return;
+    button.textContent = labelFor(node);
 }
 
-function told(button, text) {
-    if (!button) return;
-    const before = button.label;
-    button.label = text;
-    app.graph?.setDirtyCanvas(true, true);
-    setTimeout(() => {
-        button.label = before;
-        app.graph?.setDirtyCanvas(true, true);
-    }, 2500);
+function notify(severity, summary, detail) {
+    toast(severity, summary, detail, "mmx-selfcheck-toast");
 }
 
 const KIND_ORDER = ["image", "video", "audio"];
@@ -377,8 +389,28 @@ function groupEditor(chosen) {
     };
 }
 
-function openSave(node, button) {
+function held(node, cannot, note) {
     const summary = recordFor(node.id);
+    if (summary?.stored) return summary;
+    notify(
+        "info",
+        "Nothing kept yet",
+        `This node has not written anything this session, so there is nothing to ${cannot}. ` +
+            "Run it once: what it writes is what you get.\n\n" +
+            note
+    );
+    return null;
+}
+
+function openSave(node, button) {
+    const summary = held(
+        node,
+        "save",
+        "A prompt handed on from the library is not kept here either -- that one is " +
+            "already in the library, under its own name."
+    );
+    if (!summary) return;
+
     const { panel, close } = frame(false);
 
     panel.appendChild(element("h3", "mmxlib-title", "Save the last prompt"));
@@ -422,8 +454,6 @@ function openSave(node, button) {
     const take = element("button", "", "Copy prompt");
     const cancel = element("button", "", "Cancel");
     const save = element("button", "mmxlib-go", "Save");
-    save.disabled = !summary?.stored;
-    take.disabled = !summary?.stored;
     take.addEventListener("click", async () => {
         const { payload } = await ask(
             `/minimax_h3_rewriter/memory/text?node=${encodeURIComponent(node.id)}`
@@ -469,7 +499,7 @@ function openSave(node, button) {
         groups.offer(payload.groups)
     );
 
-    if (summary?.stored && summary.references) {
+    if (summary.references) {
         ask(`/minimax_h3_rewriter/references?node=${encodeURIComponent(node.id)}`).then(
             ({ payload }) => {
                 const references = payload.references || [];
@@ -498,7 +528,7 @@ function provenance(record) {
         .join("  ·  ");
 }
 
-function openEdit(record, fileName) {
+function openEdit(spec) {
     return new Promise((resolve) => {
         let settled = false;
 
@@ -514,63 +544,54 @@ function openEdit(record, fileName) {
             sticky: true,
             onClose: () => finish(false),
         });
-        panel.appendChild(element("h3", "mmxlib-title", "Edit a saved prompt"));
-        panel.appendChild(
-            element(
-                "p",
-                "mmxlib-sub",
-                "The prompt itself, and what the card says about it. What produced this " +
-                    "record -- the writer, the settings, the references -- stays as it was."
-            )
-        );
+        panel.appendChild(element("h3", "mmxlib-title", spec.title));
+        panel.appendChild(element("p", "mmxlib-sub", spec.note));
+        if (spec.caution) {
+            panel.appendChild(element("div", "mmxlib-caution", spec.caution));
+        }
 
         const scroll = element("div", "mmxlib-scroll");
         panel.appendChild(scroll);
 
-        scroll.appendChild(element("label", "mmxlib-field", "Name"));
-        const name = document.createElement("input");
-        name.type = "text";
-        name.value = record.name || "";
-        scroll.appendChild(name);
-
-        scroll.appendChild(element("label", "mmxlib-field", "Description"));
-        const description = document.createElement("textarea");
-        description.placeholder = "What it is for, what to watch out for -- searched later";
-        description.value = record.description || "";
-        scroll.appendChild(description);
-
-        scroll.appendChild(element("label", "mmxlib-field", "Groups"));
-        const chosen = new Set(record.groups || []);
+        const chosen = new Set(spec.groups || []);
         const groups = groupEditor(chosen);
-        scroll.append(groups.chips, groups.box);
+        const name = document.createElement("input");
+        const description = document.createElement("textarea");
+
+        if (spec.naming) {
+            scroll.appendChild(element("label", "mmxlib-field", "Name"));
+            name.type = "text";
+            name.value = spec.name || "";
+            scroll.appendChild(name);
+
+            scroll.appendChild(element("label", "mmxlib-field", "Description"));
+            description.placeholder =
+                "What it is for, what to watch out for -- searched later";
+            description.value = spec.description || "";
+            scroll.appendChild(description);
+
+            scroll.appendChild(element("label", "mmxlib-field", "Groups"));
+            scroll.append(groups.chips, groups.box);
+        }
 
         scroll.appendChild(element("label", "mmxlib-field", "Prompt"));
         const text = document.createElement("textarea");
         text.className = "mmxlib-prompt";
         text.spellcheck = false;
-        text.value = record.text || "";
+        text.value = spec.text || "";
         scroll.appendChild(text);
 
         const found = element("div", "mmxlib-found");
         scroll.appendChild(found);
 
-        if ((record.sections || []).length) {
-            scroll.appendChild(
-                element(
-                    "div",
-                    "mmxlib-kept",
-                    "This record also carries the writer's own split of that text into " +
-                        "fields. Changing the text drops it, and a node given this record " +
-                        "splits the text itself instead -- the same thing it already does " +
-                        "with a prompt from a different writer."
-                )
-            );
+        if (spec.keptNote) {
+            scroll.appendChild(element("div", "mmxlib-kept", spec.keptNote));
         }
 
         const about = element("div", "mmxlib-about");
-        about.appendChild(element("div", "", provenance(record)));
-        if ((record.references || []).length) {
-            about.appendChild(referenceCards(record.references));
+        about.appendChild(element("div", "", spec.provenance));
+        if ((spec.references || []).length) {
+            about.appendChild(referenceCards(spec.references));
         }
         scroll.appendChild(about);
 
@@ -584,13 +605,8 @@ function openEdit(record, fileName) {
         let pending = null;
 
         async function look() {
-            const { payload } = await ask("/minimax_h3_rewriter/library/check", {
-                file: fileName,
-                id: record.id,
-                text: text.value,
-            });
+            const issues = await spec.check(text.value);
             if (settled) return;
-            const issues = payload.issues || [];
             found.replaceChildren();
             if (!issues.length) {
                 found.appendChild(
@@ -626,33 +642,163 @@ function openEdit(record, fileName) {
         save.addEventListener("click", async () => {
             save.disabled = true;
             problem.textContent = "";
-            const result = await ask("/minimax_h3_rewriter/library/update", {
-                file: fileName,
-                id: record.id,
-                changes: {
-                    name: name.value,
-                    description: description.value,
-                    groups: [...chosen],
-                    text: text.value,
-                },
+            const done = await spec.save({
+                name: name.value,
+                description: description.value,
+                groups: [...chosen],
+                text: text.value,
             });
-            if (!result.ok || !result.payload.ok) {
-                problem.textContent = result.payload.error || `HTTP ${result.status}`;
+            if (done?.error) {
+                problem.textContent = done.error;
                 save.disabled = false;
                 return;
             }
-            console.log(
-                `[MiniMax-H3 Prompt Rewriter] '${result.payload.record.name}' edited in ${fileName}`
-            );
-            finish(result.payload.record);
+            finish(done.value);
         });
 
-        ask(`/minimax_h3_rewriter/library?file=${encodeURIComponent(fileName)}`).then(
-            ({ payload }) => groups.offer(payload.groups)
-        );
+        if (spec.naming && spec.offerGroups) {
+            spec.offerGroups().then((labels) => groups.offer(labels));
+        }
         look();
-        name.focus();
+        (spec.naming ? name : text).focus();
     });
+}
+
+function editSavedRecord(record, fileName) {
+    return openEdit({
+        title: "Edit a saved prompt",
+        note:
+            "The prompt itself, and what the card says about it. What produced this " +
+            "record -- the writer, the settings, the references -- stays as it was.",
+        naming: true,
+        name: record.name,
+        description: record.description,
+        groups: record.groups,
+        text: record.text,
+        references: record.references,
+        provenance: provenance(record),
+        keptNote: (record.sections || []).length
+            ? "This record also carries the writer's own split of that text into " +
+              "fields. Changing the text drops it, and a node given this record " +
+              "splits the text itself instead -- the same thing it already does " +
+              "with a prompt from a different writer."
+            : "",
+        async offerGroups() {
+            const { payload } = await ask(
+                `/minimax_h3_rewriter/library?file=${encodeURIComponent(fileName)}`
+            );
+            return payload.groups || [];
+        },
+        async check(value) {
+            const { payload } = await ask("/minimax_h3_rewriter/library/check", {
+                file: fileName,
+                id: record.id,
+                text: value,
+            });
+            return payload.issues || [];
+        },
+        async save(edited) {
+            const result = await ask("/minimax_h3_rewriter/library/update", {
+                file: fileName,
+                id: record.id,
+                changes: edited,
+            });
+            if (!result.ok || !result.payload.ok) {
+                return { error: result.payload.error || `HTTP ${result.status}` };
+            }
+            console.log(
+                `[MiniMax-H3 Prompt Rewriter] '${result.payload.record.name}' edited in ` +
+                    fileName
+            );
+            return { value: result.payload.record };
+        },
+    });
+}
+
+async function editLastPrompt(node, button) {
+    const summary = held(
+        node,
+        "edit",
+        "A prompt handed on from the library is not kept here either -- it was never " +
+            "this node's own answer. Edit that one in the library window."
+    );
+    if (!summary) return;
+    if (!summary.editable) {
+        notify(
+            "info",
+            "Not a prompt",
+            "This node keeps a caption about one asset rather than an answer with " +
+                "fields, so there is nothing here to split or to edit."
+        );
+        return;
+    }
+    const node_id = encodeURIComponent(node.id);
+    const [answer, shown] = await Promise.all([
+        ask(`/minimax_h3_rewriter/memory/text?node=${node_id}`),
+        ask(`/minimax_h3_rewriter/references?node=${node_id}`),
+    ]);
+
+    const pick = pickOf(node);
+    const repeating = Boolean(widgetNamed(node, REPEAT)?.value);
+    const caution = pick
+        ? `This node is pointed at the saved prompt '${pick.name || pick.id}', and that ` +
+          "is what it hands on. An edit here will not reach the output while the choice " +
+          "stands -- clear it with 'Write a new one' in the library window, or edit that " +
+          "record instead."
+        : repeating
+          ? ""
+          : "'repeat_last' is off, so the next run writes a new answer over this one. " +
+            "Saving switches it on, which is what makes this edit the node's output.";
+    const saved = await openEdit({
+        title: "Edit the last prompt",
+        note:
+            "The answer this node is holding for this session. Nothing is written to " +
+            "disk -- to keep it, save it to the library afterwards.",
+        naming: false,
+        text: answer.payload.text || "",
+        references: shown.payload.references || [],
+        provenance: describeRun(summary),
+        caution,
+        keptNote:
+            "The fields are split out of the text again when you save, so the section " +
+            "outputs stay in step with what you wrote. Everything the node kept past " +
+            "them belongs to the run rather than to the prose, and stays as it was.",
+        async check(value) {
+            const { payload } = await ask("/minimax_h3_rewriter/memory/check", {
+                node: String(node.id),
+                text: value,
+            });
+            return payload.issues || [];
+        },
+        async save({ text }) {
+            const result = await ask("/minimax_h3_rewriter/memory/rewrite", {
+                node: String(node.id),
+                text,
+            });
+            if (!result.ok || !result.payload.ok) {
+                return { error: result.payload.error || `HTTP ${result.status}` };
+            }
+            if (!pick && !repeating) {
+                setWidgetValue(node, REPEAT, true);
+                relabel(node);
+            }
+            return { value: result.payload.record };
+        },
+    });
+    if (!saved) return;
+    told(button, "Edited");
+    notify(
+        pick ? "warn" : "success",
+        "The kept answer was edited",
+        (pick
+            ? `But this node is still pointed at '${pick.name || pick.id}', which is what ` +
+              "it will hand on. The edit is waiting behind that choice."
+            : repeating
+              ? "It is what this node hands on now."
+              : "'repeat_last' was switched on, so this is what the node hands on now.") +
+            "\n\nNothing is on disk yet -- 'Save the last prompt' puts it in the library, " +
+            "which survives a restart."
+    );
 }
 
 function haystack(record) {
@@ -749,7 +895,7 @@ function openLibrary(node, button) {
         const change = element("button", "", "Edit");
         change.title = "Change the prompt itself, and what this card says about it";
         change.addEventListener("click", async () => {
-            const saved = await openEdit(record, file.value);
+            const saved = await editSavedRecord(record, file.value);
             if (!saved) return;
             const pick = pickOf(node);
             if (pick?.id === record.id && pick.name !== saved.name) {
@@ -887,18 +1033,28 @@ function addButtons(nodeType) {
     nodeType.prototype.onNodeCreated = function () {
         const result = onNodeCreated?.apply(this, arguments);
         const node = this;
-        const save = this.addWidget("button", SAVE_LABEL, null, () => openSave(this, save));
-        save.serialize = false;
-        save.serializeValue = () => undefined;
-        save.tooltip = SAVE_TOOLTIP;
 
-        const browse = this.addWidget("button", BROWSE_LABEL, null, () =>
-            openLibrary(this, browse)
-        );
-        browse.serialize = false;
-        browse.serializeValue = () => undefined;
-        browse.tooltip = BROWSE_TOOLTIP;
-        browse.mmxlibBrowse = true;
+        buttonRow(this, "mmx_prompt_actions", [
+            {
+                label: SAVE_LABEL,
+                tooltip: SAVE_TOOLTIP,
+                onClick: (button) => openSave(node, button),
+            },
+            {
+                label: EDIT_LABEL,
+                tooltip: EDIT_TOOLTIP,
+                onClick: (button) => editLastPrompt(node, button),
+            },
+        ]);
+
+        const { widget: browse, buttons } = buttonRow(this, "mmx_library", [
+            {
+                label: BROWSE_LABEL,
+                tooltip: BROWSE_TOOLTIP,
+                onClick: (button) => openLibrary(node, button),
+            },
+        ]);
+        browse.mmxlibBrowse = buttons[0];
 
         const repeat = widgetNamed(this, REPEAT);
         if (repeat) {
@@ -924,31 +1080,57 @@ function addButtons(nodeType) {
     };
 }
 
+/** Only 'Save the last prompt'. For a node that keeps an answer but repeats nothing. */
+function addSaveButton(nodeType) {
+    const onNodeCreated = nodeType.prototype.onNodeCreated;
+    nodeType.prototype.onNodeCreated = function () {
+        const result = onNodeCreated?.apply(this, arguments);
+        const node = this;
+        buttonRow(this, "mmx_prompt_actions", [
+            {
+                label: SAVE_LABEL,
+                tooltip: SAVE_TOOLTIP,
+                onClick: (button) => openSave(node, button),
+            },
+        ]);
+        return result;
+    };
+}
+
+
 function addNewFileButton(nodeType) {
     const onNodeCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
         const result = onNodeCreated?.apply(this, arguments);
         const node = this;
-        const widget = this.addWidget("button", NEW_FILE_LABEL, null, async () => {
-            const wanted = await askName(
-                "New prompt file",
-                "A separate set of saved prompts, for the nodes wired to this Options node.",
-                "storyboards"
-            );
-            if (!wanted) return;
-            const { payload } = await ask("/minimax_h3_rewriter/library/create", { file: wanted });
-            if (!payload.ok) return;
-            const combo = widgetNamed(node, FILE_WIDGET);
-            if (combo) {
-                combo.options = combo.options || {};
-                combo.options.values = payload.files || [payload.file];
-                setWidgetValue(node, FILE_WIDGET, payload.file);
-            }
-            console.log(`[MiniMax-H3 Prompt Rewriter] prompt set '${payload.file}' created`);
-        });
-        widget.serialize = false;
-        widget.serializeValue = () => undefined;
-        widget.tooltip = NEW_FILE_TOOLTIP;
+        buttonRow(this, "mmx_new_prompt_file", [
+            {
+                label: NEW_FILE_LABEL,
+                tooltip: NEW_FILE_TOOLTIP,
+                async onClick() {
+                    const wanted = await askName(
+                        "New prompt file",
+                        "A separate set of saved prompts, for the nodes wired to this " +
+                            "Options node.",
+                        "storyboards"
+                    );
+                    if (!wanted) return;
+                    const { payload } = await ask("/minimax_h3_rewriter/library/create", {
+                        file: wanted,
+                    });
+                    if (!payload.ok) return;
+                    const combo = widgetNamed(node, FILE_WIDGET);
+                    if (combo) {
+                        combo.options = combo.options || {};
+                        combo.options.values = payload.files || [payload.file];
+                        setWidgetValue(node, FILE_WIDGET, payload.file);
+                    }
+                    console.log(
+                        `[MiniMax-H3 Prompt Rewriter] prompt set '${payload.file}' created`
+                    );
+                },
+            },
+        ]);
         return result;
     };
 }
@@ -957,6 +1139,7 @@ app.registerExtension({
     name: "minimax_h3_rewriter.prompt_library",
     async beforeRegisterNodeDef(nodeType, nodeData) {
         if (NODES.includes(nodeData.name)) addButtons(nodeType);
+        if (nodeData.name === CHECK_NODE) addSaveButton(nodeType);
         if (nodeData.name === OPTIONS_NODE) addNewFileButton(nodeType);
     },
 });

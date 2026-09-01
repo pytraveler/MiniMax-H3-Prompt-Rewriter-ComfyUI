@@ -56,12 +56,17 @@ def own_nodes() -> set:
             names = {t.id for t in node.targets if isinstance(t, ast.Name)}
             if "NODE_CLASS_MAPPINGS" not in names:
                 continue
-            if isinstance(node.value, ast.Dict):
-                found |= {
-                    key.value
-                    for key in node.value.keys
-                    if isinstance(key, ast.Constant) and isinstance(key.value, str)
-                }
+            if not isinstance(node.value, ast.Dict):
+                continue
+            for key in node.value.keys:
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    found.add(key.value)
+                else:
+                    print(
+                        f"warning: {os.path.basename(path)} registers a node under a name "
+                        f"this tool cannot read (line {key.lineno}); write it as a plain "
+                        f"string so it can be translated"
+                    )
     if not found:
         raise SystemExit("no NODE_CLASS_MAPPINGS found in minimax_h3_rewriter/")
     return found

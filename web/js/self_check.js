@@ -3,7 +3,11 @@ import { api } from "../../scripts/api.js";
 
 const EVENT = "minimax_h3_rewriter.notices";
 const SHOWN = 4;
-const KIND_LABEL = { check: "Self-check" };
+const KIND_LABEL = { check: "Self-check", refusal: "Stopped" };
+
+const LIFE_MIN = 10000;
+const LIFE_MAX = 30000;
+const LIFE_PER_CHAR = 45;
 const STYLE_ID = "minimax-h3-self-check-style";
 
 function installStyle() {
@@ -18,6 +22,20 @@ function installStyle() {
         "}",
     ].join("\n");
     document.head.appendChild(style);
+}
+
+export function lifeFor(detail) {
+    return Math.min(LIFE_MAX, Math.max(LIFE_MIN, (detail || "").length * LIFE_PER_CHAR));
+}
+
+export function toast(severity, summary, detail, styleClass) {
+    app.extensionManager?.toast?.add({
+        severity,
+        summary,
+        detail,
+        life: lifeFor(detail),
+        styleClass,
+    });
 }
 
 function nodeTitle(id) {
@@ -49,13 +67,12 @@ app.registerExtension({
                 `${nodeTitle(detail.node)}:\n` +
                 issues.map((issue) => issue.message).join("\n")
             );
-            app.extensionManager.toast.add({
-                severity: worst ? "warn" : "info",
-                summary: `${label}: ${nodeTitle(detail.node)}`,
-                detail: lines.join("\n\n"),
-                life: 8000,
-                styleClass: "mmx-selfcheck-toast",
-            });
+            toast(
+                worst ? "warn" : "info",
+                `${label}: ${nodeTitle(detail.node)}`,
+                lines.join("\n\n"),
+                "mmx-selfcheck-toast"
+            );
         });
     },
 });

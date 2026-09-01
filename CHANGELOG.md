@@ -6,6 +6,112 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.18.5 - 2026-09-01
+
+### Added
+
+- **A new node reads a prompt that was written somewhere else.** "MiniMax-H3
+  Prompt Check" takes the text on a socket and applies exactly the rules the
+  writers apply to their own answers -- shot numbering, cut times against the
+  duration, dialogue markup, reference tags against what the task can take and
+  what is actually connected -- then splits the text into the same fields.
+  Anything that produces MiniMax-H3 prose can feed it: another pack's node, a
+  text file loaded into the graph, a prompt found online, or something typed in.
+
+  No model is loaded and nothing is generated; the run costs a few
+  milliseconds. What goes in comes out of the first output untouched, so the
+  node can sit in the middle of a graph. The last output carries the findings,
+  and always carries all of them: `self_check` governs what is announced on
+  screen, which is a question about noise, and wiring the output is asking.
+  "Save the last prompt" is on it too, so a prompt that arrived from elsewhere
+  and read clean goes into the library like one this pack wrote.
+
+- **The answer a node is holding can be edited.** "Edit the last prompt", beside
+  "Save the last prompt" on every writer, opens it in the editor the library
+  already uses: the prompt in a box you can write in, read as you type by the
+  rules the run was read by. The two share one row, because they act on the same
+  thing and a column of five full-width buttons said nothing about which of them
+  belonged together.
+
+  Saving splits the fields out of the new text again, so the section outputs
+  stay in step with the prose; whatever the node kept past its fields -- a
+  reference block, a list of captions -- belongs to the run rather than to the
+  prose and stays as it was. Nothing reaches disk: this is the session store,
+  and an edit worth keeping is saved to the library afterwards. The captioners
+  keep a record too, and theirs is refused rather than mangled -- a line about
+  one asset is not a prompt with fields.
+
+### Changed
+
+- **Ref2VA refuses an over-full strip before anything loads.** A task that
+  cannot use what is connected was already refused before any weights moved;
+  the reference task was not, because it has no fixed picture count -- only a
+  ceiling, nine pictures, three clips and three sounds. Going over it used to be
+  described first and flagged afterwards, which spent a full captioning pass and
+  a rewrite on something countable in advance. Subjects are counted apart from
+  pictures, so a badge is often the whole fix.
+
+- **The writers' cache key now covers the answer they are holding**, not only
+  the library record they are pointed at. Editing either changes none of a
+  node's inputs, so without this ComfyUI would go on serving the answer from
+  before the edit. Off `repeat_last` the value is constant and caching is
+  exactly as it was.
+
+- **`tools/locales.py` says when it cannot read a node's registered name**
+  instead of skipping it. A name built from a constant is invisible to the AST
+  read, and a node missed that way is never offered for translation, silently --
+  which is how the check node was nearly shipped untranslated.
+
+### Fixed
+
+- **"Save the last prompt" opened a window with nothing in it to do.** With no
+  answer kept, every control in that box was dead and a line at the bottom
+  explained why -- while "Edit the last prompt", asking the very same question,
+  refused before opening anything. Both refuse up front now, out of one place,
+  and each says the thing that is easy to get wrong: a prompt handed on from the
+  library was never this node's own answer, so it is not kept here -- it is
+  already in the library under its own name.
+
+- **A node that refuses a run now says so on screen.** Every refusal -- a task
+  the connected references cannot serve, a strip holding more than H3 can take
+  -- was only ever an exception: it stopped the run and landed in the console
+  with a traceback, which is not where anyone looks first. The same sentence is
+  now a toast before the exception goes up, under **Stopped**.
+
+- **Toasts stay long enough to be read.** Eight seconds was fine for one short
+  line and nowhere near enough for four findings. The life is now taken from
+  how much there is to read -- roughly 45 ms a character, floored at ten
+  seconds and capped at thirty.
+
+- **The prompt editor says whether an edit will reach the output.** Editing what
+  a node is holding does nothing on its own: a saved prompt wins over the node's
+  own answer, and with `repeat_last` off the next run writes a new one over the
+  edit -- on a greedy seed, byte for byte the same text, so the edit looks
+  silently ignored. The editor now says which of the two is in the way before you
+  type, saving switches `repeat_last` on when nothing else stands in the way, and
+  the toast afterwards says what will actually happen.
+
+- **A message written on a button's own face did not appear until something
+  else repainted that node.** "Saved to global" and the like were set on the
+  widget and then left there: the graph was asked to repaint, the node was not,
+  so the confirmation surfaced later, attached to an unrelated click.
+
+  Every button in the pack now lives in a shared row widget rather than in a
+  canvas widget of its own -- which is what lets two sit side by side, gives
+  them all the same look whether a row holds one or two, and makes a passing
+  message appear the moment it is written, since the text lives in the document
+  and nothing has to be told to repaint. "Open model list" and "Open guide
+  folder" share a row for the same reason Save and Edit do, and the rows sit
+  closer together than the pack's other controls: they are one block of things
+  you can do to the node, not four unrelated ones. The look is defined once, in
+  `mmx_controls.js`, with the rest of the pack's controls.
+
+- Refusals from "Edit the last prompt" are toasts rather than a two-second
+  label, since a button's face is the wrong size for a reason and the wrong
+  place to look when you expected a window. The one for an empty memory also
+  says the thing that is easy to get wrong: a prompt handed on from the library
+  was never this node's own answer, and is edited in the library window.
+
 ## 0.18.4 - 2026-09-01
 
 ### Added

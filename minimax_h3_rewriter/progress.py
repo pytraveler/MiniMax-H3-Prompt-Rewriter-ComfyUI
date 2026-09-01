@@ -9,12 +9,26 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import NoReturn
 
 log = logging.getLogger(__name__)
 
 TEXT_MIN_INTERVAL = 0.25
 
 NOTICES_EVENT = "minimax_h3_rewriter.notices"
+
+
+def refuse(node_id, message: str) -> NoReturn:
+    """Say it on screen, then raise it.
+
+    A node that stops has to say why twice over. The exception is the truthful
+    half -- it stops the run and lands in the console with a traceback -- but a
+    traceback is not where anyone looks first, and ComfyUI's own error panel is
+    easy to close without reading. The toast is the same sentence, in the same
+    place the self-check speaks from, before the exception goes up.
+    """
+    announce(node_id, [("warn", message)], kind="refusal")
+    raise ValueError(message)
 
 
 def announce(node_id, findings, kind: str = "notice") -> None:
@@ -25,8 +39,8 @@ def announce(node_id, findings, kind: str = "notice") -> None:
     is what makes a finding impossible to miss. ``findings`` is a list of
     ``(level, message)`` pairs or of objects carrying ``level`` and
     ``message`` -- the self-check's Issue is one. ``kind`` names the toast:
-    ``check`` for the self-check's reading of an answer, ``notice`` for the
-    nodes' own warnings. Fire-and-forget: a frontend that is not listening
+    ``check`` for the self-check's reading of an answer, ``refusal`` for a
+    run that is being stopped, ``notice`` for the nodes' own warnings. Fire-and-forget: a frontend that is not listening
     loses nothing but the toast.
     """
     if node_id is None or not findings:

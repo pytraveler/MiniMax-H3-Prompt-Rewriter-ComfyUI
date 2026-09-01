@@ -1,5 +1,6 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
+import { buttonRow } from "./mmx_controls.js";
 
 const MODEL_LIST_NODES = [
     "MiniMaxH3PromptRewriter",
@@ -71,14 +72,19 @@ async function open(action) {
     console.log(`[MiniMax-H3 Prompt Rewriter] opened ${payload.path}`);
 }
 
-function addButton(nodeType, action) {
+function addButtons(nodeType, actions) {
     const onNodeCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
         const result = onNodeCreated?.apply(this, arguments);
-        const widget = this.addWidget("button", action.label, null, () => open(action));
-        widget.serialize = false;
-        widget.serializeValue = () => undefined;
-        widget.tooltip = action.tooltip;
+        buttonRow(
+            this,
+            "mmx_open",
+            actions.map((action) => ({
+                label: action.label,
+                tooltip: action.tooltip,
+                onClick: () => open(action),
+            }))
+        );
         return result;
     };
 }
@@ -86,7 +92,9 @@ function addButton(nodeType, action) {
 app.registerExtension({
     name: "minimax_h3_rewriter.model_list",
     async beforeRegisterNodeDef(nodeType, nodeData) {
-        if (MODEL_LIST_NODES.includes(nodeData.name)) addButton(nodeType, MODEL_LIST);
-        if (GUIDE_NODES.includes(nodeData.name)) addButton(nodeType, GUIDE_FOLDER);
+        const actions = [];
+        if (MODEL_LIST_NODES.includes(nodeData.name)) actions.push(MODEL_LIST);
+        if (GUIDE_NODES.includes(nodeData.name)) actions.push(GUIDE_FOLDER);
+        if (actions.length) addButtons(nodeType, actions);
     },
 });

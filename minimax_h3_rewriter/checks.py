@@ -18,6 +18,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .fields import body_field
+
 WARN = "warn"
 INFO = "info"
 
@@ -80,6 +82,31 @@ SUBJECT = re.compile(r"<Subject\s+(\d+)>")
 REF_WORDS = (350, 500)
 
 
+def over_capacity(task, counts: dict) -> list[tuple]:
+    """Which reference kinds this task cannot take as many of as are offered.
+
+    The same numbers ``_tags`` reads a finished answer by, asked before anything
+    runs. A tenth picture is not a stylistic matter: H3 has nowhere to put it,
+    so a node holding one is better stopped than described.
+
+    ``counts`` is keyed by tag word -- Picture, Video, Audio. Words the task has
+    no ceiling for, Subject among them, are not this rule's business.
+
+    Findings come back as ``(word, offered, allowed)`` rather than as sentences,
+    because the nodes that ask do not share a vocabulary: one calls the task
+    Ref2VA and points at a strip, the other calls it Ref2AV and points at
+    squares. The numbers are this module's; the wording is theirs.
+    """
+    capacity = CAPACITY.get(normalize(task))
+    if not capacity:
+        return []
+    return [
+        (word, count, capacity[word])
+        for word, count in sorted(counts.items())
+        if word in capacity and count > capacity[word]
+    ]
+
+
 def normalize(task) -> str:
     return TASK_ALIASES.get(str(task or "").strip().lower(), "")
 
@@ -103,12 +130,7 @@ def review(
         return [Issue(WARN, "the answer is empty", "empty")]
 
     wanted = normalize(task)
-    body_field = (
-        "detailed_description"
-        if "detailed_description" in names
-        else (names[0] if names else "")
-    )
-    body = str(sections.get(body_field) or "")
+    body = str(sections.get(body_field(names)) or "")
 
     issues = []
     issues += _fields(sections, names)

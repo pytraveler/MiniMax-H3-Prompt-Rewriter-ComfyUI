@@ -18,6 +18,8 @@ import logging
 import time
 from dataclasses import dataclass, field
 
+from .fields import body_field, split_fields
+
 log = logging.getLogger(__name__)
 
 EVENT = "minimax_h3_rewriter.memory"
@@ -60,6 +62,8 @@ class Record:
     at: float
     task: str = ""
     references: list = field(default_factory=list)
+    fields: tuple = ()
+    edited_at: float = 0.0
 
     @property
     def text(self) -> str:
@@ -68,6 +72,16 @@ class Record:
     @property
     def clock(self) -> str:
         return time.strftime("%H:%M:%S", time.localtime(self.at))
+
+    @property
+    def editable(self) -> bool:
+        """Whether this record is a prompt, and so has something to edit.
+
+        The captioners keep a record too, and theirs is a line about one asset
+        rather than an answer with fields. They are told apart by whether the
+        node said what its fields were when it kept the record.
+        """
+        return bool(self.fields)
 
 
 LAST: dict[str, Record] = {}
@@ -123,6 +137,8 @@ def summary(record: Record | None, repeated: bool = False, changed: bool = False
         "node_class": record.node_class,
         "task": record.task,
         "references": len(record.references),
+        "editable": record.editable,
+        "edited_at": record.edited_at,
     }
 
 
@@ -153,6 +169,7 @@ def keep(
     given: dict,
     references=None,
     task: str = "",
+    fields: tuple = (),
 ) -> Record | None:
     """Remember what this node just produced."""
     if node_id is None:
@@ -165,6 +182,7 @@ def keep(
         at=time.time(),
         task=task or str(given.get("task") or ""),
         references=list(references or ()),
+        fields=tuple(fields or ()),
     )
     LAST[str(node_id)] = record
     log.info(
@@ -173,6 +191,54 @@ def keep(
     )
     announce(node_id, summary(record))
     return record
+
+
+def rewrite(node_id, text: str) -> Record | None:
+    """Replace the answer this node is holding with one a person has edited.
+
+    The sections are split out of the new text rather than carried over: they
+    were made from the text as it was, and a record whose sections no longer
+    match its own prose would hand one thing to the first output and something
+    else to the rest. Whatever the node kept past its sections -- a reference
+    block, a list of captions -- belongs to the run and not to the prose, so it
+    stays exactly as it was.
+
+    None when there is nothing to edit, or when the record is not a prompt.
+    """
+    record = recall(node_id)
+    if record is None or not record.editable:
+        return None
+    sections = split_fields(text, record.fields, fallback=body_field(record.fields))
+    record.outputs = (
+        (text,)
+        + tuple(sections.get(name, "") for name in record.fields)
+        + tuple(record.outputs[1 + len(record.fields):])
+    )
+    record.edited_at = time.time()
+    log.info(
+        "[minimax_h3_rewriter.memory] %s #%s: the kept answer was edited, now %d characters",
+        record.node_class, node_id, len(record.text),
+    )
+    announce(node_id, summary(record))
+    return record
+
+
+def stamp(node_id, enabled: bool) -> str:
+    """What this node would hand back out of its own memory, as a cache key.
+
+    The same reason ``library.stamp`` exists: editing the kept answer changes
+    none of the node's inputs, so without this ComfyUI would go on serving the
+    answer from before the edit and nothing on screen would say why.
+
+    Empty while 'repeat_last' is off, which is when the memory is not consulted
+    at all -- so caching is left exactly as it was for every ordinary run.
+    """
+    if not enabled or node_id is None:
+        return ""
+    record = recall(node_id)
+    if record is None:
+        return ""
+    return f"|{record.at:.6f}/{record.edited_at:.6f}"
 
 
 def repeat(node_id, node_class: str, enabled: bool, given: dict, label: str = "prompt"):

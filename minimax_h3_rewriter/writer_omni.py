@@ -38,6 +38,7 @@ from comfy_api.latest import io
 from . import (
     aspect,
     catalog,
+    checks,
     discovery,
     engine,
     library,
@@ -74,7 +75,7 @@ from .nodes import (
     _resolve_adapter,
     _verify_base_model,
 )
-from .progress import NodeProgress
+from .progress import NodeProgress, refuse
 from .prompt_template_omni import (
     REF_TASK,
     TASKS,
@@ -190,22 +191,40 @@ def arrange(supplied: dict | None, raw_layout: str) -> tuple[list[Reference], in
     return found, len(connected) - len(found)
 
 
-def check_task(task: str, references: list[Reference]) -> None:
+def check_task(task: str, references: list[Reference], node_id=None) -> None:
     """Refuse a task the connected references cannot serve, before anything loads.
 
     The alternative is a multi-gigabyte download followed by llama.cpp counting
     media markers and refusing, or -- worse on the frame tasks -- a rewrite that
-    quietly aligns the wrong picture with the end of the video.
+    quietly aligns the wrong picture with the end of the video. Every refusal is
+    said as a toast as well, since the console is not where anyone looks first.
     """
     task = normalize_task(task)
     kinds = [reference.kind for reference in references]
 
     if task == REF_TASK:
         if not references:
-            raise ValueError(
+            refuse(
+                node_id,
                 "Ref2AV describes how a target video reuses reference assets, so it needs at "
                 "least one. Connect a picture, a clip or a sound -- or pick T2AV, which is the "
-                "task written from text alone."
+                "task written from text alone.",
+            )
+        counts = {}
+        for kind in kinds:
+            word = checks.KIND_TAG.get(kind)
+            if word:
+                counts[word] = counts.get(word, 0) + 1
+        too_many = checks.over_capacity(task, counts)
+        if too_many:
+            listed = "; and ".join(
+                f"{count} {word.lower()}(s) where {task} takes {allowed}"
+                for word, count, allowed in too_many
+            )
+            refuse(
+                node_id,
+                f"There are {listed} switched on. H3 has nowhere to put the extra "
+                f"ones, so switch those squares off.",
             )
         return
 
@@ -214,20 +233,22 @@ def check_task(task: str, references: list[Reference]) -> None:
     heard = [KIND_NAMES[kind] for kind in kinds if kind != "image"]
 
     if heard:
-        raise ValueError(
+        refuse(
+            node_id,
             f"{task.upper()} is written from pictures alone, and {', '.join(heard)} "
             f"{'is' if len(heard) == 1 else 'are'} connected. Switch those squares off, or "
-            f"pick Ref2AV, which is the task that takes clips and sound."
+            f"pick Ref2AV, which is the task that takes clips and sound.",
         )
     if pictures != wanted:
-        raise ValueError(
+        refuse(
+            node_id,
             f"{task.upper()} is written from {wanted} picture(s), and {pictures} "
             f"{'is' if pictures == 1 else 'are'} switched on. "
             + (
                 "Switch the extra squares off, or pick Ref2AV."
                 if pictures > wanted
                 else "Connect the missing picture, or switch its square back on."
-            )
+            ),
         )
 
 
@@ -505,7 +526,7 @@ def rewrite_omni(
     """
     wanted = normalize_task(task)
     references = list(references or [])
-    check_task(wanted, references)
+    check_task(wanted, references, progress.node_id)
     choice = _resolve_model_choice(model)
 
     if choice.fmt == FORMAT_TRANSFORMERS:
@@ -764,13 +785,16 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
 
     @classmethod
     def fingerprint_inputs(cls, library_pick="", repeat_last=False, **kwargs):
-        """Whether the saved prompt this node is pointed at has changed since.
+        """Whether what this node would hand back without running has changed.
 
-        A record edited in the library window changes none of this node's
-        inputs, so without this the answer would come back out of ComfyUI's
-        execution cache, still saying what it said before the edit.
+        Neither a record edited in the library window nor an answer edited in
+        the node's own memory touches a single input, so without this the
+        answer would come back out of ComfyUI's execution cache, still saying
+        what it said before the edit.
         """
-        return library.stamp(library_pick, repeat_last)
+        return library.stamp(library_pick, repeat_last) + memory.stamp(
+            getattr(getattr(cls, "hidden", None), "unique_id", None), repeat_last
+        )
 
     @classmethod
     def execute(
@@ -877,6 +901,7 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
                 (item.slot, item.kind, item.value) for item in connected
             ),
             task=wanted,
+            fields=ALL_FIELDS,
         )
         return io.NodeOutput(*outputs)
 

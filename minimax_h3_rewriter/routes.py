@@ -54,6 +54,49 @@ def register() -> None:
         record = memory.recall(request.query.get("node") or "")
         return web.json_response({"text": record.text if record else ""})
 
+    @routes.post(f"{PREFIX}/memory/rewrite")
+    async def memory_rewrite(request):
+        """Replace the answer a node is holding with an edited one."""
+        body = await request.json()
+        record = memory.rewrite(body.get("node") or "", body.get("text") or "")
+        if record is None:
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": (
+                        "this node is not holding an answer to edit - run it once, and what "
+                        "it writes is what can be edited"
+                    ),
+                },
+                status=404,
+            )
+        return web.json_response({"ok": True, "record": memory.summary(record)})
+
+    @routes.post(f"{PREFIX}/memory/check")
+    async def memory_check(request):
+        """The self-check over text being edited, read against the run that made it.
+
+        The record supplies the task, the duration and the references the answer
+        was written for, so an edit is judged by the rules the run was. The twin
+        of ``library/check``, for the half of the memory that lives in RAM.
+        """
+        body = await request.json()
+        record = memory.recall(body.get("node") or "")
+        return web.json_response(
+            {
+                "issues": library.inspect(
+                    body.get("text") or "",
+                    task=record.task if record else "",
+                    duration=(record.about if record else {}).get("duration"),
+                    having=(
+                        [item.get("kind") for item in record.references]
+                        if record is not None
+                        else None
+                    ),
+                )
+            }
+        )
+
     @routes.get(f"{PREFIX}/references")
     async def node_references(request):
         """The thumbnails one node is holding -- what a save would put in the file."""

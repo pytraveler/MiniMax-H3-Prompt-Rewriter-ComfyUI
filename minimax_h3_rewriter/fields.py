@@ -31,6 +31,19 @@ def _pattern(names: tuple[str, ...]) -> re.Pattern:
     return cached
 
 
+def body_field(names: tuple[str, ...] = OUTPUT_FIELDS) -> str:
+    """Which of these fields carries the description everything else hangs off.
+
+    Ref2VA calls it detailed_description and puts three shorter fields in front
+    of it; every other task has it first. The shot list, the dialogue and the
+    word count are all read out of this one, so the rule lives here rather than
+    being restated wherever a set of names is split.
+    """
+    if "detailed_description" in names:
+        return "detailed_description"
+    return names[0] if names else ""
+
+
 def split_sections(
     text: str,
     names: tuple[str, ...] = OUTPUT_FIELDS,

@@ -1140,6 +1140,45 @@ system message. That branch also skips Qwen's thinking suppression, so the empty
 `<think>` block is written for you. It is Qwen-shaped by construction — on Gemma
 or anything else, stay on `plain`.
 
+### MiniMax-H3 Prompt Check
+
+Every other node here writes a prompt and then checks what it wrote. This one
+only checks, and takes the text on a socket — so a prompt that came from
+somewhere else is read by exactly the rules a rewrite from this pack is read by,
+and split into the same fields. Anything that produces MiniMax-H3 prose can feed
+it: another pack's node, a text file loaded into the graph, a prompt found
+online, or something typed into the widget.
+
+No model is loaded and nothing is generated. The run costs a few milliseconds.
+
+![The MiniMax-H3 Prompt Check node: an options socket and three reference sockets labelled ref_0, ref_1 and ref_2 down the left, two of them connected; nine outputs down the right — prompt first, then integrated_multimodal_description, subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape and non_diegetic_music, with findings last. Below them a tall empty prompt box, a task dropdown reading Ref2VA, a duration of 9.9, and one button: Save the last prompt](docs/node_prompt_check.png)
+
+*The outputs are the Universal Writer's, minus the two that describe its own captioning work — so a check node drops into a graph where a writer stood, and a writer drops in where a check node stood. The duration is 9.9 rather than a round number because it is whatever the prompt was written for, not what this pack's own writers allow. And there is one button rather than two: the node runs no model, so there is nothing to repeat and nothing to point at the library — but what it read, it can keep.*
+
+| Input | What it is for |
+| --- | --- |
+| `prompt` | The text to read. It leaves the first output untouched, so the node can sit in the middle of a graph without changing what reaches the generator. |
+| `task` | Which task the prompt was written for. It decides which fields the answer should have, how many references of each kind it may cite, and whether an alignment line belongs at the top — so getting it wrong makes the reading wrong rather than absent. |
+| `duration` | How long the target video is. Cut times are read against it. The range here is wider than the writers allow, because prompts collected elsewhere often are. |
+| `references` | Optional. Only their kind and number are read — nothing is decoded and no captioner runs. With them connected, the reading also covers what the text cites against what is actually here; with nothing connected those two rules are skipped and the rest still apply. |
+| `options` | Optional, and only `self_check` is read from it: how much is announced on screen. |
+
+The outputs are the prompt, the seven fields any task can fill, and `findings` —
+the same block the node writes under itself, `!` for a warning and `-` for a
+note, empty when there is nothing to say. That output always carries everything
+found: `self_check` governs what the nodes announce during a run, which is a
+question about noise, and wiring the output is asking.
+
+**Save the last prompt** is on it as well, so a prompt that arrived from
+elsewhere and read clean can go into [the prompt library](#the-prompt-library)
+under a name, a description and groups, exactly like one this pack wrote.
+
+One reading is worth expecting. Most prompts written for H3 by hand are prose:
+no field labels, no shot list, no tags. Read as `T2VA` such a text is reported
+as missing its fields and its `[Shot 1]`, and that is a true reading rather than
+a fault — a prompt like that is an *instruction to a rewriter*, not a finished
+H3 answer. Feed it to one of the writers and check what comes back instead.
+
 ### Repeating the last answer
 
 Every writer, rewriter and captioner has a `repeat_last` switch. Turn it on and
@@ -1161,6 +1200,29 @@ node, the ComfyUI console, and the switch's own tooltip, which carries the time
 it was kept, its length and the opening of the text. When the inputs no longer
 match the ones that produced it, all three say so rather than pretending nothing
 changed. `bypass` still wins over it.
+
+**And what is kept can be edited.** `Edit the last prompt` opens the answer the
+node is holding in the same editor [the library](#the-prompt-library) uses: the
+prompt in a box you can write in, read as you type by the rules the run was read
+by. Saving splits the fields out of the new text again, so the section outputs
+stay in step with the prose; everything the node kept past its fields belongs to
+the run rather than to the prose and stays as it was. Nothing reaches disk — this
+is the session store, and an edit worth keeping is saved to the library
+afterwards.
+
+The node hands the edited text on the next time `repeat_last` asks it to. An edit
+changes none of the node's inputs, so each writer reports what it is holding as
+its `IS_CHANGED`, the same way it reports the library record it is pointed at;
+without that ComfyUI would go on serving the answer from before the edit.
+
+**Whether the edit reaches the output is a separate question**, and the editor
+answers it before you type. A saved prompt wins over the node's own answer, so
+while one is chosen the edit waits behind it — clear the choice, or edit that
+record instead. With `repeat_last` off the next run simply writes a new answer
+over the edit, and on a greedy seed with unchanged inputs that new answer is
+byte for byte the old one, which looks exactly like being ignored; so saving
+switches `repeat_last` on when nothing else is in the way, the same way choosing
+a library record does.
 
 On the two caption nodes it is the caption that is kept, not the assembled block:
 the numbering belongs to the chain, so the line is written again around whatever
@@ -1204,8 +1266,12 @@ it looks at:
 *One deliberately bad run, read back. The `!` lines are warnings — things H3
 will likely misread; the `-` line is a note — something the guide merely
 suggests. The toast shows the first few findings; the full list sits in the
-caption under the node and in the console, where it survives the toast's eight
-seconds.*
+caption under the node and in the console, where it outlasts the toast however
+long the toast is given.*
+
+A refusal is the one thing the nodes do enforce, and it is said the same way: the
+sentence appears as a toast under **Stopped** before the exception goes up, so a
+run that halts does not look like it failed for no reason.
 
 Findings are said, never enforced: the answer ships exactly as written, because
 the model is sometimes right to bend a rule and only you know whether this is
@@ -1229,6 +1295,14 @@ with nothing for a connected asset. Those are about your wiring rather than the
 model's prose, so `self_check` does not cover them and they are always said.
 They were always in the caption and the console; now they are also impossible to
 miss.
+
+**Some of it happens before the run.** A task that cannot use what is connected
+has always been refused before any weights move — `I2VA` with two pictures, a
+clip wired into a frame task. `Ref2VA` now refuses the same way when the strip
+holds more than H3 can take: nine pictures, three clips, three sounds. It used to
+be described first and flagged afterwards, which cost a full captioning pass and
+a rewrite to learn something countable in advance. Subjects are counted apart
+from pictures, so a badge is often the whole fix.
 
 ### Acting on what it found
 

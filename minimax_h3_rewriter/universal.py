@@ -36,6 +36,7 @@ from comfy_api.latest import io
 
 from . import (
     aspect,
+    checks,
     clip_caption,
     guide_prompt,
     library,
@@ -66,7 +67,7 @@ from .nodes import (
     writer_choices,
 )
 from .multi_caption import _check_encoders
-from .progress import NodeProgress, announce
+from .progress import NodeProgress, announce, refuse
 
 log = logging.getLogger(__name__)
 
@@ -232,19 +233,37 @@ def arrange(supplied: dict | None, raw_layout: str) -> tuple[list[Asset], int]:
     return assets, skipped
 
 
-def refuse_mismatch(task: str, assets: list[Asset]) -> None:
+def refuse_mismatch(task: str, assets: list[Asset], node_id=None) -> None:
     """Stop before any weights move if the task and the strip disagree.
 
-    Both messages name the strip rather than the sockets, because the strip is
+    Every message names the strip rather than the sockets, because the strip is
     where the fix is: a reference that is in the way is switched off or given a
-    different badge, not unplugged.
+    different badge, not unplugged. Each one is also said as a toast on the way
+    out, since a refusal that only reaches the console is a run that looks like
+    it failed for no reason.
     """
     if task == REF_TASK:
         if not assets:
-            raise ValueError(
+            refuse(
+                node_id,
                 "Ref2VA writes about reference assets the target video reuses, so it needs at "
                 "least one. Connect an image, a clip or a sound and switch its square on in the "
-                "strip -- or pick a task that writes from text alone."
+                "strip -- or pick a task that writes from text alone.",
+            )
+        counts = {}
+        for asset in assets:
+            counts[asset.role] = counts.get(asset.role, 0) + 1
+        too_many = checks.over_capacity(task, counts)
+        if too_many:
+            listed = "; and ".join(
+                f"{count} {word.lower()}(s) where {task} takes {allowed}"
+                for word, count, allowed in too_many
+            )
+            refuse(
+                node_id,
+                f"The strip has {listed}. H3 has nowhere to put the extra ones, so "
+                f"switch those squares off -- or, for a picture, click its badge to "
+                f"call it a subject, which is counted separately.",
             )
         return
 
@@ -254,15 +273,17 @@ def refuse_mismatch(task: str, assets: list[Asset]) -> None:
         return
 
     if len(pictures) > wanted:
-        raise ValueError(
+        refuse(
+            node_id,
             f"{task} is written from {wanted} picture(s), and the strip has {len(pictures)}. "
             f"Switch the extra squares off, or click a badge to call one a subject or a clip: "
-            f"those are reference material rather than frames, and they are not counted here."
+            f"those are reference material rather than frames, and they are not counted here.",
         )
-    raise ValueError(
+    refuse(
+        node_id,
         f"{task} is written from {wanted} picture(s), and the strip has {len(pictures)}. "
         f"Connect the missing image, switch its square back on, or click a badge to turn a "
-        f"subject back into a picture."
+        f"subject back into a picture.",
     )
 
 
@@ -495,13 +516,16 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
 
     @classmethod
     def fingerprint_inputs(cls, library_pick="", repeat_last=False, **kwargs):
-        """Whether the saved prompt this node is pointed at has changed since.
+        """Whether what this node would hand back without running has changed.
 
-        A record edited in the library window changes none of this node's
-        inputs, so without this the answer would come back out of ComfyUI's
-        execution cache, still saying what it said before the edit.
+        Neither a record edited in the library window nor an answer edited in
+        the node's own memory touches a single input, so without this the
+        answer would come back out of ComfyUI's execution cache, still saying
+        what it said before the edit.
         """
-        return library.stamp(library_pick, repeat_last)
+        return library.stamp(library_pick, repeat_last) + memory.stamp(
+            getattr(getattr(cls, "hidden", None), "unique_id", None), repeat_last
+        )
 
     @classmethod
     def execute(
@@ -582,7 +606,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                 announce(cls.hidden.unique_id, [("warn", note)])
             assets = []
         else:
-            refuse_mismatch(task, assets)
+            refuse_mismatch(task, assets, cls.hidden.unique_id)
 
         captions: list[str] = []
         empty: list[str] = []
@@ -711,6 +735,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         memory.keep(
             cls.hidden.unique_id, "MiniMaxH3UniversalWriter", outputs, given,
             references=snapshot.take((item.slot, item.kind, item.value) for item in assets),
+            fields=ALL_FIELDS,
         )
         return io.NodeOutput(*outputs)
 

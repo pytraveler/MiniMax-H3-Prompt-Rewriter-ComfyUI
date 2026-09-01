@@ -1125,14 +1125,17 @@ class MiniMaxH3PromptRewriter:
     CATEGORY = CATEGORY
 
     @classmethod
-    def IS_CHANGED(cls, library_pick="", repeat_last=False, **kwargs):
-        """Whether the saved prompt this node is pointed at has changed since.
+    def IS_CHANGED(cls, library_pick="", repeat_last=False, unique_id=None, **kwargs):
+        """Whether what this node would hand back without running has changed.
 
-        A record edited in the library window changes none of this node's
-        inputs, so without this the answer would come back out of ComfyUI's
-        execution cache, still saying what it said before the edit.
+        Neither a record edited in the library window nor an answer edited in
+        the node's own memory touches a single input, so without this the
+        answer would come back out of ComfyUI's execution cache, still saying
+        what it said before the edit.
         """
-        return library.stamp(library_pick, repeat_last)
+        return library.stamp(library_pick, repeat_last) + memory.stamp(
+            unique_id, repeat_last
+        )
 
     def rewrite(
         self,
@@ -1198,7 +1201,10 @@ class MiniMaxH3PromptRewriter:
             )
         outputs = (text,) + tuple(fields[name] for name in OUTPUT_FIELDS)
         if not saved:
-            memory.keep(unique_id, "MiniMaxH3PromptRewriter", outputs, given, task="T2VA")
+            memory.keep(
+                unique_id, "MiniMaxH3PromptRewriter", outputs, given,
+                task="T2VA", fields=OUTPUT_FIELDS,
+            )
         return outputs
 
 
@@ -1571,14 +1577,17 @@ class MiniMaxH3GuidedWriter:
     CATEGORY = CATEGORY
 
     @classmethod
-    def IS_CHANGED(cls, library_pick="", repeat_last=False, **kwargs):
-        """Whether the saved prompt this node is pointed at has changed since.
+    def IS_CHANGED(cls, library_pick="", repeat_last=False, unique_id=None, **kwargs):
+        """Whether what this node would hand back without running has changed.
 
-        A record edited in the library window changes none of this node's
-        inputs, so without this the answer would come back out of ComfyUI's
-        execution cache, still saying what it said before the edit.
+        Neither a record edited in the library window nor an answer edited in
+        the node's own memory touches a single input, so without this the
+        answer would come back out of ComfyUI's execution cache, still saying
+        what it said before the edit.
         """
-        return library.stamp(library_pick, repeat_last)
+        return library.stamp(library_pick, repeat_last) + memory.stamp(
+            unique_id, repeat_last
+        )
 
     def write(
         self,
@@ -1641,7 +1650,9 @@ class MiniMaxH3GuidedWriter:
             )
         outputs = (text,) + tuple(sections[name] for name in OUTPUT_FIELDS)
         if not saved:
-            memory.keep(unique_id, "MiniMaxH3GuidedWriter", outputs, given)
+            memory.keep(
+                unique_id, "MiniMaxH3GuidedWriter", outputs, given, fields=OUTPUT_FIELDS
+            )
         return outputs
 
 
@@ -1752,14 +1763,17 @@ class MiniMaxH3GuidedWriterRef:
     CATEGORY = CATEGORY
 
     @classmethod
-    def IS_CHANGED(cls, library_pick="", repeat_last=False, **kwargs):
-        """Whether the saved prompt this node is pointed at has changed since.
+    def IS_CHANGED(cls, library_pick="", repeat_last=False, unique_id=None, **kwargs):
+        """Whether what this node would hand back without running has changed.
 
-        A record edited in the library window changes none of this node's
-        inputs, so without this the answer would come back out of ComfyUI's
-        execution cache, still saying what it said before the edit.
+        Neither a record edited in the library window nor an answer edited in
+        the node's own memory touches a single input, so without this the
+        answer would come back out of ComfyUI's execution cache, still saying
+        what it said before the edit.
         """
-        return library.stamp(library_pick, repeat_last)
+        return library.stamp(library_pick, repeat_last) + memory.stamp(
+            unique_id, repeat_last
+        )
 
     def write(
         self,
@@ -1824,7 +1838,8 @@ class MiniMaxH3GuidedWriterRef:
         outputs = (text,) + tuple(sections[name] for name in REF_OUTPUT_FIELDS)
         if not saved:
             memory.keep(
-                unique_id, "MiniMaxH3GuidedWriterRef", outputs, given, task="Ref2VA"
+                unique_id, "MiniMaxH3GuidedWriterRef", outputs, given,
+                task="Ref2VA", fields=REF_OUTPUT_FIELDS,
             )
         return outputs
 

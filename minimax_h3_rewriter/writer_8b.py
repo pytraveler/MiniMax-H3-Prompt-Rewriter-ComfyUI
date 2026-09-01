@@ -561,14 +561,17 @@ class MiniMaxH3PromptWriter8B:
     CATEGORY = CATEGORY
 
     @classmethod
-    def IS_CHANGED(cls, library_pick="", repeat_last=False, **kwargs):
-        """Whether the saved prompt this node is pointed at has changed since.
+    def IS_CHANGED(cls, library_pick="", repeat_last=False, unique_id=None, **kwargs):
+        """Whether what this node would hand back without running has changed.
 
-        A record edited in the library window changes none of this node's
-        inputs, so without this the answer would come back out of ComfyUI's
-        execution cache, still saying what it said before the edit.
+        Neither a record edited in the library window nor an answer edited in
+        the node's own memory touches a single input, so without this the
+        answer would come back out of ComfyUI's execution cache, still saying
+        what it said before the edit.
         """
-        return library.stamp(library_pick, repeat_last)
+        return library.stamp(library_pick, repeat_last) + memory.stamp(
+            unique_id, repeat_last
+        )
 
     def rewrite(
         self,
@@ -648,6 +651,7 @@ class MiniMaxH3PromptWriter8B:
             references=snapshot.take(
                 (("first_frame", "image", first_frame), ("last_frame", "image", last_frame))
             ),
+            fields=OUTPUT_FIELDS,
         )
         return outputs
 
