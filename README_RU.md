@@ -65,6 +65,44 @@
 
 Если у вас 8 ГБ видеопамяти, переходите сразу к [нодам писателя](#minimax-h3-prompt-writer-t2vai2vafl2val2va).
 
+## Содержание
+
+- [Что потребуется до установки](#что-потребуется-до-установки)
+- [Установка](#установка)
+  - [Готовый воркфлоу](#готовый-воркфлоу)
+- [Ноды](#ноды)
+  - [MiniMax-H3 Prompt Rewriter](#minimax-h3-prompt-rewriter)
+  - [MiniMax-H3 Prompt Rewriter 8B (sees frames)](#minimax-h3-prompt-rewriter-8b-sees-frames)
+  - [MiniMax-H3 Prompt Rewriter Omni (sees and hears)](#minimax-h3-prompt-rewriter-omni-sees-and-hears)
+  - [MiniMax-H3 Universal Rewriter](#minimax-h3-universal-rewriter)
+  - [MiniMax-H3 Rewriter Options](#minimax-h3-rewriter-options)
+  - [MiniMax-H3 Prompt Writer (T2VA/I2VA/FL2VA/L2VA)](#minimax-h3-prompt-writer-t2vai2vafl2val2va)
+  - [MiniMax-H3 Prompt Writer (Ref2VA)](#minimax-h3-prompt-writer-ref2va)
+  - [MiniMax-H3 Universal Writer](#minimax-h3-universal-writer)
+  - [MiniMax-H3 Reference Caption](#minimax-h3-reference-caption)
+  - [MiniMax-H3 Multi Reference Caption](#minimax-h3-multi-reference-caption)
+  - [Описание моделью, которая у ComfyUI уже загружена](#описание-моделью-которая-у-comfyui-уже-загружена)
+  - [MiniMax-H3 Guide Prompt (any LLM)](#minimax-h3-guide-prompt-any-llm)
+  - [MiniMax-H3 Prompt Check](#minimax-h3-prompt-check)
+  - [Повтор последнего ответа](#повтор-последнего-ответа)
+  - [Ответ проверяется](#ответ-проверяется)
+  - [Действие по находкам](#действие-по-находкам)
+  - [Библиотека промтов](#библиотека-промтов)
+  - [Руководства скачиваются, а не поставляются в паке](#руководства-скачиваются-а-не-поставляются-в-паке)
+  - [Список моделей](#список-моделей)
+- [Куда кладутся веса](#куда-кладутся-веса)
+- [Использовать уже имеющуюся модель](#использовать-уже-имеющуюся-модель)
+  - [Сборки поменьше](#сборки-поменьше)
+  - [Если нода сообщает, что пакета не хватает](#если-нода-сообщает-что-пакета-не-хватает)
+- [Самая лёгкая загрузка вообще без установки](#самая-лёгкая-загрузка-вообще-без-установки)
+- [GGUF — ещё легче, и ставить ничего не надо](#gguf--ещё-легче-и-ставить-ничего-не-надо)
+  - [Прогресс на ноде](#прогресс-на-ноде)
+  - [Переменные окружения](#переменные-окружения)
+  - [Языки](#языки)
+- [Замечания](#замечания)
+- [Благодарности](#благодарности)
+- [Лицензия](#лицензия)
+
 ## Что потребуется до установки
 
 Путь через LoRA — это языковая модель на 27 миллиардов параметров, а не лёгкий

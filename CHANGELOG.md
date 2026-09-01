@@ -43,6 +43,10 @@ the same thing; the release workflow refuses a tag that disagrees with
 
 ### Changed
 
+- **The READMEs have a contents list.** Two thousand lines with no map is a
+  page you scroll rather than read. It covers every section and subsection,
+  under the anchors GitHub actually gives them.
+
 - **Ref2VA refuses an over-full strip before anything loads.** A task that
   cannot use what is connected was already refused before any weights moved;
   the reference task was not, because it has no fixed picture count -- only a

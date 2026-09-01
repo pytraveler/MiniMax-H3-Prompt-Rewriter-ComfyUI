@@ -64,6 +64,44 @@ needs none of it at all — a clip and a sound reach it as themselves.
 
 If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2vai2vafl2val2va).
 
+## Contents
+
+- [What you need before installing](#what-you-need-before-installing)
+- [Install](#install)
+  - [Example workflow](#example-workflow)
+- [Nodes](#nodes)
+  - [MiniMax-H3 Prompt Rewriter](#minimax-h3-prompt-rewriter)
+  - [MiniMax-H3 Prompt Rewriter 8B (sees frames)](#minimax-h3-prompt-rewriter-8b-sees-frames)
+  - [MiniMax-H3 Prompt Rewriter Omni (sees and hears)](#minimax-h3-prompt-rewriter-omni-sees-and-hears)
+  - [MiniMax-H3 Universal Rewriter](#minimax-h3-universal-rewriter)
+  - [MiniMax-H3 Rewriter Options](#minimax-h3-rewriter-options)
+  - [MiniMax-H3 Prompt Writer (T2VA/I2VA/FL2VA/L2VA)](#minimax-h3-prompt-writer-t2vai2vafl2val2va)
+  - [MiniMax-H3 Prompt Writer (Ref2VA)](#minimax-h3-prompt-writer-ref2va)
+  - [MiniMax-H3 Universal Writer](#minimax-h3-universal-writer)
+  - [MiniMax-H3 Reference Caption](#minimax-h3-reference-caption)
+  - [MiniMax-H3 Multi Reference Caption](#minimax-h3-multi-reference-caption)
+  - [Captioning with a model ComfyUI already has loaded](#captioning-with-a-model-comfyui-already-has-loaded)
+  - [MiniMax-H3 Guide Prompt (any LLM)](#minimax-h3-guide-prompt-any-llm)
+  - [MiniMax-H3 Prompt Check](#minimax-h3-prompt-check)
+  - [Repeating the last answer](#repeating-the-last-answer)
+  - [The answer is checked](#the-answer-is-checked)
+  - [Acting on what it found](#acting-on-what-it-found)
+  - [The prompt library](#the-prompt-library)
+  - [The guides are fetched, not bundled](#the-guides-are-fetched-not-bundled)
+  - [The model list](#the-model-list)
+- [Where the weights go](#where-the-weights-go)
+- [Using a model you already have](#using-a-model-you-already-have)
+  - [Smaller repackings](#smaller-repackings)
+  - [If the node says a package is missing](#if-the-node-says-a-package-is-missing)
+- [Smallest download without any extra install](#smallest-download-without-any-extra-install)
+- [GGUF — smaller still, and nothing to install](#gguf--smaller-still-and-nothing-to-install)
+  - [Progress on the node](#progress-on-the-node)
+  - [Environment variables](#environment-variables)
+  - [Languages](#languages)
+- [Notes](#notes)
+- [Credits](#credits)
+- [Licence](#licence)
+
 ## What you need before installing
 
 The LoRA route is a 27-billion-parameter language model, not a small helper.
