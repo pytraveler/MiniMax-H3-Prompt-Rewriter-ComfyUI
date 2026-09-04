@@ -46,8 +46,10 @@ PARTS = ("description", "soundscape", "music")
 KIND = "preset"
 
 NOTICE = (
-    "The prompts and the clips they describe are ostris's work, carried here with credit "
-    "and not relicensed. The frames were cut from those clips by this pack."
+    "The prompts and the clips they describe are ostris's work, carried here with the "
+    "author's permission and with credit. The prompts are his own and effectively MIT; the "
+    "clips are MiniMax-H3 output, whose licence forbids using it to train models, and the "
+    "frames cut from them by this pack carry that same restriction."
 )
 
 _catalog: dict | None = None

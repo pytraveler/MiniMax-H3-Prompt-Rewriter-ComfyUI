@@ -1368,14 +1368,16 @@ A caution worth stating once: these are T2VA prompts for a five-second clip.
 Nothing stops you handing one to a task with references or to a much longer
 video, and nothing will complain, but the text describes neither.
 
-The prompts and the clips they describe are ostris's work, carried here with
-credit and not relicensed —
+The prompts and the clips they describe are ostris's work, carried here with the
+author's permission and with credit —
 [ostris/minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k). The
-shooting-style and subject tags are the
+prompts are his own and effectively MIT; the clips are MiniMax-H3 output, whose
+licence forbids using it to train models, and the frames cut from them here carry
+that same restriction. The shooting-style and subject tags are the
 [H3 Atlas](https://cohub.live/baize/video-altas/w/h3-atlas)'s reading of that
-collection; the frames were cut from those clips here. All thousand pass [the
-self-check](#the-answer-is-checked) with nothing to report, which is one way of
-saying what the format of a good H3 prompt actually looks like.
+collection. All thousand pass [the self-check](#the-answer-is-checked) with
+nothing to report, which is one way of saying what the format of a good H3 prompt
+actually looks like.
 
 ### Repeating the last answer
 
@@ -2187,7 +2189,7 @@ maintained.
 | Video/audio generator | [MiniMaxAI/MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) |
 | Prompt-writing guides | [MiniMaxAI/MiniMax-H3 `docs/`](https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/main/docs) — fetched at run time, see above |
 | Inference framework | [ModelTC/LightX2V](https://github.com/ModelTC/LightX2V) |
-| Bundled prompts, and the clips they describe | [ostris/minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k) — carried here with credit and not relicensed |
+| Bundled prompts, and the clips they describe | [ostris/minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k) — used with the author's permission; the prompts are effectively MIT, the clips and the frames cut from them are MiniMax-H3 output and may not be used to train models |
 | Shooting-style and subject tags for them | [H3 Atlas](https://cohub.live/baize/video-altas/w/h3-atlas) |
 
 The prompt templates in `minimax_h3_rewriter/prompt_template.py` and

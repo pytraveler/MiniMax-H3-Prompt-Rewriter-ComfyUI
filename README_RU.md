@@ -1341,13 +1341,16 @@ huggingface.co, а если тот не отвечает — hf-mirror.com, ад
 никто не мешает, и никто не пожалуется, — но текст не описывает ни того, ни
 другого.
 
-Промты и клипы, которые они описывают, — работа ostris, перенесённая сюда с
-указанием авторства и без перелицензирования:
-[ostris/minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k). Теги
-манеры съёмки и темы — прочтение подборки проектом
-[H3 Atlas](https://cohub.live/baize/video-altas/w/h3-atlas); кадры нарезаны из тех
-клипов здесь. Вся тысяча проходит [самопроверку](#ответ-проверяется) без единой
-находки — что заодно и есть ответ на вопрос, как выглядит хороший промт для H3.
+Промты и клипы, которые они описывают, — работа ostris, перенесённая сюда с его
+разрешения и с указанием авторства:
+[ostris/minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k).
+Промты — его собственные и по сути MIT; клипы — выход MiniMax-H3, а та
+лицензия запрещает обучать на нём модели, и нарезанные из них здесь
+кадры несут то же ограничение. Теги манеры съёмки и темы — прочтение
+подборки проектом
+[H3 Atlas](https://cohub.live/baize/video-altas/w/h3-atlas). Вся тысяча проходит
+[самопроверку](#ответ-проверяется) без единой находки — что заодно и есть
+ответ на вопрос, как выглядит хороший промт для H3.
 
 ### Повтор последнего ответа
 
@@ -2159,7 +2162,7 @@ python tools/locales.py fill ru       дописать недостающие к
 | Генератор видео и звука | [MiniMaxAI/MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) |
 | Руководства по написанию промтов | [MiniMaxAI/MiniMax-H3 `docs/`](https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/main/docs) — скачиваются при работе, см. выше |
 | Фреймворк инференса | [ModelTC/LightX2V](https://github.com/ModelTC/LightX2V) |
-| Встроенные промты и клипы, которые они описывают | [ostris/minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k) — перенесены сюда с указанием авторства и без перелицензирования |
+| Встроенные промты и клипы, которые они описывают | [ostris/minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k) — с разрешения автора; промты по сути MIT, а клипы и нарезанные из них кадры — выход MiniMax-H3, обучать на нём модели нельзя |
 | Теги манеры съёмки и темы к ним | [H3 Atlas](https://cohub.live/baize/video-altas/w/h3-atlas) |
 
 Шаблоны промптов в `minimax_h3_rewriter/prompt_template.py` и
