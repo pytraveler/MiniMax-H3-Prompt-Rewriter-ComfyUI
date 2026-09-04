@@ -284,7 +284,11 @@ def run(
 
     ``on_text`` is called with the whole text so far every time more arrives, so
     a caller can drive a progress bar and a preview without re-implementing the
-    incremental decode.
+    incremental decode. Returning something truthy from it ends the run and
+    keeps the text written up to that point -- which is how a caller stops a
+    child that has started repeating itself rather than writing. It is not a
+    failure and nothing is raised: the half-answer is the useful half, and the
+    caller is the one that decided to stop.
     """
     log.info("[minimax_h3_rewriter.runner.run] %s", " ".join(command))
 
@@ -302,6 +306,7 @@ def run(
     pieces: list[str] = []
     was_interrupted = False
     finished = False
+    stopped = False
     stalled = ""
     last_output = time.monotonic()
 
@@ -331,8 +336,13 @@ def run(
             if not text:
                 continue
             pieces.append(text)
-            if on_text is not None:
-                on_text("".join(pieces))
+            if on_text is not None and on_text("".join(pieces)):
+                stopped = True
+                log.info(
+                    "[minimax_h3_rewriter.runner.run] %s stopped early by the caller",
+                    os.path.basename(binary),
+                )
+                break
         pieces.append(decoder.decode(b"", final=True))
     finally:
         if was_interrupted or stalled or process.poll() is None:
@@ -354,7 +364,7 @@ def run(
             f"the queue. Last output from it:\n{tail}"
         )
 
-    if process.returncode != 0:
+    if process.returncode != 0 and not stopped:
         tail = "\n".join(stderr_text.splitlines()[-STDERR_TAIL:])
         raise ChildFailed(
             f"{os.path.basename(binary)} exited with code {process.returncode}.\n{tail}"

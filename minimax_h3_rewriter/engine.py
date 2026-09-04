@@ -14,6 +14,7 @@ import logging
 import os
 import threading
 import time
+from contextlib import contextmanager
 
 from . import devices
 from .constants import MERGE_AUTO, MERGE_OFF, MERGE_ON, normalize_seed
@@ -449,6 +450,61 @@ def _interrupt_criteria():
     return Interrupted()
 
 
+LOOP_PERIODS = (1, 2, 3, 4, 6, 8, 12, 16, 24, 32)
+LOOP_REPEATS = 6
+LOOP_AFTER = 96
+LOOP_EVERY = 16
+
+
+def _loop_criteria(written_from: int):
+    """Stop a generation that has started cycling instead of writing.
+
+    Counted in tokens rather than in text, which is not a preference: the
+    streamer hands the consumer loop only what is up to the last space
+    (``TextStreamer.put`` cuts at ``rfind(' ') + 1``), so a run of "000000..."
+    with no space in it arrives as nothing at all. A text-level watch would be
+    blind to exactly the worst case; the ids are always there.
+
+    Trips on six exact repeats of a block of up to 32 tokens, checked every
+    sixteenth step and never before 96 tokens are written. The window is taken
+    from the answer alone -- a period is skipped once it would reach back into
+    the prompt -- so nothing the guide repeats can start the count.
+
+    Stopping is all it does. The truncated answer goes back to the caller like
+    any other, the self-check names the loop, and what to do about it stays
+    with the person.
+    """
+    from transformers import StoppingCriteria
+
+    torch = _torch()
+
+    class Looping(StoppingCriteria):
+        def __init__(self):
+            self.fired = False
+
+        def __call__(self, input_ids, scores, **kwargs):
+            written = int(input_ids.shape[1]) - written_from
+            if not self.fired and written >= LOOP_AFTER and written % LOOP_EVERY == 0:
+                row = input_ids[0]
+                for period in LOOP_PERIODS:
+                    need = period * LOOP_REPEATS
+                    if need > written:
+                        break
+                    block = row[-need:].reshape(LOOP_REPEATS, period)
+                    if bool((block == block[0]).all()):
+                        self.fired = True
+                        log.info(
+                            "[minimax_h3_rewriter.generate] stopping at a %d-token "
+                            "repetition after %d tokens", period, written,
+                        )
+                        break
+            return torch.full(
+                (input_ids.shape[0],), self.fired, dtype=torch.bool, device=input_ids.device
+            )
+
+    return Looping()
+
+
 def _was_interrupted() -> bool:
     try:
         import comfy.model_management as mm
@@ -464,6 +520,44 @@ def _to_device(inputs, model):
     if hasattr(inputs, "to"):
         return inputs.to(device)
     return {name: tensor.to(device) for name, tensor in inputs.items()}
+
+
+@contextmanager
+def _full_precision_attention():
+    """Generate with attention reduced in fp32, whatever the host process set.
+
+    ComfyUI turns ``allow_fp16_bf16_reduction_math_sdp`` on for every process it
+    starts. It is a fair trade for a diffusion model -- the shorter accumulator
+    is faster and the picture does not notice -- but this is a 7B language model
+    writing a thousand tokens of structured text, and it does notice: on a card
+    where the flash and memory-efficient kernels decline the shape and torch
+    falls back to the math one, the same prompt that writes a full three-field
+    answer with the reduction off dies after four tokens with it on. Greedy
+    decoding has no way back from a first token chosen wrong, which is why the
+    damage is a wrecked answer rather than a slightly worse one.
+
+    Whether a machine sees it at all therefore depends on which attention kernel
+    its GPU gets -- the same build is clean where flash or cuDNN answers, and
+    that is why the reports disagree about which quantization is at fault. It is
+    not the quantization: nf4, int8 and bfloat16 all break, and all three write
+    the same answer once the reduction is off.
+
+    The switch is process-wide, so it goes back exactly as it was found. What
+    ComfyUI does with its own models stays ComfyUI's business.
+    """
+    torch = _torch()
+    backend = torch.backends.cuda
+    try:
+        allowed = backend.fp16_bf16_reduction_math_sdp_allowed()
+    except AttributeError:
+        yield
+        return
+
+    backend.allow_fp16_bf16_reduction_math_sdp(False)
+    try:
+        yield
+    finally:
+        backend.allow_fp16_bf16_reduction_math_sdp(allowed)
 
 
 def _run(
@@ -503,11 +597,12 @@ def _run(
         generation_kwargs.update(temperature=temperature, top_p=top_p, top_k=top_k)
 
     streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
+    looping = _loop_criteria(int(inputs["input_ids"].shape[1]))
     call_kwargs = {
         **inputs,
         **generation_kwargs,
         "streamer": streamer,
-        "stopping_criteria": StoppingCriteriaList([_interrupt_criteria()]),
+        "stopping_criteria": StoppingCriteriaList([_interrupt_criteria(), looping]),
     }
 
     failure: list[BaseException] = []
@@ -528,20 +623,22 @@ def _run(
         progress.update(0, "Generating\n0 tokens")
 
     thread = threading.Thread(target=worker, name="minimax-h3-rewriter", daemon=True)
-    thread.start()
 
     pieces: list[str] = []
     produced = 0
-    for piece in streamer:
-        if not piece:
-            continue
-        pieces.append(piece)
-        produced += 1
-        if progress is not None:
-            tail = "".join(pieces)[-PREVIEW_TAIL:]
-            progress.update(produced, f"Generating · {produced}/{max_new_tokens} tokens\n{tail}")
+    with _full_precision_attention():
+        thread.start()
 
-    thread.join()
+        for piece in streamer:
+            if not piece:
+                continue
+            pieces.append(piece)
+            produced += 1
+            if progress is not None:
+                tail = "".join(pieces)[-PREVIEW_TAIL:]
+                progress.update(produced, f"Generating · {produced}/{max_new_tokens} tokens\n{tail}")
+
+        thread.join()
     if failure:
         raise failure[0]
     if _was_interrupted():
@@ -550,7 +647,10 @@ def _run(
         raise mm.InterruptProcessingException()
 
     if progress is not None:
-        progress.finish(f"Done · {produced} tokens")
+        if looping.fired:
+            progress.finish(f"Stopped at a repetition · {produced} tokens")
+        else:
+            progress.finish(f"Done · {produced} tokens")
     return "".join(pieces).strip()
 
 

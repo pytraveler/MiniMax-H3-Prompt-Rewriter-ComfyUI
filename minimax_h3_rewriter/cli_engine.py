@@ -26,7 +26,7 @@ import logging
 import os
 import tempfile
 
-from . import chat_template, devices, llamacpp, runner
+from . import chat_template, checks, devices, llamacpp, runner
 from .constants import normalize_seed
 from .progress import NodeProgress
 
@@ -161,13 +161,18 @@ def generate(
             f"Loading {name}{note}\nllama.cpp binary{where}, {gpu_layers} GPU layers", force=True
         )
 
-    def report(whole: str) -> None:
-        if progress is None:
-            return
-        progress.update(
-            min(len(whole) / CHARS_PER_TOKEN, float(max_new_tokens)),
-            f"Generating · {len(whole)} chars\n{whole[-PREVIEW_TAIL:]}",
-        )
+    def report(whole: str) -> bool:
+        """Drive the bar, and say whether this answer has started cycling.
+
+        The check runs whether or not there is a progress bar to draw: a run
+        that has begun repeating is worth stopping on a headless call too.
+        """
+        if progress is not None:
+            progress.update(
+                min(len(whole) / CHARS_PER_TOKEN, float(max_new_tokens)),
+                f"Generating · {len(whole)} chars\n{whole[-PREVIEW_TAIL:]}",
+            )
+        return bool(checks.looping(whole))
 
     try:
         text, stderr_text = runner.run(command, binary, report)

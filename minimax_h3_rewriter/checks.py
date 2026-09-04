@@ -78,8 +78,55 @@ SHOT = re.compile(r"\[Shot\s+(\d+)\]\s*(?:[Aa]t\s+(\d{1,2}):(\d{2}(?:\.\d{1,3})?
 DIALOGUE = re.compile(r"<d>(.*?)</d>", re.DOTALL)
 LANGUAGE = re.compile(r"^\s*\[[A-Za-z]")
 SUBJECT = re.compile(r"<Subject\s+(\d+)>")
+RUN = re.compile(r"([^\s])\1{79,}")
 
 REF_WORDS = (350, 500)
+
+LOOP_TAIL = 1500
+LOOP_PERIOD = 120
+LOOP_SPAN = 240
+LOOP_REPEATS = 4
+
+
+def _repeated_suffix(tail: str, period: int) -> int:
+    """How many trailing characters of ``tail`` repeat with this period.
+
+    Zero when the last block does not repeat at all, otherwise the length of
+    the run including the block that starts it.
+    """
+    span = 0
+    limit = len(tail) - period
+    while span < limit and tail[-1 - span] == tail[-1 - span - period]:
+        span += 1
+    return span + period if span else 0
+
+
+def looping(text: str):
+    """The unit an answer has got stuck repeating and how far it runs, or None.
+
+    Two shapes, and it is worth being honest that they are two shapes rather
+    than a general theory of degeneration: a fixed unit cycling at the end,
+    which is "shot 1 shot 1 shot 1", and a single character running long, which
+    is "000000000". A sentence that comes back every 137 characters is past
+    ``LOOP_PERIOD`` and will not be found; a drift like "shot 1 shot 2 shot 3"
+    has no exact period and will not be found either.
+
+    The thresholds are what keeps a legitimately repetitive format out of it.
+    Four repeats of a block over at least 240 characters is far past anything
+    the prompt guides ask for: the retention analysis lists ``<Subject 1>``,
+    ``<Subject 2>`` and so on, and the changing digit breaks the period after
+    sixty-odd characters. The smallest period wins, so a run of one character
+    is reported as that character rather than as some multiple of it.
+    """
+    tail = (text or "").rstrip()[-LOOP_TAIL:]
+    for period in range(1, min(LOOP_PERIOD, len(tail) // LOOP_REPEATS) + 1):
+        span = _repeated_suffix(tail, period)
+        if span >= LOOP_SPAN and span // period >= LOOP_REPEATS:
+            return tail[-period:], span
+    match = RUN.search(text or "")
+    if match:
+        return match.group(1), len(match.group(0))
+    return None
 
 
 def over_capacity(task, counts: dict) -> list[tuple]:
@@ -133,6 +180,7 @@ def review(
     body = str(sections.get(body_field(names)) or "")
 
     issues = []
+    issues += _loop(text)
     issues += _fields(sections, names)
     issues += _alignment(text, wanted)
     issues += _shots(body, duration)
@@ -164,6 +212,32 @@ def describe(issues) -> str:
         ("! " if issue.level == WARN else "- ") + issue.message for issue in issues
     ]
     return "\n".join([head] + lines)
+
+
+def _loop(text) -> list:
+    """A generation that stopped writing and started cycling.
+
+    Said first, and said as a fact about the text rather than as advice: this
+    rule also reads prompts a person typed into the library and prompts the
+    check node was handed, where no model ran and there is no knob to turn.
+    What to do about it depends on which engine produced it, and that is the
+    caller's business, not this module's.
+    """
+    found = looping(text)
+    if not found:
+        return []
+    unit, span = found
+    shown = " ".join(unit.split())[:40]
+    if not shown:
+        return []
+    return [
+        Issue(
+            WARN,
+            f'the answer gets stuck repeating "{shown}" for {span:,} characters '
+            "and gets no further",
+            "loop",
+        )
+    ]
 
 
 def _fields(sections, names) -> list:

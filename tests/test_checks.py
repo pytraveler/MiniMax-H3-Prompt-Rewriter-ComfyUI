@@ -304,3 +304,50 @@ def test_restore_alignment_leaves_an_empty_answer_alone():
 def test_final_shot_reads_the_highest_number():
     assert repair.final_shot("[Shot 1] a [Shot 4] At 00:03.000, b [Shot 2] back to") == 4
     assert repair.final_shot("no shots here") == 1
+
+
+def test_a_character_flood_is_a_loop():
+    unit, span = checks.looping("A cinematic shot. " + "0" * 1800)
+    assert unit == "0" and span == checks.LOOP_TAIL
+
+
+def test_a_repeating_phrase_is_a_loop():
+    found = checks.looping("Opening line. " + "shot 1 " * 300)
+    assert found and found[0].strip() == "shot 1"
+
+
+def test_a_loop_is_reported_before_the_missing_fields():
+    issues = review("[Shot 1] A street. " + "0" * 400, overall_soundscape="")
+    assert issues[0].code == "loop"
+    assert 'repeating "0"' in issues[0].message
+
+
+def test_legitimate_repetition_is_not_a_loop():
+    assert checks.looping("\n".join(
+        f"<Subject {n}>: fully_preserved - kept." for n in range(1, 10)
+    )) is None
+    assert checks.looping("\n".join(
+        f"[Shot {n}] At 00:0{n}.000, the camera cuts to a close-up." for n in range(1, 9)
+    )) is None
+    assert checks.looping("") is None
+
+
+def test_a_clean_answer_still_says_nothing():
+    body = "[Shot 1] A quiet street. [Shot 2] At 00:04.000, the camera cuts to a door."
+    assert review(body) == []
+
+
+def test_a_loop_is_worth_one_more_attempt():
+    sections = {"integrated_multimodal_description": "[Shot 1] a " + "0" * 400,
+                "overall_soundscape": "", "non_diegetic_music": ""}
+    text = "integrated_multimodal_description: " + sections["integrated_multimodal_description"]
+    issues = checks.review(text, sections, FIELDS, task="T2VA")
+    assert any(issue.code == "loop" for issue in issues)
+    assert not repair.hopeless(issues, sections, FIELDS)
+
+
+def test_the_loop_rule_never_quotes_the_loop_back():
+    issues = [checks.Issue(checks.WARN, 'gets stuck repeating "0" for 400 characters', "loop")]
+    said = repair.instruct(issues)
+    assert "0" * 4 not in said
+    assert "Write each field once" in said

@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from . import checks
 
-FIXABLE = ("fields", "shots", "dialogue", "tags", "subjects")
+FIXABLE = ("fields", "shots", "dialogue", "tags", "subjects", "loop")
 
 HOPELESS_SHARE = 0.5
 
@@ -36,11 +36,20 @@ INSTRUCTION = (
     "again, obeying every one of them:"
 )
 
+RULES = {
+    "loop": (
+        "Write each field once and then stop. Do not repeat a word, a phrase "
+        "or a run of characters."
+    ),
+}
+
 
 def hopeless(issues, sections, names) -> bool:
     """Is this answer past the point where asking again could help?"""
     if any(issue.code == "empty" for issue in issues):
         return True
+    if any(issue.code == "loop" for issue in issues):
+        return False
     if not names:
         return False
     absent = sum(1 for name in names if not str((sections or {}).get(name) or "").strip())
@@ -57,11 +66,16 @@ def instruct(issues) -> str:
 
     Phrased as rules to obey rather than as complaints about an answer the
     model is not being shown: it is writing afresh, not editing.
+
+    ``RULES`` is where a finding's own wording will not do. The loop finding
+    quotes the text the model got stuck on, and quoting "000000" back into the
+    prompt is handing it the cycle to continue; the rule says what to do
+    instead and names nothing.
     """
     wanted = fixable(issues)
     if not wanted:
         return ""
-    lines = "\n".join(f"- {issue.message}" for issue in wanted)
+    lines = "\n".join(f"- {RULES.get(issue.code, issue.message)}" for issue in wanted)
     return f"\n\n{INSTRUCTION}\n{lines}"
 
 

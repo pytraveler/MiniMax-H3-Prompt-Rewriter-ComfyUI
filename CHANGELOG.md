@@ -6,6 +6,78 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.19.1 - 2026-09-04
+
+### Fixed
+
+- **The rewriter could answer with four broken tokens instead of a prompt, and
+  the quantization was not why.** Asked to rewrite "The cat" on the Omni LoRA at
+  int8, it returned nine characters -- the word "int", a line break, the word
+  "Human" -- and stopped. The same node, the same seed, the same weights now
+  return 1,871 characters with all three fields in place.
+
+  What did it was a torch setting that belongs to the process rather than to
+  this pack. Importing `comfy.model_management` turns
+  `allow_fp16_bf16_reduction_math_sdp` on for everything running in ComfyUI, and
+  unconditionally -- it is not one of the `--fast` options and there is no way
+  to opt a model out of it from a workflow. It is a fair trade for a diffusion
+  model, which does not notice the shorter accumulator. A 7B language model
+  writing a page of structured text notices: where the flash and
+  memory-efficient attention kernels decline the shape and torch falls back to
+  the math one, the reduction lands in bf16, the first decoding step is decided
+  wrong, and greedy decoding has no way back from a first token chosen wrong.
+
+  It was never the quantization. nf4, int8 and bfloat16 all break with the
+  switch on, and all three write the same answer with it off; nf4 was the milder
+  half of the same fault, which is where the run-together words and the
+  unclosed brackets came from. It also explains why accounts of it disagreed:
+  whether a machine sees it at all depends on which attention kernel its GPU is
+  given for the shape, and a card that gets flash or cuDNN never does.
+
+  Generation now holds the reduction off and puts the switch back exactly as it
+  was found, so ComfyUI's own models keep the setting it wants for them. This
+  covers all three Transformers adapters, 27B, 8B and Omni. The GGUF engines
+  were never affected -- llama.cpp uses its own kernels and reads none of this.
+
+### Added
+
+- **A generation that starts repeating is stopped, and the self-check says so.**
+  Nothing here could see a cycle before. An answer that began writing "0000000"
+  or "shot 1 shot 1 shot 1" ran on to `max_new_tokens`, and was then handed
+  downstream as a finished prompt; the only sign of it was the self-check
+  naming the fields the answer never reached, alongside advice about the
+  temperature that greedy decoding does not read.
+
+  On the Transformers engine the watch is on the tokens rather than on the
+  text: six exact repeats of a block of up to 32 tokens, read every sixteenth
+  step and never before 96 tokens are written, with the window taken from the
+  answer alone so nothing the guide repeats can start the count. It has to be
+  the ids, because the streamer hands over only what is up to the last space --
+  a run with no space in it arrives as nothing at all, which is exactly the
+  worst case.
+
+  The llama.cpp engines get the same watch in text, which is sound there
+  because llama-cpp-python hands over each token's text as it comes. `runner.run`
+  and the server's `ask` now honour what their text callback returns, so a
+  caption that starts repeating is cut short as well. Stopping is not a failure:
+  the text written up to that point is kept and returned like any other.
+
+  The self-check then names it -- `the answer gets stuck repeating "shot 1" for
+  1,500 characters and gets no further` -- as a fact and not as advice, because
+  the same rule reads prompts typed into the library, where no model ran and
+  there is no knob to turn. Two shapes are covered rather than a general theory
+  of the thing: a fixed unit of up to 120 characters cycling at the end, and a
+  single character running 80 times or more. A sentence that comes back every
+  137 characters is past that, and a drift like "shot 1 shot 2 shot 3" has no
+  exact period.
+
+  `fix_once` no longer gives up on it. Two missing fields out of three used to
+  read as an answer too far from the format to be worth rescuing; on a cycle it
+  is the opposite -- the model held the format perfectly until the moment it
+  started repeating -- so one more attempt is worth spending. What goes back
+  into the prompt is a rule and never the finding itself, since quoting
+  "000000" back at the model is handing it the cycle to carry on.
+
 ## 0.19.0 - 2026-09-04
 
 ### Added

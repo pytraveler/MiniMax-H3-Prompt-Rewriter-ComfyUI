@@ -41,7 +41,7 @@ import contextlib
 import logging
 import os
 
-from . import devices, discovery, llamacpp, media, runner, server_engine
+from . import checks, devices, discovery, llamacpp, media, runner, server_engine
 from .constants import answer_only, normalize_seed
 from .progress import NodeProgress
 
@@ -451,12 +451,19 @@ def describe(
                 force=True,
             )
 
-        def report(whole: str) -> None:
+        def report(whole: str) -> bool:
+            """Drive the bar, and say whether this caption has started cycling.
+
+            The same callback goes to both ``server.ask`` and ``runner.run``,
+            and both honour the verdict, so a repeating caption is stopped
+            whichever of the two is answering.
+            """
             if progress is not None:
                 progress.update(
                     min(len(whole) / CHARS_PER_TOKEN, float(max_new_tokens)),
                     f"Describing · {len(whole)} chars\n{whole[-PREVIEW_TAIL:]}",
                 )
+            return bool(checks.looping(whole))
 
         try:
             if server is not None:

@@ -32,7 +32,7 @@ import os
 import sys
 import threading
 
-from . import chat_template, devices, gguf_meta, llamacpp
+from . import chat_template, checks, devices, gguf_meta, llamacpp
 from .constants import install_command, normalize_seed
 from .progress import NodeProgress
 
@@ -45,6 +45,8 @@ LORA_MODERN = "modern"
 LORA_LEGACY = "legacy"
 
 PREVIEW_TAIL = 280
+
+LOOP_EVERY = 32
 RELEASES_URL = "https://github.com/abetlen/llama-cpp-python/releases"
 WHEEL_RELEASE = "v0.3.34-vulkan"
 WHEEL_FILES = {
@@ -468,6 +470,7 @@ def generate(
     pieces: list[str] = []
     produced = 0
     interrupted = False
+    looped = False
     for chunk in stream:
         try:
             piece = chunk["choices"][0]["text"]
@@ -483,20 +486,32 @@ def generate(
         if _interrupted():
             interrupted = True
             break
+        if produced % LOOP_EVERY == 0 and checks.looping("".join(pieces)):
+            looped = True
+            log.info(
+                "[minimax_h3_rewriter.gguf.generate] stopping at a repetition after %d tokens",
+                produced,
+            )
+            break
 
-    if interrupted:
+    if interrupted or looped:
         close = getattr(stream, "close", None)
         if callable(close):
             try:
                 close()
             except Exception:
                 log.debug("[minimax_h3_rewriter.gguf.generate] stream close failed", exc_info=True)
+
+    if interrupted:
         import comfy.model_management as mm
 
         raise mm.InterruptProcessingException()
 
     if progress is not None:
-        progress.finish(f"Done · {produced} tokens")
+        if looped:
+            progress.finish(f"Stopped at a repetition · {produced} tokens")
+        else:
+            progress.finish(f"Done · {produced} tokens")
     return "".join(pieces).strip()
 
 

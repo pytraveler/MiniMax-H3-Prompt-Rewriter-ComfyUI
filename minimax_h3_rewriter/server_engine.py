@@ -315,6 +315,9 @@ class Server:
         is loaded and answering, so a request that goes wrong is the run's
         problem and not a reason to start over with the binary. Falling back
         mid-loop would also mean two captioners in one strip.
+
+        ``on_text`` follows ``runner.run``: called with the whole answer so far,
+        and returning something truthy ends it and keeps what was written.
         """
         body = request_body(
             instruction, attachments, seed, greedy, max_new_tokens,
@@ -339,8 +342,11 @@ class Server:
                     if not piece:
                         continue
                     pieces.append(piece)
-                    if on_text is not None:
-                        on_text("".join(pieces))
+                    if on_text is not None and on_text("".join(pieces)):
+                        log.info(
+                            "[minimax_h3_rewriter.server] answer stopped early by the caller"
+                        )
+                        break
         except urllib.error.HTTPError as error:
             detail = error.read().decode("utf-8", errors="replace")[:600]
             raise runner.ChildFailed(
