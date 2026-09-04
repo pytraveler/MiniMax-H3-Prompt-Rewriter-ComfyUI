@@ -63,13 +63,19 @@ consequence of which slot you happened to use. The 8B rewriter needs none of tha
 for its reference *frames*: connect the picture and it reads it. The Omni rewriter
 needs none of it at all — a clip and a sound reach it as themselves.
 
+And when the shortest way to a good prompt is somebody else's:
+[Prompt Presets](#minimax-h3-prompt-presets) hands over one of a thousand
+finished MiniMax-H3 prompts that ship inside the pack, narrowed by look and
+subject, each with the frame of the clip it was written for and that clip a click
+away. No model is loaded for it and nothing is downloaded.
+
 If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2vai2vafl2val2va).
 
 ## Contents
 
 - [What you need before installing](#what-you-need-before-installing)
 - [Install](#install)
-  - [Example workflow](#example-workflow)
+  - [Example workflows](#example-workflows)
 - [Nodes](#nodes)
   - [MiniMax-H3 Prompt Rewriter](#minimax-h3-prompt-rewriter)
   - [MiniMax-H3 Prompt Rewriter 8B (sees frames)](#minimax-h3-prompt-rewriter-8b-sees-frames)
@@ -86,6 +92,7 @@ If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2va
   - [MiniMax-H3 Guide Prompt (any LLM)](#minimax-h3-guide-prompt-any-llm)
   - [MiniMax-H3 Prompt Check](#minimax-h3-prompt-check)
   - [MiniMax-H3 Reference Adapter](#minimax-h3-reference-adapter)
+  - [MiniMax-H3 Prompt Presets](#minimax-h3-prompt-presets)
   - [Repeating the last answer](#repeating-the-last-answer)
   - [The answer is checked](#the-answer-is-checked)
   - [Acting on what it found](#acting-on-what-it-found)
@@ -146,16 +153,37 @@ python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\MiniMax-H3-Prom
 
 Or install it from the Comfy registry through ComfyUI-Manager.
 
-### Example workflow
+### Example workflows
 
-A ready workflow ships with the pack and appears in ComfyUI's template browser
+Six workflows ship with the pack and appear in ComfyUI's template browser
 (*Workflow → Browse Templates*) under this node pack's name once it is
-installed. It is built on the stock MiniMax-H3 templates from ComfyUI's own
-gallery — the Ref2VA and FL2VA branches — with the prompt side wired in ahead
-of each: a Universal Rewriter and a Universal Writer per branch, so both routes
-to a prompt are there to compare. The MiniMax-H3 checkpoints it names are the
+installed. Each is a card of its own and each runs on its own: nothing is
+bypassed on open, and there is no second branch to mute before pressing Run.
+
+| | Template | What it needs |
+|---|---|---|
+| 1 | **Write a prompt** — one line of an idea in, a full H3 audio-video description out | one 2.6 GB GGUF |
+| 2 | **Rewrite a prompt with the 27B LoRA** — the LightX2V adapter this pack is named after | one 15.7 GB GGUF |
+| 3 | **Write a prompt from references** — the writer describes your pictures and writes from what it saw | two GGUFs, 6 GB together |
+| 4 | **Ready-made prompts** — a thousand finished ones, picked in a browser with their frames | nothing at all |
+| 5 | **Prompt to video** — ComfyUI's text-to-video template with the writer in front of it | the MiniMax-H3 weights |
+| 6 | **References to video** — the same for Ref2VA, the pictures reaching writer and generator both | the MiniMax-H3 ref2va weights |
+
+The first four never load a MiniMax-H3 checkpoint: they end at the text, which
+is what most of this pack is for. The last two are ComfyUI's own gallery
+templates with the generator folded into a single subgraph box, so what is on
+screen is the prompt side plus one node — the checkpoints they name are the
 ones the stock templates use, and ComfyUI offers to download any that are
 missing.
+
+Every one carries a **Read me first** note: what it does, what it downloads,
+what to set before pressing Run, and where to go next. The image loaders in 3
+and 6 ship **empty** on purpose — a file name saved into a template points at
+something your machine does not have — so choose your own pictures first.
+
+The card pictures the browser draws beside each name come from
+`python tools/template_cards.py`, which writes them as `<name>.jpg` next to the
+workflow, where the browser looks for them.
 
 For a community take, [axiomgraph's workflows](https://github.com/axiomgraph/ComfyUIWorkflow)
 pair the Omni rewriter with FL2VA (GPL-3.0, and they use a few extra node
@@ -1294,6 +1322,61 @@ not per input: it rewrites the shape of *every* argument the node receives. On a
 writer it would change how the prompt, the duration and the options arrive. So it
 lives here, on a node that has nothing else to lose by it.
 
+### MiniMax-H3 Prompt Presets
+
+A thousand finished MiniMax-H3 prompts ship inside the pack, and this node hands
+one of them on. Press **Pick a preset** and the browser opens: twenty shooting
+styles, twenty subjects, the shape of the frame, the number of shots and whether
+anyone speaks, all as tags that narrow the thousand down, with a search box over
+the words themselves. Each row carries the frame of the clip the prompt was
+written for — click it and the clip plays.
+
+They are finished T2VA prompts in the format the writers here produce, the same
+three labelled fields, which makes them useful in two directions. Wire `prompt`
+at the generator and it is used as it stands; wire it into a writer's own
+`prompt` and it is the starting point for a rewrite. That choice is a wire rather
+than a widget, which is why this is a node of its own.
+
+![The MiniMax-H3 Prompt Presets node beside a Show Any node. Eight outputs run down the right of the preset node, prompt first and source last. A preset widget reads 000014; under it two buttons, "Pick a preset" and "Save to the library"; under those the frame of the clip — a motorcycle courier on a sun-bleached desert highway — beside the whole prompt, its three labelled fields legible in full. The prompt output is wired to the Show Any node, which prints the same three fields as plain text. The run took 0.030s](docs/node_prompt_presets.png)
+
+*The preset is on the node rather than behind a dialog: the frame of the clip it was written for and the whole of its text are on the face of it before anything is run. The run itself took thirty milliseconds and loaded nothing — what came out of `prompt` is what the node had been showing all along.*
+
+| Output | What it is |
+| --- | --- |
+| `prompt` | The whole thing, three labelled fields, exactly as a writer here would have produced it. |
+| `integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music` | The same three, separately. |
+| `seconds`, `width`, `height` | The clip the prompt was written for. Every one of them is about five seconds, and the shot times inside the text are written against that. |
+| `source` | Its number, both addresses the clip can be watched at, and who is owed the credit — for wiring into a text preview when a workflow is going somewhere else. |
+
+**Nothing is downloaded, at install or during a run.** The prompts, their tags
+and one 256-pixel frame each come to 6 MB inside the pack; they are read off disk
+and unpacked the first time something asks, so a session that never opens the
+browser pays nothing, and a run takes single-digit milliseconds. The one thing
+that reaches the network is the clip in the preview, and only when somebody
+clicks a frame: huggingface.co first, hf-mirror.com when that does not answer,
+which is the address that answers from mainland China. Without a connection the
+frames are still there and only the video is missing.
+
+**Save to the library** puts a copy in one of your own prompt sets, through the
+same editor the library uses — name, description, groups, and the self-check
+running as you type. From that point it is an ordinary record: editable, filed
+under your own groups, and available to every writer through the library window.
+The copy says in its description where it came from. The bundled preset is not
+touched by any of it.
+
+A caution worth stating once: these are T2VA prompts for a five-second clip.
+Nothing stops you handing one to a task with references or to a much longer
+video, and nothing will complain, but the text describes neither.
+
+The prompts and the clips they describe are ostris's work, carried here with
+credit and not relicensed —
+[ostris/minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k). The
+shooting-style and subject tags are the
+[H3 Atlas](https://cohub.live/baize/video-altas/w/h3-atlas)'s reading of that
+collection; the frames were cut from those clips here. All thousand pass [the
+self-check](#the-answer-is-checked) with nothing to report, which is one way of
+saying what the format of a good H3 prompt actually looks like.
+
 ### Repeating the last answer
 
 Every writer, rewriter and captioner has a `repeat_last` switch. Turn it on and
@@ -2104,6 +2187,8 @@ maintained.
 | Video/audio generator | [MiniMaxAI/MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) |
 | Prompt-writing guides | [MiniMaxAI/MiniMax-H3 `docs/`](https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/main/docs) — fetched at run time, see above |
 | Inference framework | [ModelTC/LightX2V](https://github.com/ModelTC/LightX2V) |
+| Bundled prompts, and the clips they describe | [ostris/minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k) — carried here with credit and not relicensed |
+| Shooting-style and subject tags for them | [H3 Atlas](https://cohub.live/baize/video-altas/w/h3-atlas) |
 
 The prompt templates in `minimax_h3_rewriter/prompt_template.py` and
 `prompt_template_8b.py` are reproduced byte-for-byte from their adapter

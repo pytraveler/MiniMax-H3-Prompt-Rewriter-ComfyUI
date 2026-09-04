@@ -1,0 +1,422 @@
+{
+  "id": "e3f2b845-8f2c-4b5a-9caf-eac1029d3e7e",
+  "revision": 0,
+  "last_node_id": 193,
+  "last_link_id": 356,
+  "nodes": [
+    {
+      "id": 188,
+      "type": "MiniMaxH3PromptPresets",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        440,
+        620
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "preset",
+          "name": "preset",
+          "type": "STRING",
+          "widget": {
+            "name": "preset"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            352
+          ]
+        },
+        {
+          "localized_name": "integrated_multimodal_description",
+          "name": "integrated_multimodal_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "overall_soundscape",
+          "name": "overall_soundscape",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "non_diegetic_music",
+          "name": "non_diegetic_music",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "seconds",
+          "name": "seconds",
+          "type": "FLOAT",
+          "links": [
+            353
+          ]
+        },
+        {
+          "localized_name": "width",
+          "name": "width",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "height",
+          "name": "height",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "STRING",
+          "links": [
+            356
+          ]
+        }
+      ],
+      "title": "Pick a ready-made prompt",
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "a59888df88a69385d429b6865ea441e7844f49c9",
+        "Node name for S&R": "MiniMaxH3PromptPresets"
+      },
+      "widgets_values": [
+        "000042"
+      ]
+    },
+    {
+      "id": 189,
+      "type": "MiniMaxH3PromptCheck",
+      "pos": [
+        500,
+        0
+      ],
+      "size": [
+        390,
+        460
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "options",
+          "name": "options",
+          "shape": 7,
+          "type": "H3_REWRITER_OPTIONS",
+          "link": null
+        },
+        {
+          "label": "ref_0",
+          "localized_name": "references.ref_0",
+          "name": "references.ref_0",
+          "shape": 7,
+          "type": "IMAGE,VIDEO,AUDIO",
+          "link": null
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": 352
+        },
+        {
+          "localized_name": "task",
+          "name": "task",
+          "type": "COMBO",
+          "widget": {
+            "name": "task"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "duration",
+          "name": "duration",
+          "type": "FLOAT",
+          "widget": {
+            "name": "duration"
+          },
+          "link": 353
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            354
+          ]
+        },
+        {
+          "localized_name": "integrated_multimodal_description",
+          "name": "integrated_multimodal_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "subject_definitions",
+          "name": "subject_definitions",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "summary",
+          "name": "summary",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "retention_analysis",
+          "name": "retention_analysis",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "detailed_description",
+          "name": "detailed_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "overall_soundscape",
+          "name": "overall_soundscape",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "non_diegetic_music",
+          "name": "non_diegetic_music",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "findings",
+          "name": "findings",
+          "type": "STRING",
+          "links": [
+            355
+          ]
+        }
+      ],
+      "title": "Check it against the H3 rules",
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "a59888df88a69385d429b6865ea441e7844f49c9",
+        "Node name for S&R": "MiniMaxH3PromptCheck"
+      },
+      "widgets_values": [
+        "",
+        "T2VA",
+        10
+      ]
+    },
+    {
+      "id": 190,
+      "type": "PreviewAny",
+      "pos": [
+        940,
+        0
+      ],
+      "size": [
+        560,
+        500
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 354
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "The preset's prompt",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 191,
+      "type": "PreviewAny",
+      "pos": [
+        940,
+        540
+      ],
+      "size": [
+        560,
+        240
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 355
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "What the check found",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 192,
+      "type": "PreviewAny",
+      "pos": [
+        940,
+        820
+      ],
+      "size": [
+        560,
+        240
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 356
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Where this prompt came from",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 193,
+      "type": "MarkdownNote",
+      "pos": [
+        -680,
+        0
+      ],
+      "size": [
+        620,
+        1060
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Read me first",
+      "properties": {},
+      "widgets_values": [
+        "# 4 - Ready-made prompts\n\nA thousand finished MiniMax-H3 prompts ship inside this pack. Press\n**Pick a preset** and choose one in the browser -- filtered by shooting\nstyle, by subject, by shape or by words, each with the frame of the clip\nit was written for.\n\n## Nothing is loaded and nothing is downloaded\n\nNo model, no network, not on the first run either. The prompts and the\nthumbnails are files in the pack. The only thing that ever leaves your\nmachine is the clip preview, if you click a thumbnail to watch it -- it\nstreams from Hugging Face, with a mirror for viewers behind the wall.\n\n## What comes out\n\n`prompt` is the whole thing, ready for the generator. Beside it the node\nhands back the three sections separately, plus **seconds**, **width**\nand **height** -- the shape the clip was actually made at. Those are\nwired here into the check's `duration`, which is why it reads the cut\ntimes against the right length without anything being typed twice.\nWire them into a generator the same way.\n\n## Two ways to use one\n\n- **As it is.** Send `prompt` straight to MiniMax-H3 -- see\n  *5 - Prompt to video*.\n- **As a starting point.** Send it into a writer's own `prompt` and let\n  it be rewritten into something of your own.\n\n**Save the prompt** puts the one you picked into your own library, where\nyou can edit it and keep it beside the prompts you wrote yourself.\n\n## Whose these are\n\nThe prompts, and the clips they describe, are\n[ostris's minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k),\ncarried here with credit and not relicensed. The shooting-style and\nsubject tags are from the\n[H3 Atlas](https://cohub.live/baize/video-altas/w/h3-atlas). The frames\nwere cut from the clips by this pack -- one a clip, from the middle.\n\nThe **Where this prompt came from** output carries the number, both\naddresses the clip can be watched at, and the credit, so it can travel\nwith a render that leaves your machine."
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      352,
+      188,
+      0,
+      189,
+      2,
+      "STRING"
+    ],
+    [
+      353,
+      188,
+      4,
+      189,
+      4,
+      "FLOAT"
+    ],
+    [
+      354,
+      189,
+      0,
+      190,
+      0,
+      "STRING"
+    ],
+    [
+      355,
+      189,
+      8,
+      191,
+      0,
+      "STRING"
+    ],
+    [
+      356,
+      188,
+      7,
+      192,
+      0,
+      "STRING"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.8486,
+      "offset": [
+        750.7,
+        70.7
+      ]
+    },
+    "frontendVersion": "1.47.11"
+  },
+  "version": 0.4
+}

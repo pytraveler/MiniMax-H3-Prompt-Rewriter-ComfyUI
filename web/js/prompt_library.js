@@ -152,7 +152,7 @@ const STYLE = `
 
 const KIND_MARK = { image: "IMG", video: "VID", audio: "SND" };
 
-async function ask(url, body) {
+export async function ask(url, body) {
     const response = await api.fetchApi(url, {
         method: body ? "POST" : "GET",
         headers: body ? { "Content-Type": "application/json" } : undefined,
@@ -167,7 +167,7 @@ async function ask(url, body) {
     return { ok: response.ok, status: response.status, payload };
 }
 
-function element(tag, className, text) {
+export function element(tag, className, text) {
     const made = document.createElement(tag);
     if (className) made.className = className;
     if (text !== undefined) made.textContent = text;
@@ -176,7 +176,7 @@ function element(tag, className, text) {
 
 const OPEN = [];
 
-function frame(wide, { onClose, sticky } = {}) {
+export function frame(wide, { onClose, sticky } = {}) {
     installStyle(STYLE_ID, STYLE);
     const back = element("div", "mmxlib-back");
     const panel = element("div", "mmxlib-panel" + (wide ? " mmxlib-wide" : ""));
@@ -258,7 +258,7 @@ function spellShape(references) {
         .join(" + ");
 }
 
-async function copy(text, button) {
+export async function copy(text, button) {
     const before = button.textContent;
     try {
         await navigator.clipboard.writeText(text);
@@ -528,7 +528,7 @@ function provenance(record) {
         .join("  ·  ");
 }
 
-function openEdit(spec) {
+export function openEdit(spec) {
     return new Promise((resolve) => {
         let settled = false;
 
@@ -574,6 +574,8 @@ function openEdit(spec) {
             scroll.append(groups.chips, groups.box);
         }
 
+        if (spec.extra) scroll.appendChild(spec.extra);
+
         scroll.appendChild(element("label", "mmxlib-field", "Prompt"));
         const text = document.createElement("textarea");
         text.className = "mmxlib-prompt";
@@ -598,7 +600,7 @@ function openEdit(spec) {
         const row = element("div", "mmxlib-row");
         const problem = element("div", "mmxlib-problem");
         const cancel = element("button", "", "Cancel");
-        const save = element("button", "mmxlib-go", "Save changes");
+        const save = element("button", "mmxlib-go", spec.saveLabel || "Save changes");
         row.append(problem, cancel, save);
         panel.appendChild(row);
 

@@ -1,0 +1,717 @@
+{
+  "id": "e3f2b845-8f2c-4b5a-9caf-eac1029d3e7e",
+  "revision": 0,
+  "last_node_id": 179,
+  "last_link_id": 343,
+  "nodes": [
+    {
+      "id": 174,
+      "type": "MiniMaxH3PromptRewriter",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        400,
+        640
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "options",
+          "name": "options",
+          "shape": 7,
+          "type": "H3_REWRITER_OPTIONS",
+          "link": 339
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "COMBO",
+          "widget": {
+            "name": "model"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "resolution",
+          "name": "resolution",
+          "type": "COMBO",
+          "widget": {
+            "name": "resolution"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "duration",
+          "name": "duration",
+          "type": "INT",
+          "widget": {
+            "name": "duration"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "quantization",
+          "name": "quantization",
+          "type": "COMBO",
+          "widget": {
+            "name": "quantization"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "greedy",
+          "name": "greedy",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "greedy"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "keep_model_loaded",
+          "name": "keep_model_loaded",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "keep_model_loaded"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "aspect_ratio",
+          "name": "aspect_ratio",
+          "shape": 7,
+          "type": "STRING,COMBO",
+          "widget": {
+            "name": "aspect_ratio"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "bypass",
+          "name": "bypass",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "bypass"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "repeat_last",
+          "name": "repeat_last",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "repeat_last"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "library_pick",
+          "name": "library_pick",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "library_pick"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "rewritten_prompt",
+          "name": "rewritten_prompt",
+          "type": "STRING",
+          "links": [
+            340
+          ]
+        },
+        {
+          "localized_name": "integrated_multimodal_description",
+          "name": "integrated_multimodal_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "overall_soundscape",
+          "name": "overall_soundscape",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "non_diegetic_music",
+          "name": "non_diegetic_music",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Rewrite the prompt (27B + LightX2V LoRA)",
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "a59888df88a69385d429b6865ea441e7844f49c9",
+        "Node name for S&R": "MiniMaxH3PromptRewriter"
+      },
+      "widgets_values": [
+        "A lighthouse keeper climbs the spiral stairs at dawn while a storm builds outside.",
+        "Qwen3.6-27B GGUF Q4_K_M · 15.7 GB download · ~19 GB with the adapter, less if you offload fewer layers",
+        "16:9",
+        5,
+        "nf4",
+        true,
+        42,
+        "fixed",
+        false,
+        "",
+        false,
+        false,
+        ""
+      ]
+    },
+    {
+      "id": 175,
+      "type": "MiniMaxH3RewriterOptions",
+      "pos": [
+        -500,
+        0
+      ],
+      "size": [
+        420,
+        640
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "max_new_tokens",
+          "name": "max_new_tokens",
+          "type": "INT",
+          "widget": {
+            "name": "max_new_tokens"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "temperature",
+          "name": "temperature",
+          "type": "FLOAT",
+          "widget": {
+            "name": "temperature"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "top_p",
+          "name": "top_p",
+          "type": "FLOAT",
+          "widget": {
+            "name": "top_p"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "top_k",
+          "name": "top_k",
+          "type": "INT",
+          "widget": {
+            "name": "top_k"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "repetition_penalty",
+          "name": "repetition_penalty",
+          "type": "FLOAT",
+          "widget": {
+            "name": "repetition_penalty"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "attn_implementation",
+          "name": "attn_implementation",
+          "type": "COMBO",
+          "widget": {
+            "name": "attn_implementation"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "adapter",
+          "name": "adapter",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "adapter"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "use_lora",
+          "name": "use_lora",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "use_lora"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "merge_lora",
+          "name": "merge_lora",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "merge_lora"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "auto_download",
+          "name": "auto_download",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "auto_download"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "gpu_layers",
+          "name": "gpu_layers",
+          "shape": 7,
+          "type": "INT",
+          "widget": {
+            "name": "gpu_layers"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "n_ctx",
+          "name": "n_ctx",
+          "shape": 7,
+          "type": "INT",
+          "widget": {
+            "name": "n_ctx"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "gguf_runtime",
+          "name": "gguf_runtime",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "gguf_runtime"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "device",
+          "name": "device",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "device"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "llama_backend",
+          "name": "llama_backend",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "llama_backend"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "trust_remote_code",
+          "name": "trust_remote_code",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "trust_remote_code"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "prompt_file",
+          "name": "prompt_file",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "prompt_file"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "self_check",
+          "name": "self_check",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "self_check"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "fix_once",
+          "name": "fix_once",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "fix_once"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "options",
+          "name": "options",
+          "type": "H3_REWRITER_OPTIONS",
+          "links": [
+            339,
+            341
+          ]
+        }
+      ],
+      "title": "Options (optional -- unplug it and nothing changes)",
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "a59888df88a69385d429b6865ea441e7844f49c9",
+        "Node name for S&R": "MiniMaxH3RewriterOptions"
+      },
+      "widgets_values": [
+        2048,
+        0.7,
+        0.8,
+        20,
+        1.05,
+        "sdpa",
+        "lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA",
+        true,
+        "auto",
+        true,
+        -1,
+        8192,
+        "auto",
+        "auto",
+        "auto",
+        false,
+        "global",
+        "warnings and notes",
+        false
+      ]
+    },
+    {
+      "id": 176,
+      "type": "MiniMaxH3PromptCheck",
+      "pos": [
+        460,
+        0
+      ],
+      "size": [
+        390,
+        420
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "options",
+          "name": "options",
+          "shape": 7,
+          "type": "H3_REWRITER_OPTIONS",
+          "link": 341
+        },
+        {
+          "label": "ref_0",
+          "localized_name": "references.ref_0",
+          "name": "references.ref_0",
+          "shape": 7,
+          "type": "IMAGE,VIDEO,AUDIO",
+          "link": null
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": 340
+        },
+        {
+          "localized_name": "task",
+          "name": "task",
+          "type": "COMBO",
+          "widget": {
+            "name": "task"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "duration",
+          "name": "duration",
+          "type": "FLOAT",
+          "widget": {
+            "name": "duration"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            342
+          ]
+        },
+        {
+          "localized_name": "integrated_multimodal_description",
+          "name": "integrated_multimodal_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "subject_definitions",
+          "name": "subject_definitions",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "summary",
+          "name": "summary",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "retention_analysis",
+          "name": "retention_analysis",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "detailed_description",
+          "name": "detailed_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "overall_soundscape",
+          "name": "overall_soundscape",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "non_diegetic_music",
+          "name": "non_diegetic_music",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "findings",
+          "name": "findings",
+          "type": "STRING",
+          "links": [
+            343
+          ]
+        }
+      ],
+      "title": "Check it against the H3 rules",
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "a59888df88a69385d429b6865ea441e7844f49c9",
+        "Node name for S&R": "MiniMaxH3PromptCheck"
+      },
+      "widgets_values": [
+        "",
+        "T2VA",
+        5
+      ]
+    },
+    {
+      "id": 177,
+      "type": "PreviewAny",
+      "pos": [
+        900,
+        0
+      ],
+      "size": [
+        560,
+        480
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 342
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "The finished prompt",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 178,
+      "type": "PreviewAny",
+      "pos": [
+        900,
+        520
+      ],
+      "size": [
+        560,
+        240
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 343
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "What the check found",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 179,
+      "type": "MarkdownNote",
+      "pos": [
+        -1120,
+        0
+      ],
+      "size": [
+        580,
+        760
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Read me first",
+      "properties": {},
+      "widgets_values": [
+        "# 2 - Rewrite a prompt with the 27B LoRA\n\nThe node this pack is named after. It runs LightX2V's MiniMax-H3 prompt\nrewriter LoRA on Qwen3.6-27B -- an adapter trained on this exact job,\nwhich is why its prose reads like the prompts MiniMax ships.\n\n## What it needs\n\nA 27B model, fetched on the first run. The list starts at 10 GB and\nends at 52 GB; this template picks **GGUF Q4_K_M**, a 15.7 GB download\nthat wants about 19 GB of VRAM with the adapter attached. Nothing has\nto be installed for it -- without `llama-cpp-python` the node fetches\nthe official llama.cpp binaries by itself.\n\n**If it does not fit:** lower **gpu_layers** on the options node (-1 is\nall of them) and the rest runs on the CPU, slower. Or open\n*1 - Write a prompt*, which does the same job with a 2.6 GB model.\n\n## The options node\n\nUnplug it and nothing changes: every value on it is the default the\nnodes use anyway. It is there for the four things worth reaching for --\n**gpu_layers** to fit a smaller card, **device** to send the writer to\na second GPU, **self_check** to decide how much the nodes say out loud,\nand **fix_once** to let them repair what the check found instead of\nonly reporting it.\n\n## How to use it\n\n1. Put a short idea into **prompt**. One sentence is enough.\n2. Set **duration** to the length of the clip you are going to make --\n   in both nodes.\n3. Run. The rewrite comes out on the right.\n\nThe outputs match *1 - Write a prompt* one for one, so the two nodes\nare interchangeable anywhere in a graph."
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      339,
+      175,
+      0,
+      174,
+      0,
+      "H3_REWRITER_OPTIONS"
+    ],
+    [
+      340,
+      174,
+      0,
+      176,
+      2,
+      "STRING"
+    ],
+    [
+      341,
+      175,
+      0,
+      176,
+      0,
+      "H3_REWRITER_OPTIONS"
+    ],
+    [
+      342,
+      176,
+      0,
+      177,
+      0,
+      "STRING"
+    ],
+    [
+      343,
+      176,
+      8,
+      178,
+      0,
+      "STRING"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.7171,
+      "offset": [
+        1203.7,
+        303.4
+      ]
+    },
+    "frontendVersion": "1.47.11"
+  },
+  "version": 0.4
+}

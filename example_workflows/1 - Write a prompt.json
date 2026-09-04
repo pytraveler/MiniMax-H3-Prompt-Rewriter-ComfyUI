@@ -1,0 +1,484 @@
+{
+  "id": "e3f2b845-8f2c-4b5a-9caf-eac1029d3e7e",
+  "revision": 0,
+  "last_node_id": 173,
+  "last_link_id": 338,
+  "nodes": [
+    {
+      "id": 169,
+      "type": "MiniMaxH3GuidedWriter",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        400,
+        640
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "options",
+          "name": "options",
+          "shape": 7,
+          "type": "H3_REWRITER_OPTIONS",
+          "link": null
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "COMBO",
+          "widget": {
+            "name": "model"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "task",
+          "name": "task",
+          "type": "COMBO",
+          "widget": {
+            "name": "task"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "resolution",
+          "name": "resolution",
+          "type": "COMBO",
+          "widget": {
+            "name": "resolution"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "duration",
+          "name": "duration",
+          "type": "INT",
+          "widget": {
+            "name": "duration"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "greedy",
+          "name": "greedy",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "greedy"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "keep_model_loaded",
+          "name": "keep_model_loaded",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "keep_model_loaded"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "aspect_ratio",
+          "name": "aspect_ratio",
+          "shape": 7,
+          "type": "STRING,COMBO",
+          "widget": {
+            "name": "aspect_ratio"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "reference_material",
+          "name": "reference_material",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "reference_material"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "bypass",
+          "name": "bypass",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "bypass"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "system_prompt",
+          "name": "system_prompt",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "system_prompt"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "repeat_last",
+          "name": "repeat_last",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "repeat_last"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "library_pick",
+          "name": "library_pick",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "library_pick"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "rewritten_prompt",
+          "name": "rewritten_prompt",
+          "type": "STRING",
+          "links": [
+            336
+          ]
+        },
+        {
+          "localized_name": "integrated_multimodal_description",
+          "name": "integrated_multimodal_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "overall_soundscape",
+          "name": "overall_soundscape",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "non_diegetic_music",
+          "name": "non_diegetic_music",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Write the prompt",
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "a59888df88a69385d429b6865ea441e7844f49c9",
+        "Node name for S&R": "MiniMaxH3GuidedWriter"
+      },
+      "widgets_values": [
+        "A lighthouse keeper climbs the spiral stairs at dawn while a storm builds outside.",
+        "Qwen3.5-4B · 2.6 GB download · ~5 GB with the guide in context — smallest that still holds the format; start here on an 8 GB card",
+        "T2VA",
+        "16:9",
+        5,
+        true,
+        42,
+        "fixed",
+        false,
+        "",
+        "",
+        false,
+        "",
+        false,
+        ""
+      ]
+    },
+    {
+      "id": 170,
+      "type": "MiniMaxH3PromptCheck",
+      "pos": [
+        460,
+        0
+      ],
+      "size": [
+        390,
+        420
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "options",
+          "name": "options",
+          "shape": 7,
+          "type": "H3_REWRITER_OPTIONS",
+          "link": null
+        },
+        {
+          "label": "ref_0",
+          "localized_name": "references.ref_0",
+          "name": "references.ref_0",
+          "shape": 7,
+          "type": "IMAGE,VIDEO,AUDIO",
+          "link": null
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": 336
+        },
+        {
+          "localized_name": "task",
+          "name": "task",
+          "type": "COMBO",
+          "widget": {
+            "name": "task"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "duration",
+          "name": "duration",
+          "type": "FLOAT",
+          "widget": {
+            "name": "duration"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            337
+          ]
+        },
+        {
+          "localized_name": "integrated_multimodal_description",
+          "name": "integrated_multimodal_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "subject_definitions",
+          "name": "subject_definitions",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "summary",
+          "name": "summary",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "retention_analysis",
+          "name": "retention_analysis",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "detailed_description",
+          "name": "detailed_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "overall_soundscape",
+          "name": "overall_soundscape",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "non_diegetic_music",
+          "name": "non_diegetic_music",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "findings",
+          "name": "findings",
+          "type": "STRING",
+          "links": [
+            338
+          ]
+        }
+      ],
+      "title": "Check it against the H3 rules",
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "a59888df88a69385d429b6865ea441e7844f49c9",
+        "Node name for S&R": "MiniMaxH3PromptCheck"
+      },
+      "widgets_values": [
+        "",
+        "T2VA",
+        5
+      ]
+    },
+    {
+      "id": 171,
+      "type": "PreviewAny",
+      "pos": [
+        900,
+        0
+      ],
+      "size": [
+        560,
+        480
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 337
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "The finished prompt",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 172,
+      "type": "PreviewAny",
+      "pos": [
+        900,
+        520
+      ],
+      "size": [
+        560,
+        240
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 338
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "What the check found",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 173,
+      "type": "MarkdownNote",
+      "pos": [
+        -640,
+        0
+      ],
+      "size": [
+        580,
+        760
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Read me first",
+      "properties": {},
+      "widgets_values": [
+        "# 1 - Write a prompt\n\nTurns one line of an idea into a full MiniMax-H3 audio-video description:\nshot list, camera moves, the soundscape and the music.\n\n## What it needs\n\nOne small language model, fetched on the first run. `Qwen3.5-4B` is a\n2.6 GB download and writes inside about 5 GB of VRAM. Nothing to install.\n\n**No MiniMax-H3 video checkpoint is involved here.** This template only\nwrites the text. The generator is in templates 5 and 6.\n\n## How to use it\n\n1. Put a short idea into **prompt**. One sentence is enough.\n2. Set **duration** to the length of the clip you are going to make --\n   in both nodes. The shot list is built to fill exactly that.\n3. Run. The finished prompt comes out on the right.\n\nA bigger card writes better prose: **model** holds a 9B, a 12B and\nseveral 27B quants in the same list.\n\n## What the second node is for\n\n**Prompt Check** loads nothing and generates nothing. It reads the\nfinished text against the rules the H3 guides are written by -- shot\nnumbering, cut times against the duration, dialogue markup, reference\ntags -- and reports what it found. It never edits anything: what goes\nin comes out of `prompt` untouched, so it can sit anywhere in a graph.\n\n## Where to go next\n\n- **2 - Rewrite a prompt with the 27B LoRA** -- the LightX2V adapter\n  this pack is named after, for a 16 GB card and up.\n- **3 - Write a prompt from references** -- when the shot has to match\n  pictures you already have.\n- **4 - Ready-made prompts** -- a thousand finished ones, no model at all.\n- **5 - Prompt to video** -- this writer wired into MiniMax-H3 itself."
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      336,
+      169,
+      0,
+      170,
+      2,
+      "STRING"
+    ],
+    [
+      337,
+      170,
+      0,
+      171,
+      0,
+      "STRING"
+    ],
+    [
+      338,
+      170,
+      8,
+      172,
+      0,
+      "STRING"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.85,
+      "offset": [
+        710.6,
+        196.5
+      ]
+    },
+    "frontendVersion": "1.47.11"
+  },
+  "version": 0.4
+}

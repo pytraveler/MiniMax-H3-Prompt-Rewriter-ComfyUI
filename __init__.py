@@ -16,6 +16,7 @@ for _module_name, _label in (
     ("multi_caption", "Multi Reference Caption"),
     ("universal", "Universal Writer"),
     ("prompt_check", "Prompt Check"),
+    ("preset_node", "Prompt Presets"),
     ("reference_adapter", "Reference Adapter"),
     ("writer_omni", "Prompt Rewriter Omni"),
     ("universal_rewriter", "Universal Rewriter"),

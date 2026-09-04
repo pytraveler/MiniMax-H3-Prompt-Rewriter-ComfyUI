@@ -6,6 +6,82 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.19.0 - 2026-09-04
+
+### Added
+
+- **A thousand finished MiniMax-H3 prompts now come with the pack.** "MiniMax-H3
+  Prompt Presets" hands one of them on. The browser behind its button filters by
+  shooting style, subject, shape, shot count and speech, or searches the words,
+  and shows the frame of the clip each prompt was written for; click a frame and
+  the clip plays.
+
+  They are finished T2VA prompts in the format this pack's own writers produce --
+  the same three labelled fields -- so `prompt` can go to the generator as it
+  stands, or into a writer's prompt input to be rewritten from. That choice is a
+  wire rather than a widget, which is the reason this is a node of its own rather
+  than another button inside the library window. The other outputs are the three
+  fields separately, the size and length of the clip, and where the prompt came
+  from.
+
+  Nothing is downloaded, at install or during a run. The prompts, their tags and
+  one 256-pixel frame each are 6 MB inside the pack, read off disk and unpacked
+  the first time something asks for them; a run takes single-digit milliseconds.
+  The one thing that reaches the network is the clip in the preview, and only
+  when somebody clicks a frame: huggingface.co first, and hf-mirror.com when that
+  does not answer, which is the address that answers from mainland China.
+
+  The prompts and the clips they describe are ostris's work, carried here with
+  credit and not relicensed --
+  [ostris/minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k).
+  The shooting-style and subject tags are the
+  [H3 Atlas](https://cohub.live/baize/video-altas/w/h3-atlas)'s reading of that
+  collection; the frames were cut from those clips here. Every one of the
+  thousand passes this pack's own self-check with nothing to report.
+
+- **Any of them can be copied into your own prompt library.** "Save to the
+  library" opens the editor the library already uses -- name, description,
+  groups, the prompt itself, and the self-check running as you type -- and puts
+  the copy in whichever of your prompt sets you choose.
+
+  The copy says where it came from in its description, so a prompt that travels
+  on from there still names whose it was, and it is an ordinary record from that
+  point: editable, filed under your own groups, and available to every writer
+  through the library window. The bundled preset is untouched, and the node goes
+  on handing on the original.
+
+### Changed
+
+- **The one example workflow is now six.** What shipped before was ComfyUI's
+  Ref2VA and FL2VA gallery templates stacked into a single graph: 59 nodes, 89
+  links, saved at 19% zoom, seven nodes bypassed on open -- the prompt box of the
+  lower half among them -- and one press of Run queuing both halves at once, two
+  diffusion checkpoints and the 32B text encoder, before there was anything on
+  screen to read. Three of the pack's fourteen nodes appeared in it, and the node
+  it is named after was not one of them.
+
+  In its place are six cards in the same browser, numbered in the order they are
+  worth meeting. Four of them write prompts and never load a MiniMax-H3
+  checkpoint at all: the small writer, the 27B LoRA, the reference writer and the
+  bundled presets. Two generate, and those are ComfyUI's own current gallery
+  templates -- the generator folded into one subgraph box, the way ComfyUI now
+  ships them -- with a writer and the prompt check wired in ahead of it. Ten and
+  thirteen nodes, not fifty-nine.
+
+  Each of the six opens at a scale it can be read at, has nothing bypassed, ends
+  every chain in something that shows the result, and carries a "Read me first"
+  note saying what it does, what it downloads, what to set before Run and which
+  template to open next. The image loaders ship empty rather than naming files
+  nobody else has.
+
+- **`tools/template_cards.py` draws the pictures the template browser shows.**
+  ComfyUI builds a custom pack's card from the file name alone and looks the
+  picture up at `<name>.jpg` beside the workflow, so every template needs one of
+  its own. A screenshot cannot serve: prompt boxes, notes and previews are HTML
+  drawn over the canvas and photograph blank. What the cards draw instead is the
+  chain of nodes, with blue for a template that only writes text and amber for
+  one that needs the video weights.
+
 ## 0.18.6 - 2026-09-01
 
 ### Added

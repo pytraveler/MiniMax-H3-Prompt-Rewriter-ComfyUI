@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from . import catalog, guides, library, memory
+from . import catalog, guides, library, memory, presets
 
 log = logging.getLogger(__name__)
 
@@ -214,6 +214,105 @@ def register() -> None:
         except OSError as error:
             return web.json_response({"ok": False, "error": str(error)}, status=500)
         return web.json_response({"ok": gone})
+
+    @routes.get(f"{PREFIX}/presets")
+    async def preset_catalogue(request):
+        """The bundled prompts, their tags and who they are owed to.
+
+        Empty when the pack was installed without the files: the picker says so
+        rather than reporting a failure the person cannot act on.
+
+        Sent as bytes serialised once, not built per request: it is a megabyte
+        and a third, and it is the same every time.
+        """
+        return web.Response(
+            body=presets.payload(),
+            content_type="application/json",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
+    @routes.get(PREFIX + "/presets/record/{preset}")
+    async def preset_record(request):
+        """One preset: its label, its text and where its clip can be watched.
+
+        What a node draws itself from after a page reload. The catalogue would
+        answer the same question and cost a megabyte to do it, and a graph with
+        five of these nodes in it would pull it five times.
+        """
+        found = presets.one(request.match_info["preset"])
+        if found is None:
+            return web.json_response({"ok": False}, status=404)
+        return web.json_response({"ok": True, "preset": found})
+
+    @routes.get(PREFIX + "/presets/thumb/{preset}")
+    async def preset_thumb(request):
+        """The frame of one preset, as the WebP that is on disk.
+
+        A route rather than data URLs in the catalogue: this way the browser
+        asks for the two dozen frames a screenful needs, caches them by URL, and
+        never carries six megabytes it is not showing.
+        """
+        frame = presets.thumb(request.match_info["preset"])
+        if frame is None:
+            return web.Response(status=404)
+        return web.Response(
+            body=frame,
+            content_type="image/webp",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    @routes.post(f"{PREFIX}/presets/check")
+    async def preset_check(request):
+        """The self-check over a preset being edited on its way to the library.
+
+        The twin of ``library/check``, for text that has no record yet. The task
+        and the duration come from the preset rather than from the caller, since
+        those are facts about the clip it was written for.
+        """
+        body = await request.json()
+        found = presets.find(body.get("preset") or "")
+        seconds = (found or {}).get("seconds")
+        return web.json_response(
+            {
+                "issues": library.inspect(
+                    body.get("text") or "",
+                    task=presets.TASK,
+                    duration=round(float(seconds)) if seconds else None,
+                    having=[],
+                )
+            }
+        )
+
+    @routes.post(f"{PREFIX}/library/save_preset")
+    async def library_save_preset(request):
+        """Put a copy of a bundled preset into one of the person's own sets.
+
+        The one place a record enters the library from somewhere other than a
+        node's session memory. It arrives with the credit in its description and
+        the collection in its ``source``, so a prompt that travels on from here
+        still says whose it was.
+        """
+        body = await request.json()
+        found = presets.find(body.get("preset") or "")
+        if found is None:
+            return web.json_response(
+                {"ok": False, "error": "that preset is not in this pack"}, status=404
+            )
+        record = presets.as_record(
+            found,
+            name=body.get("name") or "",
+            description=body.get("description") or "",
+            tags=body.get("groups") if isinstance(body.get("groups"), list) else None,
+            prompt=body.get("text") or "",
+        )
+        name = body.get("file") or library.DEFAULT_FILE
+        try:
+            saved = library.add(name, record)
+        except OSError as error:
+            return web.json_response({"ok": False, "error": str(error)}, status=500)
+        return web.json_response(
+            {"ok": True, "file": library.clean(name), "record": saved}
+        )
 
     @routes.get(f"{PREFIX}/model_list")
     async def model_list(request):
