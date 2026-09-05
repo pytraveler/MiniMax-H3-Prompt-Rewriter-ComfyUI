@@ -1219,26 +1219,27 @@ REFERENCE_ASSETS_PLACEHOLDER = (
 )
 
 
-def _guided_text(
-    mode: str,
+def run_messages(
     model: str,
-    prompt: str,
-    resolution: str,
-    duration: float,
-    references: str,
+    messages: list[dict[str, str]],
     greedy: bool,
     seed: int,
     keep_model_loaded: bool,
     settings: dict,
     progress: NodeProgress,
-    system_prompt: str = "",
+    label: str = "",
 ) -> str:
-    """Run one guided rewrite and return the model's raw answer.
+    """Run one chat completion on a model from the writer list, and return it raw.
 
-    ``system_prompt`` stands in for the whole assembled guide, and when it is
-    given the guide is never fetched: a writer aimed at another model has no use
-    for MiniMax's document, and an offline machine should not be made to
-    download one to ignore it.
+    Everything from here down is the same whatever the messages say, so it is
+    the same code: picking the file out of the list, fetching it if it is not
+    on disk yet, refusing a LoRA that cannot run on its own, widening the
+    context to fit what is actually being sent, and choosing between the wheel
+    and the official binaries. A node that has its own reason to talk to a
+    local model -- the guided writers, the reducer -- builds its messages and
+    hands them here rather than repeating any of that.
+
+    ``label`` only names the caller in the log line and the caption.
     """
     choice = _resolve_writer_choice(model)
     if choice.local:
@@ -1254,24 +1255,17 @@ def _guided_text(
             f"on its own. Pick a base model from the list."
         )
 
-    given = (system_prompt or "").strip()
-    guide = "" if given else guides.text(
-        guide_prompt.GUIDE_FOR_MODE[mode], settings["auto_download"], progress
-    )
-    messages = guide_prompt.build_messages(
-        guide, mode, prompt, resolution, duration, references, system=given
-    )
-
     max_new_tokens = int(settings["max_new_tokens"])
     n_ctx = int(settings["n_ctx"])
     needed = guide_prompt.context_needed(messages, max_new_tokens)
     if needed > n_ctx:
         log.info(
-            "[minimax_h3_rewriter._guided_text] raising n_ctx from %d to %d for the %s guide",
-            n_ctx, needed, mode,
+            "[minimax_h3_rewriter.run_messages] raising n_ctx from %d to %d for %s",
+            n_ctx, needed, label or "this prompt",
         )
         progress.text(
-            f"{mode}: the guide needs a {needed}-token context, raising n_ctx from {n_ctx}",
+            f"{label + ': ' if label else ''}this prompt needs a {needed}-token context, "
+            f"raising n_ctx from {n_ctx}",
             force=True,
         )
         n_ctx = needed
@@ -1310,6 +1304,39 @@ def _guided_text(
         backend=settings["llama_backend"],
         auto_download=settings["auto_download"],
         **common,
+    )
+
+
+def _guided_text(
+    mode: str,
+    model: str,
+    prompt: str,
+    resolution: str,
+    duration: float,
+    references: str,
+    greedy: bool,
+    seed: int,
+    keep_model_loaded: bool,
+    settings: dict,
+    progress: NodeProgress,
+    system_prompt: str = "",
+) -> str:
+    """Run one guided rewrite and return the model's raw answer.
+
+    ``system_prompt`` stands in for the whole assembled guide, and when it is
+    given the guide is never fetched: a writer aimed at another model has no use
+    for MiniMax's document, and an offline machine should not be made to
+    download one to ignore it.
+    """
+    given = (system_prompt or "").strip()
+    guide = "" if given else guides.text(
+        guide_prompt.GUIDE_FOR_MODE[mode], settings["auto_download"], progress
+    )
+    messages = guide_prompt.build_messages(
+        guide, mode, prompt, resolution, duration, references, system=given
+    )
+    return run_messages(
+        model, messages, greedy, seed, keep_model_loaded, settings, progress, label=mode
     )
 
 

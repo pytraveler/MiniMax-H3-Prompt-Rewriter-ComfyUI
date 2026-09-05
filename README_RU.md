@@ -92,6 +92,8 @@
   - [Каптионер грузится один раз, а не по разу на референс](#каптионер-грузится-один-раз-а-не-по-разу-на-референс)
   - [MiniMax-H3 Guide Prompt (any LLM)](#minimax-h3-guide-prompt-any-llm)
   - [MiniMax-H3 Prompt Check](#minimax-h3-prompt-check)
+  - [MiniMax-H3 Prompt Reducer](#minimax-h3-prompt-reducer)
+  - [MiniMax-H3 Reduce Prompt (any LLM)](#minimax-h3-reduce-prompt-any-llm)
   - [MiniMax-H3 Reference Adapter](#minimax-h3-reference-adapter)
   - [MiniMax-H3 Prompt Presets](#minimax-h3-prompt-presets)
   - [Виджет duration](#виджет-duration)
@@ -1256,6 +1258,153 @@ MiniMax-H3: нода другого пака, загруженный в граф
 `T2VA`, такой текст будет объявлен потерявшим поля и `[Shot 1]`, и это верное
 чтение, а не поломка: подобный промт есть *указание переписывателю*, а не
 готовый ответ H3. Скормите его одному из писателей и проверяйте то, что вернётся.
+
+### MiniMax-H3 Prompt Reducer
+
+Все остальные ноды здесь разворачивают. Эта сворачивает: превращает готовый
+промт H3 обратно в короткую строку, из которой он мог быть написан.
+
+```
+integrated_multimodal_description: [Shot 1] Live-action, cinematic, a low-angle medium
+shot frames a sleek black cat walking steadily along the top of a weathered wooden
+fence in a quiet suburban yard at dusk. The camera tracks right with small amplitude
+at slow speed, following the feline as its soft fur catches the fading golden light...
+
+overall_soundscape: A gentle evening breeze rustles through nearby grass and leaves...
+non_diegetic_music: A sparse piano melody at a slow tempo...
+```
+
+возвращается как
+
+```
+A black cat walks along a wooden fence in a yard at dusk.
+```
+
+Пригождается в трёх случаях. Поменять одно слово в удачном промте, не переписывая
+остальные четыреста, — сократить, поправить строку, отдать обратно писателю.
+Отдать промт, написанный под H3, генератору, который хочет короткий: промт H3
+имеет форму H3, а Wan, Hunyuan и Kling — нет. И подписать сохранённый промт
+читаемой строкой, чтобы на карточке было имя, а не абзац.
+
+**Половина этой работы — не работа для модели, и именно поэтому всё получается.**
+Промт H3 — не проза, а известная форма: именованные поля, фиксированная строка
+выравнивания сверху, метки `[Shot 2] At 0:03` по телу, теги `<Picture 1>` везде,
+где цитируется референс, диалог в ограде `<d>`. Всё это обвязка, всё это
+опознаётся по правилам, и всё это снимается до того, как модель о чём-то спросят.
+До модели доходит один абзац обычного описания под короткой инструкцией — вот
+почему с этим хорошо справляется 4B. Попроси её «обратить этот документ» — не
+справилась бы.
+
+Привязки к референсам уходят вместе с остальной обвязкой, и это намеренно: у
+Ref2VA `subject_definitions` и `retention_analysis` описывают *ассеты*, и короткий
+промт, сохранивший их, описывал бы картинки, которых у следующего прогона не
+будет.
+
+| Вход | Для чего |
+| --- | --- |
+| `prompt` | Готовый промт, который надо сократить. Любая из пяти задач, и говорить какая не нужно: текст разбирается по всем именам полей обоих семейств, а промт вообще без имён полей читается целиком как описание. |
+| `model` | Любая инструкционная GGUF из того же списка, которым пользуются писатели, включая записи `on disk:` и `ollama:`. Здесь от модели требуется куда меньше, чем при письме, так что самая маленькая запись в списке тут разумный выбор, даже если там она им не была. |
+| `detail` | Сколько возвращается. `idea` — голая строка, не длиннее десяти слов; `sentence` разрешает место и время суток; `paragraph` оставляет по предложению на каждое событие, а это то, что нужно промту с несколькими шотами, если порядок должен уцелеть. |
+| `subjects` | Насколько подробно называются люди: `as written`, `age and gender` или `impersonal`. |
+| `keep_camera` | Сохранить крупность, ракурс и движение камеры. По умолчанию выключено: камера обычно выдумка писателя, а не ваша, и без неё следующий рерайт выберет заново. |
+| `keep_audio` | Свести звуковой ландшафт и музыку в одно предложение в конце. По умолчанию выключено, и выключено означает, что звуковые секции вообще не доходят до модели: их выбрасывает разборщик, а не инструкция. |
+| `keep_style` | Сохранить носитель и look, с которых промт начинается: live-action, анимация, cinematic, документальность. |
+| `language` | На каком языке вернётся ответ. Пусто — язык входа. На этой ноде это второй проход: строка сперва сокращается, потом переводится, — именно поэтому он надёжен; в подразделе ниже сказано, почему иначе не выходит. |
+| `greedy`, `seed`, `keep_model_loaded` | Как у писателей. `greedy` тут стоит держать включённым: именно сэмплирование превращает «чёрного кота» в «лоснящегося обсидианового представителя кошачьих». |
+| `options` | Необязательно. Обычная нода [Rewriter Options](#minimax-h3-rewriter-options) — `device`, `n_ctx`, `gpu_layers`, `gguf_runtime` и прочее. |
+| `bypass` | Отдать `prompt` прямо на выход и не запускать ничего. |
+| `system_prompt` | Заменить всю собранную инструкцию своей. `detail`, `subjects` и три галочки тогда перестают действовать — они существуют только чтобы собрать текст, который вы переопределяете. `language` продолжает работать: он отдельный запрос, а не часть этого текста. Разбор остаётся в любом случае, так что вашей инструкции достаётся очищенная сцена, а не исходный текст. |
+
+Два выхода: `short_prompt` и `scene` — описание со снятой обвязкой и больше ничем.
+Модель `scene` не касалась. Подключайте, когда нужна была только
+детерминированная половина.
+
+![The MiniMax-H3 Prompt Reducer node with a Show Any node beside it: an options socket on the left, short_prompt and scene as the two outputs on the right, a tall prompt box holding a full I2VA prompt with its integrated_multimodal_description and [Shot 1] marker, then the widgets — a 35B model on disk, detail on idea, subjects on impersonal, keep_camera and keep_audio true, keep_style false, language reading Chinese, greedy true, a seed set to randomize, keep_model_loaded and bypass false, and an empty system_prompt box. Under the node the status line reads '110 words in, 33 characters out - 1 shot markers dropped - translated into Chinese', and below it the two Chinese sentences themselves, which the Show Any node repeats](docs/node_reducer.png)
+
+*Четыреста слов про кота, забор и сумерки в два коротких китайских предложения, за 25 секунд на 35B. Сразу три оси делают видимую работу: `detail` стоит на `idea`, поэтому возвращается голая строка; `keep_camera` вернул в неё нижний ракурс и проезд; `keep_audio` свернул весь звуковой ландшафт во второе предложение; а `keep_style` выключен, и `Live-action, cinematic`, с которого промт начинался, исчез. Счёт идёт в символах, а не в словах, потому что китайский не пишет пробелов, на которых держится подсчёт слов.
+
+И одно, что кадр показывает честно: `subjects` стоит на `impersonal`, а кот всё равно вернулся чёрным. Правило просит голый род, и эта модель оставила цвет — из трёх осей эта сильнее всех опирается на модель, и целится она всё-таки в людей.*
+
+#### Что оси делают на самом деле
+
+Один промт, одна 4B, оси двигались по одной. На входе документальный промт I2VA
+про пожилого рыбака, вытягивающего сеть, два шота, со звуковым ландшафтом и
+виолончельным дроном:
+
+| Настройка | Что вернулось |
+| --- | --- |
+| по умолчанию | An elderly fisherman with a thick grey beard and a faded yellow oilskin jacket hauls a dripping net over the gunwale of a small wooden trawler under a bruised pre-dawn sky. |
+| `detail: idea` | An elderly fisherman hauls a net on a boat. |
+| `subjects: age and gender` | An elderly man hauls a net on a boat under a pre-dawn sky. |
+| `subjects: impersonal` | A subject hauls a net over the side of a boat under a pre-dawn sky. |
+| `keep_camera` | A handheld close-up follows an elderly fisherman... |
+| `keep_style` | Live-action, documentary style. An elderly fisherman... |
+| `keep_audio` | ...under a pre-dawn sky. Waves slap the hull, rope creaks, gulls cry overhead, and the man breathes heavily. A low cello drone underneath. |
+
+`impersonal` — для шаблонов, которые потом заполняют. Отданный генератору как
+есть, он выдаст ровно то безличное ничто, которое просит.
+
+Осей четыре, а не один регулятор абстракции, потому что они независимы. Длина
+ответа и подробность имён — разные вопросы: однострочный промт вполне может
+сказать «женщина в красном пальто», — а камера, звук и киношный look держатся
+или выбрасываются каждый сам по себе.
+
+#### `language` — это второй проход, и иначе не выходит
+
+Просить сокращение и язык одним запросом не работает. Разобранный пример внутри
+инструкции написан по-английски и другим быть не может — ничто здесь не переведёт
+его на язык, набранный в виджете, — а модель, копирующая демонстрацию, копирует и
+её язык вместе со всем остальным, что из неё берёт.
+
+Отказ этот неравномерный, и именно поэтому его стоит описать. С тремя галочками
+*выключенными* пример короткий, и правило языка соблюдалось. С *включенными* —
+пример становится длиннее и наряднее, — три модели подряд ответили по-английски,
+как правило ни формулируй и куда его ни ставь, в том числе последней строкой
+системного промта, после примера.
+
+Поэтому Reducer сперва сокращает, а потом переводит готовую строку — отдельным
+запросом. У этого запроса одна цель, копировать нечего и не с чем торговаться, и
+те же самые модели ему подчиняются: все испробованные сочетания вернулись на
+запрошенном языке, на 4B, на 9B и на 35B, по-русски и по-китайски. Стоит это
+одной короткой генерации на уже загруженной модели, и между двумя проходами нода
+держит её в памяти, что бы ни говорил `keep_model_loaded` про «после».
+
+Из устройства следуют две вещи:
+
+- **`system_prompt` его не выключает.** Три галочки, `detail` и `subjects`
+  перестают действовать, когда вы заменяете инструкцию, потому что они только для
+  того и существуют, чтобы собрать заменённый текст. `language` в этом тексте не
+  участвует вовсе, так что он продолжает работать.
+- **`Reduce Prompt (any LLM)` так не умеет** — она собирает один запрос и ничего
+  не запускает. Там язык остаётся правилом внутри инструкции, соблюдаемым или нет
+  в зависимости от модели, то есть ровно тем поведением, что описано выше. Если
+  короткий промт вернулся от этой ноды не на том языке, причина в этом, а надёжный
+  путь — Reducer.
+
+Остаётся качество перевода, а не отказ переводить: маленькая модель нет-нет да и
+оставит слово непереведённым. Это модель, и у большей таких слов меньше.
+
+#### Один круг, который стоит знать
+
+Reducer → правка строки → писатель → [Prompt Check](#minimax-h3-prompt-check).
+Если в конце этого круга кот всё ещё идёт по забору, обе половины пака ведут себя
+как надо. Это же самый дешёвый способ выяснить, достаточно ли хороша конкретная
+маленькая модель для этой задачи: прогнать и прочитать строку.
+
+### MiniMax-H3 Reduce Prompt (any LLM)
+
+То же сокращение, но ничего не запускается: нода собирает `system_prompt` и
+`user_prompt` и отдаёт их строками для той LLM-ноды, что у вас уже есть, —
+локальной, API, удалённой. Не стоит ни VRAM, ни времени. Разбор при этом
+происходит здесь, так что сцена, которая достанется вашей модели, уже чистая.
+
+![The MiniMax-H3 Reduce Prompt (any LLM) node with a Show Any node beside it displaying the assembled system prompt: the rules list — never upgrade a word, add nothing, drop the writing rather than the story, answer with one sentence, name the subjects as written, drop the camera, drop the medium, write the answer in Russian — then the output contract, then the worked example with its scene and its answer 'A black cat walks along a wooden fence in a yard at dusk', and last the two lines saying the example is in English and the answer is to be in Russian. Four outputs run down the right of the node: system_prompt, user_prompt, prompt and scene](docs/node_reduce_prompt.png)
+
+*То же сокращение, но ничего не запущено, за 0.01 с. Вся инструкция видна целиком, и в этом смысл ноды: 2112 символов системного промта, 632 пользовательского, и каждое правило в нём поставлено виджетом. Последние две строки — это та самая однозапросная попытка задать язык, о которой сказано выше: собрать больше одного запроса эта нода не умеет.*
+
+Управляется теми же четырьмя осями, `format` склеивает два выхода так же, как в
+[Guide Prompt](#minimax-h3-guide-prompt-any-llm), а четвёртый выход — `scene`,
+как выше.
 
 ### MiniMax-H3 Reference Adapter
 

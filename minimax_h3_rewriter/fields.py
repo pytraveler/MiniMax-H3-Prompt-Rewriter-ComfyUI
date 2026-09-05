@@ -9,7 +9,13 @@ from __future__ import annotations
 
 import re
 
-from .constants import OUTPUT_FIELDS
+from .constants import OUTPUT_FIELDS, REF_OUTPUT_FIELDS
+
+ALL_FIELDS = (
+    OUTPUT_FIELDS[0],
+    *REF_OUTPUT_FIELDS[:4],
+    *OUTPUT_FIELDS[1:],
+)
 
 _PATTERNS: dict[tuple[str, ...], re.Pattern] = {}
 

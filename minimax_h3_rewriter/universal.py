@@ -46,12 +46,10 @@ from . import (
     snapshot,
 )
 from .constants import (
-    OUTPUT_FIELDS,
-    REF_OUTPUT_FIELDS,
     RESOLUTIONS,
     duration_options,
 )
-from .fields import split_sections
+from .fields import ALL_FIELDS, split_sections
 from .nodes import (
     BYPASS_TOOLTIP,
     CAPTION_LENGTHS,
@@ -92,12 +90,6 @@ ROLE_AUDIO = "Audio"
 IMAGE_ROLES = (ROLE_PICTURE, ROLE_SUBJECT, ROLE_VIDEO)
 
 FIXED_ROLE = {"video": ROLE_VIDEO, "audio": ROLE_AUDIO}
-
-ALL_FIELDS = (
-    OUTPUT_FIELDS[0],
-    *REF_OUTPUT_FIELDS[:4],
-    *OUTPUT_FIELDS[1:],
-)
 
 DESCRIPTION = (
     "Describes every connected reference and writes the finished MiniMax-H3 prompt, in one "

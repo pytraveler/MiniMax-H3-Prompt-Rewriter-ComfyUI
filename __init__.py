@@ -20,6 +20,7 @@ for _module_name, _label in (
     ("reference_adapter", "Reference Adapter"),
     ("writer_omni", "Prompt Rewriter Omni"),
     ("universal_rewriter", "Universal Rewriter"),
+    ("reduce_node", "Prompt Reducer"),
 ):
     try:
         _module = importlib.import_module(f".minimax_h3_rewriter.{_module_name}", __name__)

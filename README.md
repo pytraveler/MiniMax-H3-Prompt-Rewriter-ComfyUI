@@ -91,6 +91,8 @@ If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2va
   - [The captioner is loaded once, not once per reference](#the-captioner-is-loaded-once-not-once-per-reference)
   - [MiniMax-H3 Guide Prompt (any LLM)](#minimax-h3-guide-prompt-any-llm)
   - [MiniMax-H3 Prompt Check](#minimax-h3-prompt-check)
+  - [MiniMax-H3 Prompt Reducer](#minimax-h3-prompt-reducer)
+  - [MiniMax-H3 Reduce Prompt (any LLM)](#minimax-h3-reduce-prompt-any-llm)
   - [MiniMax-H3 Reference Adapter](#minimax-h3-reference-adapter)
   - [MiniMax-H3 Prompt Presets](#minimax-h3-prompt-presets)
   - [The duration widget](#the-duration-widget)
@@ -1283,6 +1285,158 @@ no field labels, no shot list, no tags. Read as `T2VA` such a text is reported
 as missing its fields and its `[Shot 1]`, and that is a true reading rather than
 a fault — a prompt like that is an *instruction to a rewriter*, not a finished
 H3 answer. Feed it to one of the writers and check what comes back instead.
+
+### MiniMax-H3 Prompt Reducer
+
+Every other node here expands. This one contracts: it turns a finished H3 prompt
+back into the short line it could have been written from.
+
+```
+integrated_multimodal_description: [Shot 1] Live-action, cinematic, a low-angle medium
+shot frames a sleek black cat walking steadily along the top of a weathered wooden
+fence in a quiet suburban yard at dusk. The camera tracks right with small amplitude
+at slow speed, following the feline as its soft fur catches the fading golden light...
+
+overall_soundscape: A gentle evening breeze rustles through nearby grass and leaves...
+non_diegetic_music: A sparse piano melody at a slow tempo...
+```
+
+comes back as
+
+```
+A black cat walks along a wooden fence in a yard at dusk.
+```
+
+Three things it is for. Changing one word of a prompt you liked without
+rewriting the other four hundred — reduce, edit the line, feed it back to a
+writer. Feeding a prompt written for H3 to a generator that wants a short one:
+an H3 prompt is H3-shaped, and Wan, Hunyuan and Kling are not. And putting a
+readable line on a prompt you saved, where the card shows a name rather than a
+paragraph.
+
+**Half of this is not a job for a model, and that is what makes it work.** An H3
+prompt is not prose — it is a known shape: named fields, the fixed alignment
+sentence at the top, `[Shot 2] At 0:03` markers through the body, `<Picture 1>`
+tags wherever a reference is cited, dialogue fenced in `<d>`. All of that is
+scaffolding, all of it is recognisable by rule, and all of it comes off before a
+model is asked anything. What reaches the model is one paragraph of ordinary
+description under a short instruction, which is why a 4B does this well. Asked
+to "reverse this document" instead, it would not.
+
+Reference bindings go off with the rest of the scaffolding, and that is
+deliberate: for Ref2VA, `subject_definitions` and `retention_analysis` describe
+*the assets*, and a short prompt that kept them would describe pictures the next
+run will not have.
+
+| Input | What it is for |
+| --- | --- |
+| `prompt` | The finished prompt to shorten. Any of the five tasks, and you do not have to say which: the text is split against every field name either family uses, and one with no field names at all is read whole as the description. |
+| `model` | Any instruction-following GGUF, from the same list the writers use — including `on disk:` and `ollama:` entries. This asks much less of a model than writing does, so the smallest entry in the list is a reasonable choice here even when it is not one there. |
+| `detail` | How much comes back. `idea` is the bare line, ten words at most; `sentence` allows the place and the time of day; `paragraph` keeps one sentence per thing that happens, which is what a prompt with several shots needs if the order is to survive. |
+| `subjects` | How specifically people are named: `as written`, `age and gender`, or `impersonal`. |
+| `keep_camera` | Keep the shot size, the angle and the camera move. Off by default — the camera is usually the writer's invention rather than yours, and leaving it out lets the next rewrite choose again. |
+| `keep_audio` | Fold the soundscape and the music into one sentence at the end. Off by default, and off means the sound sections never reach the model at all: they are dropped by the parser, not by the instruction. |
+| `keep_style` | Keep the medium and the look the prompt opens with — live-action, animation, cinematic, documentary. |
+| `language` | Which language the answer comes back in. Empty means the language of the input. On this node it is a second pass — the line is shortened first and translated afterwards — which is what makes it reliable; the sub-section below says why it has to be. |
+| `greedy`, `seed`, `keep_model_loaded` | As on the writers. Greedy is worth keeping on here: sampling is what turns "a black cat" into "a sleek obsidian feline". |
+| `options` | Optional. The usual [Rewriter Options](#minimax-h3-rewriter-options) node — `device`, `n_ctx`, `gpu_layers`, `gguf_runtime` and the rest. |
+| `bypass` | Hand `prompt` straight to the output and run nothing. |
+| `system_prompt` | Replace the whole assembled instruction with your own. `detail`, `subjects` and the three keeps then stop applying — they exist only to build the text you are overriding. `language` still applies, because it is a separate request rather than part of that text. The parsing still happens either way, so what your instruction is handed is the cleaned scene rather than the raw text. |
+
+Two outputs: `short_prompt`, and `scene` — the description with the scaffolding
+taken off and nothing else done to it. No model has touched `scene`. Wire it
+when the deterministic half is all you wanted.
+
+![The MiniMax-H3 Prompt Reducer node with a Show Any node beside it: an options socket on the left, short_prompt and scene as the two outputs on the right, a tall prompt box holding a full I2VA prompt with its integrated_multimodal_description and [Shot 1] marker, then the widgets — a 35B model on disk, detail on idea, subjects on impersonal, keep_camera and keep_audio true, keep_style false, language reading Chinese, greedy true, a seed set to randomize, keep_model_loaded and bypass false, and an empty system_prompt box. Under the node the status line reads '110 words in, 33 characters out - 1 shot markers dropped - translated into Chinese', and below it the two Chinese sentences themselves, which the Show Any node repeats](docs/node_reducer.png)
+
+*Four hundred words of cat, fence and dusk down to two short Chinese sentences, in 25 seconds on a 35B. Three axes are doing visible work at once: `detail` is on `idea`, so what comes back is the bare line; `keep_camera` put the low-angle tracking shot back into it; `keep_audio` folded the whole soundscape into the second sentence; and `keep_style` is off, so the `Live-action, cinematic` the prompt opened with is gone. The count is in characters rather than words because Chinese does not write the spaces a word count needs.
+
+One thing it also shows honestly: `subjects` is on `impersonal`, and the cat still comes back black. The rule asks for the bare kind and this model kept the colour — that axis leans hardest on the model of the three, and it is people it is really aimed at.*
+
+#### What the axes actually do
+
+One prompt, one 4B, the axes moved one at a time. The input was a documentary
+I2VA prompt about an elderly fisherman hauling a net, two shots, with a
+soundscape and a cello drone:
+
+| Setting | What came back |
+| --- | --- |
+| default | An elderly fisherman with a thick grey beard and a faded yellow oilskin jacket hauls a dripping net over the gunwale of a small wooden trawler under a bruised pre-dawn sky. |
+| `detail: idea` | An elderly fisherman hauls a net on a boat. |
+| `subjects: age and gender` | An elderly man hauls a net on a boat under a pre-dawn sky. |
+| `subjects: impersonal` | A subject hauls a net over the side of a boat under a pre-dawn sky. |
+| `keep_camera` | A handheld close-up follows an elderly fisherman... |
+| `keep_style` | Live-action, documentary style. An elderly fisherman... |
+| `keep_audio` | ...under a pre-dawn sky. Waves slap the hull, rope creaks, gulls cry overhead, and the man breathes heavily. A low cello drone underneath. |
+
+`impersonal` is for templates you fill in afterwards. Fed to a generator as it
+stands, it produces exactly the anonymous nothing it asks for.
+
+There are four axes rather than one abstraction dial because they are
+independent. How long the answer is and how specifically it names people are
+different questions — a one-line prompt can still say "a woman in a red coat" —
+and the camera, the sound and the film look are each kept or dropped on their
+own.
+
+#### `language` is a second pass, and it has to be
+
+Asking for the reduction and the language in one request does not work. The
+worked example inside the instruction is written in English and cannot be
+anything else — nothing here can translate it into a language typed into a
+widget — and a model copying the demonstration copies its language along with
+everything else it copies from it.
+
+That failure is not uniform, which is what makes it worth describing. With the
+three keeps *off*, the example is short and the language rule was obeyed. With
+them *on*, which makes the example longer and more elaborate, three models in a
+row answered in English however the rule was phrased and wherever it was placed
+— including as the last line of the system prompt, after the example.
+
+So the Reducer shortens first and translates the finished line afterwards, in
+its own request. That request has one objective, no example to copy and nothing
+to trade off against, and the same models obey it: every combination tried came
+back in the language asked for, on a 4B, a 9B and a 35B, in Russian and in
+Chinese. It costs one short generation on a model that is already loaded, and
+the node keeps it loaded between the two whatever `keep_model_loaded` says about
+afterwards.
+
+Two things follow from the design:
+
+- **`system_prompt` does not switch it off.** The three keeps, `detail` and
+  `subjects` all stop applying when you replace the instruction, because they
+  exist only to build the text you replaced. `language` is not in that text at
+  all, so it still applies.
+- **`Reduce Prompt (any LLM)` cannot do this**, because it builds one request
+  and runs nothing. There the language is a rule inside the instruction, obeyed
+  or not depending on the model — which is exactly the behaviour described
+  above. If a short prompt comes back from that node in the wrong language, this
+  is why, and the Reducer is the reliable path.
+
+What remains is translation quality rather than translation refusal: a small
+model leaves the occasional word untranslated. That is the model, and a larger
+one leaves fewer.
+
+#### One loop worth knowing
+
+Reducer → edit the line → writer → [Prompt Check](#minimax-h3-prompt-check).
+If the cat is still on the fence at the end of that circuit, both halves of the
+pack are behaving. It is also the cheapest way to find out whether a given small
+model is good enough at this: run it and read the line.
+
+### MiniMax-H3 Reduce Prompt (any LLM)
+
+The same reduction with nothing run: it builds the `system_prompt` and
+`user_prompt` and hands them back as strings for whichever LLM node you already
+use — local, API, remote. Costs no VRAM and no time. The parsing still happens
+here, so the scene your model receives is already clean.
+
+![The MiniMax-H3 Reduce Prompt (any LLM) node with a Show Any node beside it displaying the assembled system prompt: the rules list — never upgrade a word, add nothing, drop the writing rather than the story, answer with one sentence, name the subjects as written, drop the camera, drop the medium, write the answer in Russian — then the output contract, then the worked example with its scene and its answer 'A black cat walks along a wooden fence in a yard at dusk', and last the two lines saying the example is in English and the answer is to be in Russian. Four outputs run down the right of the node: system_prompt, user_prompt, prompt and scene](docs/node_reduce_prompt.png)
+
+*The same reduction with nothing run, in 0.01 s. The whole instruction is visible here, which is the point of the node: 2112 characters of system prompt, 632 of user prompt, and every rule in it put there by a widget. The last two lines are the single-request language attempt described above — this node can only build one request, so that is the best it can do.*
+
+The same four axes steer it, `format` joins the two outputs the way it does on
+[Guide Prompt](#minimax-h3-guide-prompt-any-llm), and the fourth output is
+`scene`, as above.
 
 ### MiniMax-H3 Reference Adapter
 

@@ -6,6 +6,106 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.21.0 - 2026-09-05
+
+### Added
+
+- **Two nodes that go the other way: a finished H3 prompt back to the short line
+  it was written from.** `MiniMax-H3 Prompt Reducer` runs a model from the
+  writer list and hands back the line; `MiniMax-H3 Reduce Prompt (any LLM)`
+  builds the same two messages as strings for an LLM node you already have, the
+  way Guide Prompt does for the writers. Four hundred words of blocking, light
+  and sound come back as "A black cat walks along a wooden fence in a yard at
+  dusk."
+
+  It is for changing one word of a prompt you liked without rewriting the other
+  four hundred -- reduce, edit the line, feed it back to a writer -- for handing
+  a prompt written for H3 to a generator that wants a short one, and for putting
+  a readable line on a prompt in the library.
+
+  **Half of it is not a job for a model, which is what makes a 4B enough.** An
+  H3 prompt is not prose, it is a known shape: named fields, the alignment
+  sentence at the top, `[Shot 2] At 0:03` markers through the body, `<Picture 1>`
+  tags wherever a reference is cited, dialogue fenced in `<d>`. All of that is
+  recognisable by rule and all of it comes off before the model is asked
+  anything, so what it gets is one paragraph of ordinary description under a
+  short instruction. Asked instead to reverse the whole document, a small model
+  loses the format and the idea together.
+
+  Reference bindings come off with the rest, deliberately: for Ref2VA,
+  `subject_definitions` and `retention_analysis` describe the assets, and a short
+  prompt that kept them would describe pictures the next run will not have. Both
+  nodes also expose the cleaned text on its own output, `scene`, which no model
+  has touched.
+
+  Any of the five tasks is accepted without being told which -- the text is
+  split against every field name either family uses, and one with no field names
+  at all is read whole as the description.
+
+- **Four axes on both nodes, rather than one abstraction dial.** `detail` is how
+  much comes back (`idea`, `sentence`, `paragraph`); `subjects` is how
+  specifically people are named (`as written`, `age and gender`, `impersonal`);
+  `keep_camera`, `keep_style` and `keep_audio` each hold or drop one thing.
+  They are separate because they are independent: a one-line prompt can still
+  say "a woman in a red coat", and a three-sentence one can still say "a
+  subject". Measured on a 4B against a documentary prompt about a fisherman,
+  `impersonal` gives "A subject hauls a net over the side of a boat under a
+  pre-dawn sky" and `keep_audio` appends "Waves slap the hull, rope creaks,
+  gulls cry overhead" -- one axis at a time, as asked.
+
+  The worked example in the instruction is assembled from those same axes, and
+  that is load-bearing rather than tidy. Where the rules and the demonstration
+  disagree, a small model follows the demonstration: with a fixed example whose
+  answer had no camera in it, `keep_camera` silently did nothing no matter what
+  the rule above it said. Every combination now shows an answer that obeys it.
+
+- **A `language` widget on both nodes, and on the Reducer it is a second pass.**
+  Empty means the language of the input; anything else is a language name.
+
+  Asking for the reduction and the language in one request does not work, and
+  the reason is the worked example again: it is written in English, it cannot be
+  anything else, and a model copying the demonstration copies its language too.
+  The failure is not uniform, which is what took measuring to see. With the
+  three keeps off the example is short and the rule was obeyed; with them on,
+  which lengthens the example, three models in a row answered in English however
+  the rule was phrased and wherever it was put, including as the last line of
+  the system prompt after the example.
+
+  So the Reducer shortens first and translates the finished line afterwards, in
+  its own request. That one has a single objective, no example to copy and
+  nothing to trade off, and the same models obey it: every combination tried
+  came back in the language asked for, on a 4B, a 9B and a 35B, in Russian and
+  in Chinese. It costs one short generation on a model already loaded, and the
+  node holds the model between the two passes whatever `keep_model_loaded` says
+  about afterwards. The translate pass is sent the sentence with no label over
+  it, because a label is text and a model told to translate the text translates
+  the label with it.
+
+  Two consequences. `system_prompt` does not switch the language off: `detail`,
+  `subjects` and the keeps stop applying when the instruction is replaced,
+  because they only exist to build it, but the language is not in that text at
+  all. And `Reduce Prompt (any LLM)` cannot do this, since it builds one request
+  and runs nothing -- there the language stays a rule inside the instruction,
+  obeyed or not depending on the model, and the Reducer is the reliable path.
+
+  It ships here and not on the writers because there is no format contract on
+  this output: a wrong-language short prompt is visible immediately and breaks
+  nothing downstream, where a wrong-language H3 answer would.
+
+### Changed
+
+- **The guided writers' engine handling moved into `run_messages`.** Picking the
+  file out of the writer list, fetching it, refusing a LoRA that cannot run on
+  its own, widening `n_ctx` to fit what is actually being sent and choosing
+  between the wheel and the official binaries were all inside `_guided_text`,
+  where only a guided rewrite could reach them. They are the same steps whatever
+  the messages say, so the reducer runs through the same code rather than a
+  second copy of it. No behaviour changes for the writers.
+
+- **`ALL_FIELDS` moved from `universal` to `fields`.** Both field families in one
+  tuple is a fact about the format, not about the Universal Writer, and the
+  reducer needs it without pulling ComfyUI in behind it.
+
 ## 0.20.0 - 2026-09-05
 
 ### Changed
