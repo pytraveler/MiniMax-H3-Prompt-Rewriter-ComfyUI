@@ -22,18 +22,11 @@ import logging
 from comfy_api.latest import io
 
 from . import checks, guide_prompt, memory, snapshot
+from .constants import duration_options, duration_tooltip
 from .fields import split_sections
 from .nodes import CATEGORY, DEFAULT_OPTIONS, OPTIONS_TYPE
 from .progress import NodeProgress, announce
-from .universal import (
-    ALL_FIELDS,
-    DURATION_CEILING,
-    DURATION_DEFAULT,
-    DURATION_MIN,
-    MAX_REFERENCES,
-    TASKS,
-    kind_of,
-)
+from .universal import ALL_FIELDS, MAX_REFERENCES, TASKS, kind_of
 
 log = logging.getLogger(__name__)
 
@@ -64,12 +57,12 @@ TASK_TOOLTIP = (
     "T2VA is reported as missing three fields it never needed."
 )
 
-DURATION_TOOLTIP = (
+DURATION_TOOLTIP = duration_tooltip(
     "How long the target video is, in seconds. Cut times are read against it: a shot that "
     "starts after the end is the one mistake in a hand-written shot list that nothing else "
     "catches.\n\n"
     "Set it to what the prompt was written for, which is not necessarily what this pack's "
-    "own writers allow -- prompts collected from elsewhere are often longer."
+    "own writers were asked for -- prompts collected from elsewhere are often longer."
 )
 
 REFERENCES_TOOLTIP = (
@@ -104,13 +97,9 @@ class MiniMaxH3PromptCheck(io.ComfyNode):
                 io.Combo.Input(
                     "task", options=list(TASKS), default="T2VA", tooltip=TASK_TOOLTIP
                 ),
-                io.Float.Input(
-                    "duration",
-                    default=DURATION_DEFAULT,
-                    min=DURATION_MIN,
-                    max=DURATION_CEILING,
-                    step=0.1,
-                    tooltip=DURATION_TOOLTIP,
+                io.MultiType.Input(
+                    io.Float.Input("duration", **duration_options(DURATION_TOOLTIP)),
+                    types=[io.Int],
                 ),
                 io.Autogrow.Input(
                     "references",

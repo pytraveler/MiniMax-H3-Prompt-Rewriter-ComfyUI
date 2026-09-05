@@ -57,12 +57,12 @@ from comfy_api.latest import io
 
 from . import aspect, library, memory, snapshot, writer_8b, writer_omni
 from .constants import (
-    DURATION_MAX,
-    DURATION_MIN,
     OUTPUT_FIELDS,
     QUANTIZATIONS,
     REF_OUTPUT_FIELDS,
     RESOLUTIONS,
+    duration_options,
+    duration_tooltip,
 )
 from .fields import split_fields
 from .guide_prompt import ALL_MODES, BASE_MODES, REF_MODE
@@ -143,10 +143,10 @@ TASK_TOOLTIP = (
     "leaves it alone, so it is still here when you switch back."
 )
 
-DURATION_TOOLTIP = (
-    "Target clip length in seconds; drives shot count and pacing. The range is what both "
-    "adapters were trained on, and a number outside it is a worse prompt rather than a longer "
-    "video -- MiniMax-H3 gets the length from its own settings, not from this line."
+DURATION_TOOLTIP = duration_tooltip(
+    "Target clip length in seconds; drives shot count and pacing. Both adapters were trained "
+    "on clips of a few seconds, so a number far past that is a worse prompt rather than a "
+    "longer video -- MiniMax-H3 gets the length from its own settings, not from this line."
 )
 
 SWITCH_TOOLTIP = (
@@ -353,15 +353,13 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
                     socketless=True,
                     tooltip=aspect.PICKER_TOOLTIP,
                 ),
-                io.Float.Input(
-                    "duration",
-                    default=10.0,
-                    min=DURATION_MIN,
-                    max=DURATION_MAX,
-                    step=0.1,
-                    round=0.1,
-                    display_mode=io.NumberDisplay.slider,
-                    tooltip=DURATION_TOOLTIP,
+                io.MultiType.Input(
+                    io.Float.Input(
+                        "duration",
+                        display_mode=io.NumberDisplay.slider,
+                        **duration_options(DURATION_TOOLTIP),
+                    ),
+                    types=[io.Int],
                 ),
                 io.String.Input(
                     "prompt",

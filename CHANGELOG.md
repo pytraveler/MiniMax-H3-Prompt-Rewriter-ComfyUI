@@ -6,6 +6,141 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.20.0 - 2026-09-05
+
+### Changed
+
+- **`duration` is the same widget on all nine nodes now, and it takes both
+  number types.** Two nodes had a `FLOAT` slider in tenths of a second; the other
+  seven had an `INT` box that stopped at 15. The socket is `FLOAT,INT`
+  everywhere, so an `INT` primitive, a node that counts frames and a `FLOAT` off
+  a maths node all wire straight in with no converter between, and the widget is
+  a float in tenths on every one of them.
+
+  Tenths were already the truth of it. Every guide in the pack writes cut times
+  to a thousandth -- `At 00:02.378, the camera cuts to` -- and every template
+  already formatted the number as `{float(duration):g}s`, so a length of 7.5
+  seconds went through intact and only the widget refused to say it. Two places
+  were truncating with `int()` on the way in; they no longer do. The duration is
+  a hint the model reads as one line of text, not a setting: how long the clip
+  really turns out to be is settled downstream by whatever samples it.
+
+- **The 15-second ceiling is gone, and where the widget stops is now yours to
+  set.** People are stretching MiniMax-H3 to twenty and thirty seconds and
+  further with pipelines nobody here wrote, and a widget that refuses to say 20
+  is a widget arguing with what is actually on screen. The server accepts up to
+  600 seconds on every node; the widget offers 30 until you move it.
+
+### Added
+
+- **A `duration` menu on every node that has the widget.** Right-click the node
+  -- on the classic canvas, right-click the widget itself and the entry comes
+  first -- for a submenu with two items: **Default value**, which puts the
+  widget back to ten seconds, and **Longest offered...**, which asks for a number
+  and makes it the widget's top end. What you type is rounded to a tenth of a
+  second, clamped to what the server will take, and kept in the node's own
+  `max_duration` property, so it is saved with the workflow and comes back with
+  it.
+
+  A widget's range is fixed when the node is declared and no single range suits
+  every graph -- MiniMax's own guide is written around clips of a few seconds,
+  those stretched pipelines run well past that -- so the server takes anything
+  sane while the widget spans what you actually work with. A slider reaching ten
+  minutes is a slider that cannot be nudged to 9.
+
+  The Universal Writer has had this as a `max_duration` property since 0.14.0,
+  reachable only through the Properties Panel. That property is still the same
+  one and the panel still reaches it; the menu is the way to it that does not
+  require knowing it exists, and the other eight nodes have both now.
+
+- **The model list is a window now, not a file you open in Notepad.** The
+  **Model list** button on every model-loading node opens a panel over the
+  graph: the models that node offers, with **Add a model**, **Edit** and
+  **Delete** beside them. It shows only the lists that node actually reads --
+  the Universal Rewriter opens on three tabs, the captioner on one -- because
+  the adapters take different architectures and an entry from one list will not
+  load in another's node. Under the tabs is what the list requires: the
+  architecture, the block count and width, whether a projector is needed and
+  which encoders it has to carry.
+
+  Everything still lives in the same `models.json`, and **Open models.json** in
+  the footer still opens it, for the two things the window deliberately leaves
+  alone: the `adapters` sections and a path to a network share. The models found
+  in your ComfyUI model folders are listed too, greyed out and not editable --
+  they are offered in the dropdown, so their absence from the editor read as
+  something the window had lost.
+
+  Adding or deleting a model updates the dropdowns in the open graph straight
+  away, on every node fed from that list and inside subgraphs, without a browser
+  refresh. The lists come back from the server built by the very functions
+  `INPUT_TYPES` calls, so they are the same labels in the same order that the
+  next `/object_info` would return.
+
+- **A check that reads the model before you spend a download on it.** **Check
+  it** in the add and edit form answers as much as can be answered without
+  moving any weights. A file already on this machine is read outright:
+
+  ```text
+  - 'Qwen2.5-Omni-7B-Q4_K_M.gguf' is a 'qwen2vl' model, 28 blocks of width 3584. That fits.
+  - 'mmproj-Qwen2.5-Omni-7B-Q8_0.gguf' carries the vision and audio encoder.
+  ```
+
+  Offer that same file to the 27B list and it says so before anything is saved.
+  A transformers repository on Hugging Face is judged from its 4 KB
+  `config.json`, and a GGUF repository is asked whether the files you named are
+  in it -- which is what catches a typo in `file` or `mmproj`, until now a
+  download that failed minutes in, and it fills in `download_gb` while it is
+  there.
+
+- **Restore the packaged entries.** `seed_offered` is what makes a deletion
+  stick across updates, and dropping a list from it is what brings the pack's
+  own entries back. The file's comment block has always said so; it is a button
+  now. Entries you wrote yourself are untouched by it.
+
+- **Models you already pulled for Ollama are offered as writers and
+  captioners** (issue #12). They appear in the `writer_model` and
+  `caption_model` dropdowns prefixed `ollama:`, named the way `ollama list`
+  names them -- `ollama: qwen3:8b [qwen3, 4.7 GB]` -- and nothing is copied,
+  converted or downloaded to get there.
+
+  Ollama stores what it pulls as a plain GGUF, so llama.cpp reads it where it
+  lies. This is the file rather than Ollama's API: the service can be stopped,
+  disabled or removed and the models stay usable. A multimodal model reaches
+  both lists, as a writer without its projector and as a captioner with it, and
+  the pair comes out of the model's own manifest, where the two files are named
+  together -- certain in a way that comparing file names in a folder is not.
+
+  Three stores are found automatically: `OLLAMA_MODELS` if you set it,
+  `~/.ollama/models`, and `/usr/share/ollama/.ollama/models` for a service
+  install. One somewhere else -- inside WSL, in a container, on a drive the
+  server knows nothing about -- is named by hand in `ollama_stores` in
+  `models.json` or in `MINIMAX_H3_OLLAMA_MODELS`. Deliberately not automatic:
+  reaching a path like `\\wsl$\...` starts a stopped WSL distribution, and
+  these lists are rebuilt every time a dropdown is filled. Opening a ComfyUI tab
+  should not boot a virtual machine.
+
+### Fixed
+
+- **An Omni entry without an `mmproj` failed after the download instead of
+  before it.** `models_8b` skips a GGUF entry with no projector and says so in
+  the log; `models_omni` offered it, and the run died on `'x.gguf' and '' were
+  not both present after downloading` with the gigabytes already spent. It now
+  skips the same way. The model-list window refuses to write one in the first
+  place.
+
+- **Deleting a model could bring it back on the next start.** The merge only
+  records what the pack has offered you while it is running over a file it could
+  parse, and the packaged `models.json` carries no such record at all -- so a
+  deletion made before that had ever happened was undone by the next read.
+  Deletions through the window record the name themselves. Only names the pack
+  actually ships are recorded, since `seed_offered` is yours to edit and
+  inventing names in it would silently refuse a future entry of the pack's own.
+
+- **Two edits inside one second could show the older one.** The parsed list is
+  cached under `(path, size, whole seconds)`, and changing a VRAM note from
+  "8 GB" to "9 GB" moves neither the size nor the second. Hand-editing never hit
+  it; a window does. The cache is now cleared by the write itself.
+
 ## 0.19.1 - 2026-09-04
 
 ### Fixed

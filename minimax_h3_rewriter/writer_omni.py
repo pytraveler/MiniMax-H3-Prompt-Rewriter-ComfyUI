@@ -50,12 +50,12 @@ from . import (
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
 from .constants import (
     MERGE_AUTO,
-    DURATION_MAX,
-    DURATION_MIN,
     OUTPUT_FIELDS,
     QUANTIZATIONS,
     REF_OUTPUT_FIELDS,
     RESOLUTIONS,
+    duration_options,
+    duration_tooltip,
 )
 from .fields import split_sections
 from .nodes import (
@@ -260,12 +260,17 @@ def _build_model_map() -> dict[str, BaseChoice]:
     mapping: dict[str, BaseChoice] = {}
     try:
         for entry in catalog.models_omni():
-            if entry.is_gguf:
-                mapping[entry.label] = BaseChoice(
-                    entry.repo, FORMAT_GGUF, entry.file, entry.mmproj
-                )
-            else:
+            if not entry.is_gguf:
                 mapping[entry.label] = BaseChoice(entry.repo, FORMAT_TRANSFORMERS)
+                continue
+            if not entry.mmproj:
+                log.warning(
+                    "[minimax_h3_rewriter.writer_omni] '%s' has no 'mmproj', skipping", entry.name
+                )
+                continue
+            mapping[entry.label] = BaseChoice(
+                entry.repo, FORMAT_GGUF, entry.file, entry.mmproj
+            )
     except Exception:
         log.warning("[minimax_h3_rewriter.writer_omni] catalog unreadable", exc_info=True)
 
@@ -620,7 +625,7 @@ TASK_TOOLTIP = (
     "full-reference prompt. Only Ref2AV takes clips and sound."
 )
 
-DURATION_TOOLTIP = (
+DURATION_TOOLTIP = duration_tooltip(
     "Target clip length in seconds. MiniMax-H3 generates on a 17n+5 frame grid at 24 fps, so "
     "the model is told the next length that actually exists -- 10 seconds becomes 243 frames, "
     "10.13 s -- and it is that number the alignment line quotes back. The node does the "
@@ -689,13 +694,9 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
                     socketless=True,
                     tooltip=aspect.PICKER_TOOLTIP,
                 ),
-                io.Float.Input(
-                    "duration",
-                    default=10.0,
-                    min=float(DURATION_MIN),
-                    max=float(DURATION_MAX),
-                    step=0.5,
-                    tooltip=DURATION_TOOLTIP,
+                io.MultiType.Input(
+                    io.Float.Input("duration", **duration_options(DURATION_TOOLTIP)),
+                    types=[io.Int],
                 ),
                 io.String.Input(
                     "prompt",

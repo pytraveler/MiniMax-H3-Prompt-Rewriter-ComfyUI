@@ -70,6 +70,8 @@ def same_repo(one: str, other: str) -> bool:
 OFFERED_KEY = "seed_offered"
 VERSION_KEY = "seed_version"
 
+OLLAMA_KEY = "ollama_stores"
+
 
 @dataclass
 class CatalogEntry:
@@ -285,15 +287,26 @@ def merge(live: dict, seed: dict) -> tuple[dict, list[str]]:
     return merged, changes
 
 
-def _write(path: str, data: dict) -> None:
-    """Replace the live file atomically, keeping one step back as ``.bak``."""
+def _write(path: str, data: dict, backup: bool = True) -> None:
+    """Replace the live file atomically, keeping one step back as ``.bak``.
+
+    ``backup`` is off for edits somebody made on purpose. The ``.bak`` has one
+    documented job -- the file as it was before the pack changed it behind their
+    back -- and a window that rewrites the list on every click would spend that
+    one snapshot within seconds of the merge that earned it.
+
+    The cache is cleared here rather than by the callers, because its key is
+    ``(path, size, whole seconds)`` and two edits inside one second can produce
+    a file of exactly the same size: renaming a note from "8 GB" to "9 GB" does
+    it. The next read would then be served the copy from before the edit.
+    """
     directory = os.path.dirname(path) or "."
     handle, staging = tempfile.mkstemp(prefix=FILE_NAME, suffix=".part", dir=directory)
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as file:
             json.dump(data, file, ensure_ascii=False, indent=2)
             file.write("\n")
-        if os.path.isfile(path):
+        if backup and os.path.isfile(path):
             shutil.copyfile(path, path + BACKUP_SUFFIX)
         os.replace(staging, path)
     except OSError:
@@ -302,6 +315,8 @@ def _write(path: str, data: dict) -> None:
         except OSError:
             pass
         raise
+    finally:
+        _DATA_CACHE.clear()
 
 
 _DATA_CACHE: dict[tuple, dict] = {}
@@ -433,6 +448,26 @@ def captioners() -> list[CatalogEntry]:
     return _entries(_data(), "captioners")
 
 
+def ollama_stores() -> list[str]:
+    """Ollama model stores named by hand in the live file, if any.
+
+    Not a section: there are no entries to merge, restore or clash, only paths.
+    ``merge`` copies the live file before folding the seed into it, so a key the
+    packaged list never mentions survives an update untouched.
+
+    It exists because the store worth naming is the one that cannot be found --
+    inside WSL, inside a container, on a drive the server does not know about.
+    ``ollama_store.roots`` says why looking for those automatically is the wrong
+    thing to do.
+    """
+    value = _data().get(OLLAMA_KEY)
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    return [str(one).strip() for one in value if str(one).strip()]
+
+
 def _alternatives_from(raw: dict, repo: str) -> tuple[AdapterSpec, ...]:
     """The other precisions listed beside an adapter, which share its repository."""
     found = []
@@ -535,6 +570,224 @@ def adapter_entries(fmt: str, section: str = ADAPTERS_27B) -> list[CatalogEntry]
             )
         )
     return entries
+
+
+class CatalogWriteError(RuntimeError):
+    """The list must not be written right now, and why."""
+
+
+def writable() -> str:
+    """The live file, or a refusal saying why editing it would do harm.
+
+    Two states look like an ordinary list and are not. A seeding that failed
+    leaves ``user_file`` pointing at the packaged copy, where an edit would be
+    written into the node pack and lost on the next update. A file that does not
+    parse leaves ``_data`` serving the seed, so writing that back would replace a
+    curated list with the defaults -- the exact loss the dropdown warning exists
+    to prevent, arriving through the window meant to fix it.
+    """
+    path = user_file()
+    if os.path.normcase(path) == os.path.normcase(SEED_FILE):
+        raise CatalogWriteError(
+            "the model list could not be created in the ComfyUI user directory, so the "
+            "packaged copy is being read instead. Anything written here would live inside "
+            "the node pack and disappear on the next update. Check that the ComfyUI user "
+            "directory is writable, then reopen this window."
+        )
+    _data()
+    trouble = problem()
+    if trouble:
+        raise CatalogWriteError(
+            f"{trouble}. The file has to parse before it can be edited here, or saving would "
+            f"replace your own entries with the packaged list. Open {path}, fix it, then "
+            f"reopen this window."
+        )
+    return path
+
+
+def _mutable() -> tuple[str, dict]:
+    """The live file's path and a private copy of it, safe to edit.
+
+    ``merge`` copies shallowly, so the section lists inside the cached dict are
+    the very objects ``json.load`` produced. Editing one in place would change
+    what every ``INPUT_TYPES`` call sees, including after a write that failed.
+    """
+    path = writable()
+    return path, json.loads(json.dumps(_data()))
+
+
+def raw_entries(section: str) -> list[dict]:
+    """One list as it is written, for something that edits it.
+
+    ``load()`` and its siblings return ``CatalogEntry``, which is what the nodes
+    want and the wrong shape for an editor: defaults are already applied, and a
+    malformed entry has been dropped, so the file that needs fixing looks fine.
+    """
+    found = _data().get(section)
+    if not isinstance(found, list):
+        return []
+    return [dict(raw) for raw in found if isinstance(raw, dict)]
+
+
+def entry_label(raw: dict) -> str:
+    """The dropdown text one raw entry would produce.
+
+    Through ``CatalogEntry`` rather than a second copy of the rule. The label is
+    what a saved workflow remembers, so two implementations of it would be two
+    chances to quietly stop matching.
+    """
+    try:
+        return CatalogEntry(
+            name=str(raw.get("name") or ""),
+            repo=str(raw.get("repo") or ""),
+            download_gb=float(raw.get("download_gb") or 0.0),
+            vram=str(raw.get("vram") or ""),
+            note=str(raw.get("note") or ""),
+        ).label
+    except (TypeError, ValueError):
+        return str(raw.get("name") or "")
+
+
+def seed_names(section: str) -> set[str]:
+    """Every name the packaged list holds for one section."""
+    found = _seed().get(section)
+    if not isinstance(found, list):
+        return set()
+    return {str(raw["name"]) for raw in found if isinstance(raw, dict) and raw.get("name")}
+
+
+def _missing_from(data: dict, section: str) -> list[str]:
+    present = {
+        str(raw.get("name")) for raw in (data.get(section) or ()) if isinstance(raw, dict)
+    }
+    return sorted(seed_names(section) - present)
+
+
+def restorable(section: str) -> list[str]:
+    """Packaged entries this list no longer has, which a restore would bring back."""
+    return _missing_from(_data(), section)
+
+
+def _record_offered(data: dict, section: str, name: str) -> None:
+    """Record that a packaged entry has already been put in front of this install.
+
+    Without this a deletion does not stick. ``merge`` offers back every seed
+    entry that is neither present nor recorded, and the recording happens only
+    inside its own loop -- which is skipped for a file that failed to parse, and
+    has never run at all on a copy seeded and edited before its first read. The
+    packaged file ships without the key entirely.
+
+    Only seed names are recorded. ``seed_offered`` is documented as the user's to
+    edit, and inventing names in it would silently refuse a future entry of the
+    pack's own that happened to be called the same thing.
+    """
+    if name not in seed_names(section):
+        return
+    offered = dict(data.get(OFFERED_KEY) or {})
+    offered[section] = sorted(set(offered.get(section) or ()) | {name})
+    data[OFFERED_KEY] = offered
+
+
+def _entries_of(data: dict, section: str) -> list[dict]:
+    found = data.get(section)
+    return list(found) if isinstance(found, list) else []
+
+
+def _find(entries: list, name: str) -> int:
+    for at, raw in enumerate(entries):
+        if isinstance(raw, dict) and str(raw.get("name") or "") == name:
+            return at
+    return -1
+
+
+def _refuse_clash(entries: list, entry: dict, skip: int = -1) -> None:
+    """Refuse a name or a label another entry in the same list already carries.
+
+    Both, and for different reasons. ``name`` is how an edit and a deletion
+    address an entry, so a duplicate makes those ambiguous. The label is what the
+    dropdown is keyed on -- every ``_build_*_map`` is a dict of it -- so two
+    entries sharing one silently shadow each other and only ever offer the one.
+    """
+    name = str(entry.get("name") or "")
+    label = entry_label(entry)
+    for at, raw in enumerate(entries):
+        if at == skip or not isinstance(raw, dict):
+            continue
+        if str(raw.get("name") or "") == name:
+            raise CatalogWriteError(
+                f"'{name}' is already in this list. Edit that entry instead of adding a "
+                f"second one under the same name."
+            )
+        if entry_label(raw) == label:
+            raise CatalogWriteError(
+                f"'{raw.get('name')}' already shows as '{label}' in the dropdown, and two "
+                f"entries with the same label hide one another. Give this one a different "
+                f"name, download size, VRAM note or note."
+            )
+
+
+def add(section: str, entry: dict) -> dict:
+    """Append one entry to a list. Returns it as written."""
+    path, data = _mutable()
+    entries = _entries_of(data, section)
+    _refuse_clash(entries, entry)
+    entries.append(entry)
+    data[section] = entries
+    _write(path, data, backup=False)
+    return entry
+
+
+def update(section: str, name: str, entry: dict) -> dict:
+    """Replace the entry called ``name``. Returns it as written."""
+    path, data = _mutable()
+    entries = _entries_of(data, section)
+    at = _find(entries, name)
+    if at < 0:
+        raise CatalogWriteError(
+            f"'{name}' is not in this list any more -- something else changed the file. "
+            f"Reopen this window to see what is there now."
+        )
+    _refuse_clash(entries, entry, skip=at)
+    entries[at] = entry
+    data[section] = entries
+    if str(entry.get("name") or "") != name:
+        _record_offered(data, section, name)
+    _write(path, data, backup=False)
+    return entry
+
+
+def remove(section: str, name: str) -> bool:
+    """Delete one entry, and record it so the next merge does not bring it back."""
+    path, data = _mutable()
+    entries = _entries_of(data, section)
+    at = _find(entries, name)
+    if at < 0:
+        return False
+    entries.pop(at)
+    data[section] = entries
+    _record_offered(data, section, name)
+    _write(path, data, backup=False)
+    return True
+
+
+def restore_packaged(section: str) -> list[str]:
+    """Offer this list's packaged entries again, by forgetting they were offered.
+
+    The other half of ``remove``: ``seed_offered`` is the whole mechanism that
+    makes a deletion stick, so dropping the section from it is all a restore
+    needs. The next read merges the missing entries back in on its own. This is a
+    button for what the file's own comment block already tells people to do by
+    hand.
+    """
+    path, data = _mutable()
+    coming = _missing_from(data, section)
+    if not coming:
+        return []
+    offered = dict(data.get(OFFERED_KEY) or {})
+    offered.pop(section, None)
+    data[OFFERED_KEY] = offered
+    _write(path, data, backup=False)
+    return coming
 
 
 def reveal() -> str:

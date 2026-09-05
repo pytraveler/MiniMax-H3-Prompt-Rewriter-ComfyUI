@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 
 from .constants import ADAPTER_FILES, MODELS_SUBDIR
 
@@ -42,6 +43,37 @@ def local_dir_for_repo(repo_id: str) -> str:
 
 def looks_like_repo_id(value: str) -> bool:
     return "/" in value and not os.path.isabs(value) and "\\" not in value
+
+
+_EXTENDED_LOCAL = re.compile(r"^\\\\[?.]\\[A-Za-z]:")
+
+
+def is_network_path(value: str) -> bool:
+    """Whether this string names a UNC share rather than something on this machine."""
+    text = (value or "").strip()
+    if os.name == "nt":
+        text = text.replace("/", "\\")
+    return text.startswith("\\\\") and not _EXTENDED_LOCAL.match(text)
+
+
+def refuse_network_path(value: str, field: str, advice: str) -> None:
+    """Refuse a network location that arrived from outside this machine.
+
+    Paths written into ``models.json`` by hand are the user's own and may point
+    wherever they like, a NAS included; that file never leaves the machine unless
+    somebody sends it. A string that arrived over the wire is the other kind --
+    inside a downloaded workflow, or in a request to the ComfyUI API, which has
+    no CSRF token and is routinely served on ``--listen``. Merely *looking* at a
+    UNC path is an authentication attempt against whatever host it names: it
+    happens on the ``isfile`` call, long before anything judges the model.
+
+    Nothing legitimate is lost. A share holding your models is reachable through
+    a drive letter or a mount point like any other folder, and ``advice`` says so
+    in the words that fit wherever this is being called from.
+    """
+    if not is_network_path(value):
+        return
+    raise RuntimeError(f"'{value}' is a network path, and {field} will not follow one.\n\n{advice}")
 
 
 def catalog_file(repo: str, name: str) -> str:

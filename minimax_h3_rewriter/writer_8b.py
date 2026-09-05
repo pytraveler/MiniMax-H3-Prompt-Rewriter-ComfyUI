@@ -32,11 +32,10 @@ from . import aspect, catalog, discovery, engine, media, mtmd_engine
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
 from .constants import (
     MERGE_AUTO,
-    DURATION_MAX,
-    DURATION_MIN,
     OUTPUT_FIELDS,
     QUANTIZATIONS,
     RESOLUTIONS,
+    duration_widget,
 )
 from . import library, memory, snapshot
 from .fields import split_fields
@@ -489,16 +488,7 @@ class MiniMaxH3PromptWriter8B:
                     list(RESOLUTIONS),
                     {"default": "16:9", "socketless": True, "tooltip": aspect.PICKER_TOOLTIP},
                 ),
-                "duration": (
-                    "INT",
-                    {
-                        "default": 10,
-                        "min": DURATION_MIN,
-                        "max": DURATION_MAX,
-                        "step": 1,
-                        "tooltip": "Target clip length in seconds; drives shot count and pacing.",
-                    },
-                ),
+                "duration": duration_widget(),
                 "quantization": (
                     list(QUANTIZATIONS),
                     {

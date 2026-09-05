@@ -261,7 +261,8 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
                     options=captioner_choices(),
                     tooltip=(
                         "A multimodal GGUF and its projector. Entries prefixed 'on disk:' are "
-                        "pairs already in your ComfyUI model folders. One model reads every asset "
+                        "pairs already in your ComfyUI model folders, 'ollama:' ones come from "
+                        "your Ollama store. One model reads every asset "
                         "here, so it has to cover every kind you connected -- a vision-only "
                         "captioner cannot take the audio group. Ignored entirely while 'clip' is "
                         "connected."

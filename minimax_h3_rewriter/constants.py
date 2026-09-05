@@ -14,8 +14,55 @@ ADAPTER_FILES = ("adapter_config.json", "adapter_model.safetensors")
 BASE_SKIP_SUFFIXES = (".md", ".gitattributes")
 
 RESOLUTIONS = ("48:9", "32:9", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16")
-DURATION_MIN = 4
-DURATION_MAX = 15
+
+DURATION_TYPE = "FLOAT,INT"
+DURATION_MIN = 0.1
+DURATION_DEFAULT = 10.0
+DURATION_STEP = 0.1
+DURATION_CEILING = 600.0
+DURATION_PROPERTY = "max_duration"
+DURATION_PROPERTY_DEFAULT = 30.0
+
+DURATION_LEAD = "Target clip length in seconds; drives shot count and pacing."
+
+DURATION_MENU = (
+    "Right-click the node for 'duration': the default value back, or a new upper end for "
+    "the widget. It offers 30 seconds until you change it and the server takes up to 600, "
+    "because a widget's range is fixed when the node is declared and one number cannot suit "
+    "every graph -- MiniMax's own guide is written around clips of a few seconds, while the "
+    "stretched pipelines the community has built run well past that. What you set is "
+    "remembered with the workflow."
+)
+
+
+def duration_tooltip(lead: str = DURATION_LEAD) -> str:
+    """One node's own sentence about duration, with the menu explained after it."""
+    return f"{lead}\n\n{DURATION_MENU}"
+
+
+DURATION_TOOLTIP = duration_tooltip()
+
+
+def duration_options(tooltip: str = DURATION_TOOLTIP) -> dict:
+    """The duration widget's numbers, shared by both node schemas."""
+    return {
+        "default": DURATION_DEFAULT,
+        "min": DURATION_MIN,
+        "max": DURATION_CEILING,
+        "step": DURATION_STEP,
+        "round": DURATION_STEP,
+        "tooltip": tooltip,
+    }
+
+
+def duration_widget(tooltip: str = DURATION_TOOLTIP) -> tuple:
+    """The v1 declaration: a float widget that an INT link may drive as readily.
+
+    'widgetType' is what tells the frontend which of the two types to draw,
+    since the socket carries both.
+    """
+    return (DURATION_TYPE, {"widgetType": "FLOAT", **duration_options(tooltip)})
+
 
 QUANTIZATIONS = ("nf4", "int8", "bfloat16", "float16")
 ATTN_IMPLEMENTATIONS = ("sdpa", "eager", "flash_attention_2")

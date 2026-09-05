@@ -1,4 +1,5 @@
 import { app } from "../../scripts/app.js";
+import { applyDurationCeiling } from "./duration_limit.js";
 import { addSlotSwitches } from "./slot_switches.js";
 import {
     chipElement,
@@ -34,18 +35,12 @@ const LAYOUT = "reference_layout";
 const INSTRUCTIONS = "reference_instructions";
 const TASK = "task";
 const RESOLUTION = "resolution";
-const DURATION = "duration";
 
 const PREFIX = "ref_";
 const REF_TASK = "Ref2VA";
 const TEXT_TASK = "T2VA";
 
 const PICTURES_FOR_TASK = { I2VA: 1, FL2VA: 2, L2VA: 1 };
-
-const DURATION_PROPERTY = "max_duration";
-const DURATION_PROPERTY_DEFAULT = 30;
-const DURATION_MIN = 0.1;
-const DURATION_CEILING = 600;
 
 const IMAGE_ROLES = ["Picture", "Subject", "Video"];
 
@@ -311,19 +306,6 @@ function renderTasks(node) {
 }
 
 
-function applyDurationCeiling(node) {
-    const widget = widgetNamed(node, DURATION);
-    if (!widget?.options) return;
-
-    let ceiling = Number(node.properties?.[DURATION_PROPERTY]);
-    if (!isFinite(ceiling) || ceiling <= DURATION_MIN) ceiling = DURATION_PROPERTY_DEFAULT;
-    ceiling = Math.min(Math.round(ceiling * 10) / 10, DURATION_CEILING);
-
-    widget.options.max = ceiling;
-    if (Number(widget.value) > ceiling) widget.value = ceiling;
-}
-
-
 function redraw(node) {
     if (!node[STATE]) return;
     renderStrip(node);
@@ -360,24 +342,11 @@ function build(node) {
     replaceWithDom(node, TASK, "minimaxh3_task", tasks, () => TASKS_H);
     replaceWithDom(node, RESOLUTION, "minimaxh3_ratio", ratios, () => ratiosHeight(node, RESOLUTION));
 
-    if (node.properties?.[DURATION_PROPERTY] === undefined) {
-        node.addProperty?.(DURATION_PROPERTY, DURATION_PROPERTY_DEFAULT, "number");
-    }
     redraw(node);
 }
 
 function addControls(nodeType) {
     repaintOn(nodeType, build);
-
-    const onPropertyChanged = nodeType.prototype.onPropertyChanged;
-    nodeType.prototype.onPropertyChanged = function (name) {
-        const result = onPropertyChanged?.apply(this, arguments);
-        if (name === DURATION_PROPERTY) {
-            applyDurationCeiling(this);
-            this.setDirtyCanvas?.(true, true);
-        }
-        return result;
-    };
 
     addSlotSwitches(nodeType, {
         prefixes: [PREFIX],

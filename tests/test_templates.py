@@ -33,14 +33,8 @@ catalog = importlib.import_module(f"{_PKG}.catalog")
 
 OFFERED = {
     entry.label
-    for listing in (
-        catalog.load,
-        catalog.models_8b,
-        catalog.models_omni,
-        catalog.writers,
-        catalog.captioners,
-    )
-    for entry in listing()
+    for section in catalog.SECTIONS
+    for entry in catalog._entries(catalog._seed(), section)
 }
 
 LOOKS_LIKE_A_MODEL = re.compile(r"GB download|^on disk: ")

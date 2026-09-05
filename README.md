@@ -93,12 +93,14 @@ If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2va
   - [MiniMax-H3 Prompt Check](#minimax-h3-prompt-check)
   - [MiniMax-H3 Reference Adapter](#minimax-h3-reference-adapter)
   - [MiniMax-H3 Prompt Presets](#minimax-h3-prompt-presets)
+  - [The duration widget](#the-duration-widget)
   - [Repeating the last answer](#repeating-the-last-answer)
   - [The answer is checked](#the-answer-is-checked)
   - [Acting on what it found](#acting-on-what-it-found)
   - [The prompt library](#the-prompt-library)
   - [The guides are fetched, not bundled](#the-guides-are-fetched-not-bundled)
   - [The model list](#the-model-list)
+  - [Models you already pulled for Ollama](#models-you-already-pulled-for-ollama)
 - [Where the weights go](#where-the-weights-go)
 - [Using a model you already have](#using-a-model-you-already-have)
   - [Smaller repackings](#smaller-repackings)
@@ -210,8 +212,8 @@ releases the VRAM again.
 - `prompt` — the short prompt to expand.
 - `model` — the base model. The list holds every entry from your model list plus
   every Qwen3.6-27B already on disk (prefixed `on disk:`). Anything not present
-  is downloaded on first use, resuming if interrupted. The **Open model list**
-  button edits the list — see below.
+  is downloaded on first use, resuming if interrupted. The **Model list**
+  button edits the list in a window over the graph — see below.
 - `resolution` / `duration` — conditions the rewrite is composed for. Keep them
   equal to what you pass to MiniMax-H3, or the shot pacing will not match. The
   list runs `48:9` down to `9:16`; the two ultrawides are the multi-monitor
@@ -538,16 +540,17 @@ Run the 27B tab with any of them connected and the node says on itself that it i
 not reading them, and where to put them instead, rather than leaving you to
 wonder.
 
-**`duration` is a slider, and its range is 4–15 seconds.** Not a property you can
-raise, unlike the Universal Writer's: that node writes from a prose guide, while
-these two are LoRAs, and 4–15 is the range they were trained on. A number outside
-it is a worse prompt rather than a longer video — MiniMax-H3 gets the length from
-its own settings, not from this line.
+**`duration` is a slider**, reaching 30 seconds until you move it — right-click
+the node, `duration`. See [The duration widget](#the-duration-widget). The three
+adapters were trained on clips of a few seconds, so a number far past that is a
+worse prompt rather than a longer video — MiniMax-H3 gets the length from its own
+settings, not from this line.
 
 **There is no "Open guide folder" button**, because none of the three adapters
 reads a guide: the format is in the system prompt they were trained with. The
-model list button is there, and it opens the same `models.json` — `models` for
-the 27B tab, `models_8b` for the 8B one, `models_omni` for the Omni one.
+**Model list** button is there, and it opens all three of this node's lists as
+tabs in one window — `models` for the 27B tab, `models_8b` for the 8B one,
+`models_omni` for the Omni one.
 
 > **If the interface script does not load**, the tab strip, the task switch and
 > the ratio picker fall back to the plain dropdowns they are built on, and every
@@ -880,11 +883,9 @@ come out at roughly 15, 10 and 6 pixels tall. A node too narrow to hold the whol
 row wraps it onto a second line rather than cutting the last rectangles off, and
 grows by exactly that much.
 
-**`duration` is a slider, in tenths of a second.** How far it reaches is the
-node's own `max_duration` property — right-click the node, Properties Panel —
-and it is 30 seconds until you change it. A widget's range is fixed when the node
-is declared and one number cannot suit every graph, so the server accepts up to
-ten minutes while the slider spans whatever you actually work with.
+**`duration` is a slider, in tenths of a second**, and how far it reaches is
+yours to set — right-click the node, `duration`. See
+[The duration widget](#the-duration-widget).
 
 **Two model widgets, because there are two jobs.** `caption_model` reads the
 references and `writer_model` writes the prompt from MiniMax's guide; `clip`
@@ -1257,13 +1258,13 @@ No model is loaded and nothing is generated. The run costs a few milliseconds.
 
 ![The MiniMax-H3 Prompt Check node: an options socket and three reference sockets labelled ref_0, ref_1 and ref_2 down the left, two of them connected; nine outputs down the right — prompt first, then integrated_multimodal_description, subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape and non_diegetic_music, with findings last. Below them a tall empty prompt box, a task dropdown reading Ref2VA, a duration of 9.9, and one button: Save the last prompt](docs/node_prompt_check.png)
 
-*The outputs are the Universal Writer's, minus the two that describe its own captioning work — so a check node drops into a graph where a writer stood, and a writer drops in where a check node stood. The duration is 9.9 rather than a round number because it is whatever the prompt was written for, not what this pack's own writers allow. And there is one button rather than two: the node runs no model, so there is nothing to repeat and nothing to point at the library — but what it read, it can keep.*
+*The outputs are the Universal Writer's, minus the two that describe its own captioning work — so a check node drops into a graph where a writer stood, and a writer drops in where a check node stood. The duration is 9.9 rather than a round number because it is whatever the prompt was written for, not what you would have asked a writer for. And there is one button rather than two: the node runs no model, so there is nothing to repeat and nothing to point at the library — but what it read, it can keep.*
 
 | Input | What it is for |
 | --- | --- |
 | `prompt` | The text to read. It leaves the first output untouched, so the node can sit in the middle of a graph without changing what reaches the generator. |
 | `task` | Which task the prompt was written for. It decides which fields the answer should have, how many references of each kind it may cite, and whether an alignment line belongs at the top — so getting it wrong makes the reading wrong rather than absent. |
-| `duration` | How long the target video is. Cut times are read against it. The range here is wider than the writers allow, because prompts collected elsewhere often are. |
+| `duration` | How long the target video is. Cut times are read against it, so set it to what the prompt was written for rather than to what you would ask a writer for. |
 | `references` | Optional. Only their kind and number are read — nothing is decoded and no captioner runs. With them connected, the reading also covers what the text cites against what is actually here; with nothing connected those two rules are skipped and the rest still apply. |
 | `options` | Optional, and only `self_check` is read from it: how much is announced on screen. |
 
@@ -1378,6 +1379,52 @@ that same restriction. The shooting-style and subject tags are the
 collection. All thousand pass [the self-check](#the-answer-is-checked) with
 nothing to report, which is one way of saying what the format of a good H3 prompt
 actually looks like.
+
+### The duration widget
+
+Every node in the pack that writes or reads a prompt has one, and it means the
+same thing on all nine: how long the target clip is meant to be, in seconds. It
+is a hint rather than a setting — it reaches the model as one line of text,
+`duration: 10s`, and decides how many shots the rewrite plans and how it paces
+them. How long the clip really turns out to be is settled downstream, by whatever
+samples it.
+
+**It takes `FLOAT` and `INT` on the same socket.** The widget itself is a float,
+in tenths, because the cut times a rewrite writes are quoted to a thousandth —
+`At 00:02.378, the camera cuts to` — and asking for 7.5 seconds is as ordinary as
+asking for 8. But most graphs carry a length as a whole number, so the socket
+takes either: an `INT` primitive, a node that counts frames, or a `FLOAT` off a
+maths node all wire straight in, with no converter between. The two Universal
+nodes draw it as a slider and the rest as a number field you can type into; the
+range and the menu are the same either way.
+
+**Its upper end is yours to move.** Right-click the node — on the classic canvas,
+right-click the widget itself and the entry comes first — and there is a
+`duration` submenu with two items:
+
+| Item | What it does |
+| --- | --- |
+| **Default value** | Puts the widget back to the ten seconds it starts at. |
+| **Longest offered…** | Asks for a number and makes it the widget's top end. It is rounded to a tenth of a second and kept in the node, so it travels with the workflow. |
+
+![The classic-canvas context menu over a Universal Writer, headed MiniMaxH3UniversalWriter with `duration` as its first entry, highlighted, and its submenu open to the right holding two items — “Default value (10 s)” and “Longest offered (now 30 s)…”. Below the highlighted entry the node's ordinary menu continues: Set, Get, two greyed-out rgthree queue entries, Run, Reload Node and “Favorite Widget: duration”. Behind the menu the node shows its aspect-ratio chips with 16:9 lit and the duration slider reading 10.0](docs/duration_widget.png)
+
+*Right-clicking the widget itself puts `duration` at the top of the menu, as
+here; right-clicking anywhere else on the node reaches the same submenu further
+down. Both numbers in the submenu are the node's own and are saved with the
+workflow.*
+
+Thirty seconds until you change it, and the server accepts up to six hundred. Two
+numbers rather than one because a widget's range is fixed when the node is
+declared and no single range suits every graph: MiniMax's own guide is written
+around clips of a few seconds, while the stretched pipelines the community has
+built run well past that. So the server takes anything sane, and the widget spans
+what *you* work with — a slider reaching ten minutes is a slider that cannot be
+nudged to 9.
+
+That number is the node's own `max_duration` property, so the Properties Panel
+reaches the same setting; a workflow saved before this existed simply gets the
+thirty.
 
 ### Repeating the last answer
 
@@ -1677,18 +1724,69 @@ guide is the cheapest way to fit a small model's context.
 
 ### The model list
 
-The **Open model list** button on the rewriter node opens
+The **Model list** button on any model-loading node opens a window over the
+graph: the models that node offers, with **Add a model**, **Edit** and
+**Delete** beside them, and a **Check it** that reads the model before you spend
+a download on it. Everything is kept in
 
 ```text
 ComfyUI/user/minimax_h3_rewriter/models.json
 ```
 
-in your desktop's JSON editor — on the machine running ComfyUI, which is not
-necessarily the one looking at the browser tab. It is seeded from the packaged
-copy on first use, so updating the node pack never overwrites your edits.
+which is seeded from the packaged copy on first use, so updating the node pack
+never overwrites your edits. **Open models.json** in the window's footer still
+opens that file in your desktop's JSON editor — on the machine running ComfyUI,
+which is not necessarily the one looking at the browser tab — for the two things
+the window deliberately leaves alone: the `adapters` sections, and a path to a
+network share.
 
-It holds five lists with the same fields. **`models`** feeds the LoRA rewriter
-and has to be Qwen3.6-27B:
+The window shows only the lists the node it was opened from actually reads,
+because the adapters take different architectures and an entry from one list
+will not load in another's node. The Universal Rewriter therefore opens on three
+tabs and the captioner on one. Under the tabs is what that list requires — the
+architecture, the block count and width, whether a projector is needed and which
+encoders it has to carry — and below the entries, greyed out, the models found in
+your ComfyUI model folders: those are offered in the dropdown too, and there is
+nothing to edit, because they are files on disk rather than lines in a file.
+
+![The Model list window over the graph, headed “Model list” above the line “The models this node offers. Entries are kept in models.json in the ComfyUI user directory, so they outlive an update of the pack and are shared by every workflow.” Two tabs, Captioners lit and Guided writers beside it, over what that list requires: GGUF only, one file run by llama.cpp rather than a folder of safetensors; any architecture as long as the file is a language model with an embedded chat template; and a pair — the model and its ‘mmproj’ projector, from the same conversion. Below them two entries badged FROM THE PACK — Qwen2.5-Omni-3B, a 3.4 GB download needing about 5 GB, and Qwen2.5-Omni-7B, 5.8 GB needing about 8 — each showing its format, repository, file and projector in monospace, with Edit and Delete buttons at the right. Under a rule, “Found in your model folders. These are offered too, and there is nothing to edit: they are files on disk, not entries in the file.” heads three unbuttoned rows: on disk: Qwen3VL-8B-Instruct-Q4\_K\_M.gguf [+mmproj, vision, 5.4 GB], and the Omni 3B and 7B pairs, both marked vision and audio](docs/model_list_dialog.png)
+
+*Opened here from a node that reads two lists, so there are two tabs; the
+Universal Rewriter opens on three and the reference captioner on one. What the
+list requires sits above the entries, because it is the reason an entry belongs
+in this list and not another one.*
+
+**Check it** answers as much as can be answered without moving any weights. A
+file already on this machine is read outright, so it reports the architecture and
+the shape and says whether the projector carries vision and audio:
+
+```text
+- 'Qwen2.5-Omni-7B-Q4_K_M.gguf' is a 'qwen2vl' model, 28 blocks of width 3584. That fits.
+- 'mmproj-Qwen2.5-Omni-7B-Q8_0.gguf' carries the vision and audio encoder.
+```
+
+Anything only on Hugging Face is asked what its metadata can say: a transformers
+repository is judged from its 4 KB `config.json`, and a GGUF repository is asked
+whether the files you named are in it — which is what catches a typo that would
+otherwise surface as a download failing minutes in, and fills in `download_gb`
+for you while it is there.
+
+Two things the window will not do. It refuses a **network path** in `repo`,
+`file` or `mmproj`: it is reachable over the ComfyUI API, which has no CSRF
+token and is routinely served on `--listen`, and merely looking at a UNC path is
+an authentication attempt against the host it names. A path typed into
+`models.json` by hand is still unrestricted — that file does not travel. And it
+refuses to write at all while the file does not parse, since saving over it
+would replace your own entries with the packaged list; it shows the parse error
+and leaves only **Open models.json**.
+
+Editing an entry's name, download size, VRAM note or note changes what the
+dropdown reads, and saved workflows remember that string. The form says so
+before it commits, and the graph you have open is moved across for you. Other
+workflows are not.
+
+The file holds five lists with the same fields. **`models`** feeds the LoRA
+rewriter and has to be Qwen3.6-27B:
 
 ```json
 {
@@ -1831,16 +1929,68 @@ names in the pack  −  names in your file  −  names you were already offered
 
 so an entry you deleted stays deleted, one you renamed is not duplicated, and a
 genuinely new one arrives. Deleting a name from `seed_offered` offers that entry
-again on the next start.
+again on the next start, and **Restore the packaged entries** in the model-list
+window is that same edit as a button: it drops the record for one list, and the
+next read brings back every packaged entry the list is missing. Entries you
+wrote yourself are untouched by it.
 
 One exception, once: a file written before this existed has no record of what it
 was offered, so on the first update everything missing comes back — including
 anything you had deleted by hand. The previous file is kept beside it as
-`models.json.bak`, and from then on your deletions stick.
+`models.json.bak`, and from then on your deletions stick. That backup records
+the merge and nothing else: edits you make in the model-list window do not
+spend it, or two clicks would be all it took to lose the copy it exists for.
 
 Merges are logged to the ComfyUI console by name. A file the node cannot parse is
 left exactly as it is and the packaged list is used for that session, so a stray
 comma costs you a restart, not your edits.
+
+### Models you already pulled for Ollama
+
+If you run Ollama, the writers and captioners this pack wants are on your disk
+already, and downloading the same quant a second time would be silly. They are
+offered in the `writer_model` and `caption_model` dropdowns, prefixed `ollama:`
+and named the way `ollama list` names them:
+
+```text
+ollama: qwen3:8b [qwen3, 4.7 GB]
+ollama: moondream:latest [+mmproj, vision, 1.7 GB]
+```
+
+Nothing is copied, converted or downloaded, and Ollama itself does not have to be
+running: what it pulls is a plain GGUF, and llama.cpp reads it where it lies.
+This is the file on disk, not Ollama's API — the server can be stopped, disabled
+or uninstalled and the models stay usable.
+
+A multimodal model appears in both lists: as a writer without its projector, and
+as a captioner with it. The pairing comes out of the model's own manifest, where
+the two files are named together, so it is certain in a way that comparing file
+names in a folder is not.
+
+Three places are looked at, and Ollama's layout is the same on every platform:
+
+```text
+$OLLAMA_MODELS                     # if you set it
+~/.ollama/models                   # the usual install, Windows included
+/usr/share/ollama/.ollama/models   # Linux, installed as a service
+```
+
+A store anywhere else — inside WSL, in a container, on a drive the server knows
+nothing about — is named by hand, in `models.json`
+
+```json
+"ollama_stores": ["\\\\wsl$\\Ubuntu\\usr\\share\\ollama\\.ollama\\models"]
+```
+
+or in `MINIMAX_H3_OLLAMA_MODELS`, which takes several paths separated the way
+`PATH` separates them. Those are not looked for automatically on purpose:
+reaching `\\wsl$\...` **starts a stopped WSL distribution**, and these lists are
+rebuilt every time a dropdown is filled. Opening a ComfyUI tab should not boot a
+virtual machine.
+
+`ollama rm` takes a model out of the dropdowns the way deleting any other file
+does. What your workflow saves is the name and the tag rather than the path, so
+re-pulling the same tag — even at a different quantisation — leaves it working.
 
 ## Where the weights go
 

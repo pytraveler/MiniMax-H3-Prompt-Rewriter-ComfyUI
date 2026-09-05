@@ -6,13 +6,82 @@ everything is guarded and logged rather than raised.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
-from . import catalog, guides, library, memory, presets
+from . import catalog, guides, library, memory, model_sections, presets
 
 log = logging.getLogger(__name__)
 
 PREFIX = "/minimax_h3_rewriter"
+
+
+def _model_list(node: str) -> dict:
+    """Everything the model-list window needs to draw itself for one node."""
+    wanted = model_sections.sections_of(node) or tuple(model_sections.SECTIONS)
+    writable, refusal = True, ""
+    try:
+        catalog.writable()
+    except catalog.CatalogWriteError as error:
+        writable, refusal = False, str(error)
+    return {
+        "ok": True,
+        "path": catalog.user_file(),
+        "writable": writable,
+        "problem": refusal,
+        "widgets": [
+            {"widget": one.widget, "section": one.section}
+            for one in model_sections.for_node(node)
+        ],
+        "sections": [model_sections.listing(one) for one in wanted],
+    }
+
+
+def _current(section: str, name: str) -> dict | None:
+    return next(
+        (one for one in catalog.raw_entries(section) if str(one.get("name") or "") == name),
+        None,
+    )
+
+
+def _save_entry(section: str, name: str, raw: dict) -> dict:
+    """Add or replace one entry, and say what the dropdown used to call it.
+
+    The label is what a saved workflow remembers, and it is built from four of
+    these fields rather than just the name -- so an edit that only touches the
+    VRAM note still moves it. Reporting both spellings is what lets the window
+    put the graph in front of the person back in step instead of leaving a
+    dangling choice for them to find later.
+    """
+    entry = model_sections.clean_entry(section, raw)
+    before = ""
+    if name:
+        held = _current(section, name)
+        if held is None:
+            raise catalog.CatalogWriteError(
+                f"'{name}' is not in this list any more -- something else changed the file. "
+                f"Reopen this window to see what is there now."
+            )
+        before = catalog.entry_label(held)
+        catalog.update(section, name, entry)
+    else:
+        catalog.add(section, entry)
+
+    after = catalog.entry_label(entry)
+    return {
+        "ok": True,
+        "entry": dict(entry, label=after),
+        "label_before": before,
+        "label_after": after,
+        "choices": {section: model_sections.choices(section)},
+    }
+
+
+def _check_entry(section: str, raw: dict) -> dict:
+    """Probe one entry. Cleaned first, so a network path is refused before it is read."""
+    entry = model_sections.clean_entry(section, raw)
+    found = model_sections.check(section, entry)
+    return {"ok": True, "label": catalog.entry_label(entry), **found}
 
 
 def register() -> None:
@@ -314,15 +383,83 @@ def register() -> None:
             {"ok": True, "file": library.clean(name), "record": saved}
         )
 
+    async def off_loop(work, *args):
+        """Run blocking work on a thread, so the event loop keeps serving.
+
+        Every other route here answers from memory. These read GGUF headers, walk
+        the model folders and talk to the Hub: a cold header read costs seconds
+        per file, and the Hub calls carry 30- and 60-second timeouts. Holding the
+        loop for that stops the whole interface, the progress socket and the
+        queue along with it.
+        """
+        return await asyncio.to_thread(work, *args)
+
+    def refused(error, status=400):
+        return web.json_response({"ok": False, "error": str(error)}, status=status)
+
+    async def answered(work, *args):
+        """Run one model-list operation, telling a refusal apart from a failure.
+
+        A refusal is the ordinary case here -- a duplicate name, a network path,
+        a file that does not parse -- and the window prints it beside the field.
+        Anything else is a bug and is logged as one.
+        """
+        try:
+            return web.json_response(await off_loop(work, *args))
+        except (RuntimeError, KeyError) as error:
+            return refused(error)
+        except Exception as error:  # noqa: BLE001 - the window has to say something
+            log.error("[minimax_h3_rewriter.routes] model list: %s", error, exc_info=True)
+            return refused(error, status=500)
+
     @routes.get(f"{PREFIX}/model_list")
     async def model_list(request):
-        return web.json_response(
-            {
-                "path": catalog.user_file(),
-                "models": [entry.label for entry in catalog.load()],
-                "writers": [entry.label for entry in catalog.writers()],
-            }
+        """The lists one node reads, what may go in them, and what is in them now."""
+        return await answered(_model_list, request.query.get("node") or "")
+
+    @routes.post(f"{PREFIX}/model_list/save")
+    async def model_list_save(request):
+        """Add an entry, or replace the one named by ``name``."""
+        body = await request.json()
+        return await answered(
+            _save_entry,
+            body.get("section") or "",
+            str(body.get("name") or ""),
+            body.get("entry") or {},
         )
+
+    @routes.post(f"{PREFIX}/model_list/delete")
+    async def model_list_delete(request):
+        body = await request.json()
+        section = body.get("section") or ""
+
+        def drop():
+            gone = catalog.remove(section, str(body.get("name") or ""))
+            return {"ok": gone, "choices": {section: model_sections.choices(section)}}
+
+        return await answered(drop)
+
+    @routes.post(f"{PREFIX}/model_list/restore")
+    async def model_list_restore(request):
+        """Offer this list's packaged entries again."""
+        body = await request.json()
+        section = body.get("section") or ""
+
+        def bring_back():
+            restored = catalog.restore_packaged(section)
+            return {
+                "ok": True,
+                "restored": restored,
+                "choices": {section: model_sections.choices(section)},
+            }
+
+        return await answered(bring_back)
+
+    @routes.post(f"{PREFIX}/model_list/check")
+    async def model_list_check(request):
+        """What this entry actually is, as far as that can be known without weights."""
+        body = await request.json()
+        return await answered(_check_entry, body.get("section") or "", body.get("entry") or {})
 
 
 try:

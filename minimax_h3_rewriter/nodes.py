@@ -27,6 +27,7 @@ from . import (
     media,
     memory,
     mtmd_engine,
+    ollama_store,
     repair,
 )
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
@@ -36,8 +37,6 @@ from .constants import (
     ATTN_IMPLEMENTATIONS,
     BASE_MODEL_REPO,
     BASE_SKIP_SUFFIXES,
-    DURATION_MAX,
-    DURATION_MIN,
     GGUF_RUNTIMES,
     MERGE_AUTO,
     MERGE_LORA,
@@ -49,6 +48,7 @@ from .constants import (
     RUNTIME_AUTO,
     RUNTIME_BINARY,
     RUNTIME_WHEEL,
+    duration_widget,
 )
 from .fields import split_fields, split_sections
 from .paths import (
@@ -56,6 +56,7 @@ from .paths import (
     base_model_is_complete,
     catalog_file,
     models_root,
+    refuse_network_path,
     resolve_source,
 )
 from .progress import NodeProgress, TransferReporter, announce
@@ -104,6 +105,8 @@ ADAPTER_SPEC = {
 }
 
 LOCAL_PREFIX = "on disk: "
+
+OLLAMA_PREFIX = "ollama: "
 
 
 @dataclass
@@ -161,8 +164,8 @@ def _announce(choices: list[str]) -> list[str]:
 def _refuse_problem(choice: str) -> None:
     if choice.startswith(PROBLEM_PREFIX):
         raise RuntimeError(
-            f"{choice[len(PROBLEM_PREFIX):]}\n\nFix {catalog.user_file()} — the 'Open model "
-            f"list' button opens it — then refresh the browser tab. ComfyUI need not restart."
+            f"{choice[len(PROBLEM_PREFIX):]}\n\nFix {catalog.user_file()} — the 'Model list' "
+            f"button opens it — then refresh the browser tab. ComfyUI need not restart."
         )
 
 
@@ -184,7 +187,7 @@ def _resolve_model_choice(choice: str) -> Choice:
         return Choice(reference=choice)
     raise RuntimeError(
         f"'{choice}' is not in the model list any more. Pick another entry, or add it back "
-        f"with the 'Open model list' button ({catalog.user_file()})."
+        f"with the 'Model list' button ({catalog.user_file()})."
     )
 
 
@@ -210,6 +213,11 @@ def _build_writer_map() -> dict[str, Choice]:
             mapping[f"{LOCAL_PREFIX}{label}"] = Choice(reference=path, fmt=FORMAT_GGUF, local=True)
     except Exception:
         log.warning("[minimax_h3_rewriter._build_writer_map] gguf scan failed", exc_info=True)
+    try:
+        for label, path in ollama_store.scan_writers():
+            mapping[f"{OLLAMA_PREFIX}{label}"] = Choice(reference=path, fmt=FORMAT_GGUF, local=True)
+    except Exception:
+        log.warning("[minimax_h3_rewriter._build_writer_map] ollama scan failed", exc_info=True)
 
     _WRITER_MAP.clear()
     _WRITER_MAP.update(mapping)
@@ -272,6 +280,13 @@ def _build_captioner_map() -> dict[str, CaptionerChoice]:
             )
     except Exception:
         log.warning("[minimax_h3_rewriter._build_captioner_map] gguf scan failed", exc_info=True)
+    try:
+        for label, model_path, mmproj_path in ollama_store.scan_captioners():
+            mapping[f"{OLLAMA_PREFIX}{label}"] = CaptionerChoice(
+                reference=model_path, mmproj=mmproj_path, local=True
+            )
+    except Exception:
+        log.warning("[minimax_h3_rewriter._build_captioner_map] ollama scan failed", exc_info=True)
 
     _CAPTIONER_MAP.clear()
     _CAPTIONER_MAP.update(mapping)
@@ -450,31 +465,20 @@ def _ensure_pair(
     return targets
 
 
-_EXTENDED_LOCAL = re.compile(r"^\\\\[?.]\\[A-Za-z]:")
-
-
 def _refuse_remote(value: str) -> None:
     """Refuse a network location that arrived through a widget.
 
-    Paths in ``models.json`` are the user's own and may point wherever they
-    like, a NAS included; that file never leaves the machine unless somebody
-    sends it. This string is the other kind. It rides inside the workflow JSON,
-    so a graph downloaded from anywhere gets to choose it, and merely *looking*
-    at a UNC path is an authentication attempt against whatever host is named --
-    it happens on the ``isfile`` call, long before anything decides the adapter
-    is unusable. Nothing legitimate is lost: a share holding your models is
-    reachable through a drive letter or a mount point like any other folder.
+    The rule and the reasoning live in ``paths.refuse_network_path``, which the
+    model-list routes share: this string rides inside the workflow JSON, so a
+    graph downloaded from anywhere gets to choose it.
     """
-    text = (value or "").strip()
-    if os.name == "nt":
-        text = text.replace("/", "\\")
-    if not text.startswith("\\\\") or _EXTENDED_LOCAL.match(text):
-        return
-    raise RuntimeError(
-        f"'{value}' is a network path, and the options node will not follow one.\n\n"
-        f"This field travels inside the workflow, so a graph from elsewhere could point it "
+    refuse_network_path(
+        value,
+        "the options node",
+        "This field travels inside the workflow, so a graph from elsewhere could point it "
         f"at any host. Map the share to a drive letter and use that, or put the adapter in "
-        f"{catalog.user_file()} instead — paths in that file are yours and are not restricted."
+        f"{catalog.user_file()} instead — paths written into that file by hand are yours "
+        f"and are not restricted.",
     )
 
 
@@ -955,7 +959,7 @@ def rewrite_t2va(
     choice = _resolve_model_choice(model)
 
     decoding = {
-        "messages": build_messages(prompt, resolution, int(duration)),
+        "messages": build_messages(prompt, resolution, float(duration)),
         "seed": int(seed),
         "greedy": greedy,
         "max_new_tokens": int(settings["max_new_tokens"]),
@@ -1056,16 +1060,7 @@ class MiniMaxH3PromptRewriter:
                     list(RESOLUTIONS),
                     {"default": "16:9", "socketless": True, "tooltip": aspect.PICKER_TOOLTIP},
                 ),
-                "duration": (
-                    "INT",
-                    {
-                        "default": 10,
-                        "min": DURATION_MIN,
-                        "max": DURATION_MAX,
-                        "step": 1,
-                        "tooltip": "Target clip length in seconds; drives shot count and pacing.",
-                    },
-                ),
+                "duration": duration_widget(),
                 "quantization": (
                     list(QUANTIZATIONS),
                     {
@@ -1478,7 +1473,8 @@ class MiniMaxH3GuidedWriter:
                     {
                         "tooltip": (
                             "Any GGUF language model. Entries prefixed 'on disk:' are already "
-                            "in your ComfyUI model folders; the rest are fetched on first use. "
+                            "in your ComfyUI model folders and 'ollama:' ones are models you "
+                            "pulled for Ollama; the rest are fetched on first use. "
                             "Nothing has to be installed: without llama-cpp-python the node "
                             "runs the official llama.cpp binaries."
                         ),
@@ -1500,16 +1496,7 @@ class MiniMaxH3GuidedWriter:
                     list(RESOLUTIONS),
                     {"default": "16:9", "socketless": True, "tooltip": aspect.PICKER_TOOLTIP},
                 ),
-                "duration": (
-                    "INT",
-                    {
-                        "default": 10,
-                        "min": DURATION_MIN,
-                        "max": DURATION_MAX,
-                        "step": 1,
-                        "tooltip": "Target clip length in seconds; drives shot count and pacing.",
-                    },
-                ),
+                "duration": duration_widget(),
                 "greedy": (
                     "BOOLEAN",
                     {
@@ -1706,16 +1693,7 @@ class MiniMaxH3GuidedWriterRef:
                     list(RESOLUTIONS),
                     {"default": "16:9", "socketless": True, "tooltip": aspect.PICKER_TOOLTIP},
                 ),
-                "duration": (
-                    "INT",
-                    {
-                        "default": 10,
-                        "min": DURATION_MIN,
-                        "max": DURATION_MAX,
-                        "step": 1,
-                        "tooltip": "Target clip length in seconds; drives shot count and pacing.",
-                    },
-                ),
+                "duration": duration_widget(),
                 "greedy": (
                     "BOOLEAN",
                     {
@@ -1899,10 +1877,7 @@ class MiniMaxH3GuidePrompt:
                     list(RESOLUTIONS),
                     {"default": "16:9", "socketless": True, "tooltip": aspect.PICKER_TOOLTIP},
                 ),
-                "duration": (
-                    "INT",
-                    {"default": 10, "min": DURATION_MIN, "max": DURATION_MAX, "step": 1},
-                ),
+                "duration": duration_widget(),
             },
             "optional": {
                 "aspect_ratio": (
@@ -1969,7 +1944,7 @@ class MiniMaxH3GuidePrompt:
         progress = NodeProgress(unique_id)
         guide = guides.text(guide_prompt.GUIDE_FOR_MODE[task], auto_download, progress)
         messages = guide_prompt.build_messages(
-            guide, task, prompt, resolution, int(duration), reference_material
+            guide, task, prompt, resolution, float(duration), reference_material
         )
         system, user = messages[0]["content"], messages[1]["content"]
         joined = single_prompt(system, user, format)
@@ -2145,7 +2120,8 @@ class MiniMaxH3ReferenceCaption:
                     {
                         "tooltip": (
                             "A multimodal GGUF and its projector. Entries prefixed 'on disk:' "
-                            "are pairs already in your ComfyUI model folders. Not every "
+                            "are pairs already in your ComfyUI model folders, 'ollama:' ones "
+                            "are vision models you pulled for Ollama. Not every "
                             "multimodal GGUF works: llama.cpp's mtmd has to understand the "
                             "projector, and some current models abort while loading it. Ignored "
                             "entirely while 'clip' is connected."

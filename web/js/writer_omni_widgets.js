@@ -283,7 +283,8 @@ function renderDuration(node) {
     const fit = snapped(value);
     widget.tooltip =
         `${fit.frames} frames at ${FRAME_RATE} fps, ${fit.seconds.toFixed(2)} s -- the ` +
-        "nearest length MiniMax-H3 can actually produce, and the one the rewrite quotes.";
+        "nearest length MiniMax-H3 can actually produce, and the one the rewrite quotes." +
+        "\n\nRight-click the node for 'duration' to move how far this reaches.";
 }
 
 

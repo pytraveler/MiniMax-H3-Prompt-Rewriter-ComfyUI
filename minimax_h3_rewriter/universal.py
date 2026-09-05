@@ -45,7 +45,12 @@ from . import (
     mtmd_engine,
     snapshot,
 )
-from .constants import OUTPUT_FIELDS, REF_OUTPUT_FIELDS, RESOLUTIONS
+from .constants import (
+    OUTPUT_FIELDS,
+    REF_OUTPUT_FIELDS,
+    RESOLUTIONS,
+    duration_options,
+)
 from .fields import split_sections
 from .nodes import (
     BYPASS_TOOLTIP,
@@ -94,13 +99,6 @@ ALL_FIELDS = (
     *OUTPUT_FIELDS[1:],
 )
 
-DURATION_MIN = 0.1
-DURATION_DEFAULT = 10.0
-
-DURATION_CEILING = 600.0
-DURATION_PROPERTY = "max_duration"
-DURATION_PROPERTY_DEFAULT = 30.0
-
 DESCRIPTION = (
     "Describes every connected reference and writes the finished MiniMax-H3 prompt, in one "
     "node, for all five tasks. One socket takes an image, a clip or a sound; the strip under "
@@ -128,13 +126,6 @@ TASK_TOOLTIP = (
     "picture, the final frame. FL2VA: two pictures, first and last. Ref2VA: any number of "
     "references the target video reuses, written with the six-section full-reference guide. "
     "Everything but T2VA opens with the alignment line, duration already filled in."
-)
-
-DURATION_TOOLTIP = (
-    "Target clip length in seconds; drives shot count and pacing. The slider's upper end is "
-    "the node's own 'max_duration' property (right-click, Properties Panel), 30 seconds until "
-    "you change it -- MiniMax's guide is written around clips of a few seconds, so a shorter "
-    "range is a more useful slider than a longer one."
 )
 
 
@@ -370,15 +361,13 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                     socketless=True,
                     tooltip=aspect.PICKER_TOOLTIP,
                 ),
-                io.Float.Input(
-                    "duration",
-                    default=DURATION_DEFAULT,
-                    min=DURATION_MIN,
-                    max=DURATION_CEILING,
-                    step=0.1,
-                    round=0.1,
-                    display_mode=io.NumberDisplay.slider,
-                    tooltip=DURATION_TOOLTIP,
+                io.MultiType.Input(
+                    io.Float.Input(
+                        "duration",
+                        display_mode=io.NumberDisplay.slider,
+                        **duration_options(),
+                    ),
+                    types=[io.Int],
                 ),
                 io.String.Input(
                     "prompt",
@@ -395,7 +384,8 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                     options=captioner_choices(),
                     tooltip=(
                         "The multimodal GGUF that reads the references, with its projector. "
-                        "Entries prefixed 'on disk:' are pairs already in your model folders. "
+                        "Entries prefixed 'on disk:' are pairs already in your model folders, "
+                        "'ollama:' ones come from your Ollama store. "
                         "One model reads every reference here, so it has to cover every kind "
                         "you connected. Unused while 'clip' is connected, or on T2VA."
                     ),
