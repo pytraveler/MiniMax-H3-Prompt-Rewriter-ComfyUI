@@ -28,6 +28,7 @@ from . import (
     memory,
     mtmd_engine,
     ollama_store,
+    remote_engine,
     repair,
 )
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
@@ -37,6 +38,7 @@ from .constants import (
     ATTN_IMPLEMENTATIONS,
     BASE_MODEL_REPO,
     BASE_SKIP_SUFFIXES,
+    DEFAULT_SERVER_URL,
     GGUF_RUNTIMES,
     MERGE_AUTO,
     MERGE_LORA,
@@ -47,6 +49,7 @@ from .constants import (
     RESOLUTIONS,
     RUNTIME_AUTO,
     RUNTIME_BINARY,
+    RUNTIME_REMOTE,
     RUNTIME_WHEEL,
     duration_widget,
 )
@@ -82,12 +85,35 @@ DEFAULT_OPTIONS = {
     "n_ctx": 8192,
     "gguf_runtime": RUNTIME_AUTO,
     "llama_backend": "auto",
+    "server_url": DEFAULT_SERVER_URL,
+    "server_model": "",
     "device": devices.AUTO,
     "trust_remote_code": False,
     "prompt_file": library.DEFAULT_FILE,
     "self_check": checks.REPORT_ALL,
     "fix_once": False,
 }
+
+LOCAL_PREFIX = "on disk: "
+
+OLLAMA_PREFIX = "ollama: "
+
+
+def remote_target(settings: dict) -> tuple[str, str] | None:
+    """``(server_url, server_model)`` when the run is to go over the wire, else None.
+
+    The one place the decision is made, so the text nodes, the captioners and
+    the frame-carrying writers all agree without repeating it: the Options
+    node picks 'remote (llama.cpp server)' as the ``gguf_runtime`` and every
+    local engine -- the wheel, the binaries, the downloads, the VRAM -- stops
+    being involved. The model the local list names is ignored, because the
+    server already holds one; ``server_model`` is its name, or empty to let
+    the server decide.
+    """
+    if not (settings or {}).get("gguf_runtime") == RUNTIME_REMOTE:
+        return None
+    return remote_engine.normalize_url(settings.get("server_url")), remote_engine.server_model(settings)
+
 
 BASE_SPEC = {
     "default_repo": BASE_MODEL_REPO,
@@ -103,10 +129,6 @@ ADAPTER_SPEC = {
     "skip_suffixes": (),
     "label": "Prompt-rewriter LoRA",
 }
-
-LOCAL_PREFIX = "on disk: "
-
-OLLAMA_PREFIX = "ollama: "
 
 
 @dataclass
@@ -675,9 +697,17 @@ def _gguf_text(settings: dict, **common) -> str:
 
     Both rewriters ask the same question -- resident wheel, or the official
     binaries in a subprocess -- and the answer does not depend on which of them
-    is asking, so it is answered once.
+    is asking, so it is answered once. The remote server is a third answer, and
+    it is reached before the question is asked: once the Options node points at
+    one, the local engines are not in the running at all.
     """
     runtime = settings.get("gguf_runtime", RUNTIME_AUTO)
+    if runtime == RUNTIME_REMOTE:
+        return remote_engine.rewrite(
+            server_url=settings.get("server_url"),
+            server_model=settings.get("server_model"),
+            **common,
+        )
     if runtime == RUNTIME_AUTO:
         runtime = RUNTIME_WHEEL if gguf_engine.available() else RUNTIME_BINARY
 
@@ -789,11 +819,45 @@ class MiniMaxH3RewriterOptions:
                     {
                         "default": RUNTIME_AUTO,
                         "tooltip": (
-                            "GGUF only: what runs the model. 'auto' uses llama-cpp-python when "
+                            "What runs the GGUF models. 'auto' uses llama-cpp-python when "
                             "it is importable and the official llama.cpp binaries otherwise. "
                             "Force 'llama.cpp' if an installed wheel is broken; force "
-                            "'llama-cpp-python' to keep the model resident between runs, which "
-                            "the binaries cannot do."
+                            "'llama-cpp-python' to keep the model resident between runs, "
+                            "which the binaries cannot do.\n\n"
+                            "'remote (llama.cpp server)' runs none of it: the messages go "
+                            "over HTTP to an already-running 'llama-server' or llama-swap at "
+                            "'server_url' -- llama-swap's default is '127.0.0.1:9090'. "
+                            "Nothing is downloaded, nothing is loaded here, the model and "
+                            "its LoRA are whatever the server holds, and 'server_model' "
+                            "names which one to ask for when the server serves several."
+                        ),
+                    },
+                ),
+                "server_url": (
+                    "STRING",
+                    {
+                        "default": DEFAULT_SERVER_URL,
+                        "tooltip": (
+                            "Where the llama.cpp server listens, for 'remote (llama.cpp "
+                            "server)' only. llama-swap -- a model-swapping proxy around "
+                            "llama-server -- listens on '127.0.0.1:9090' by default; a "
+                            "plain 'llama-server' listens on '127.0.0.1:8080'. Give the "
+                            "base address only; the node appends /v1/chat/completions."
+                        ),
+                    },
+                ),
+                "server_model": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "tooltip": (
+                            "Which model on the server to ask for, for 'remote (llama.cpp "
+                            "server)' only. llama-swap switches to whatever model this names "
+                            "and loads it if needed; a plain 'llama-server' holds one model "
+                            "and ignores the field, which is what an empty value achieves. "
+                            "The model's LoRA travels with it -- a server-served rewriter "
+                            "already has the prompt-rewriter LoRA attached, which is why "
+                            "'use_lora' is ignored here."
                         ),
                     },
                 ),
@@ -959,8 +1023,6 @@ def rewrite_t2va(
     the same either way, and the second copy of it would be the one that stopped
     getting fixed.
     """
-    choice = _resolve_model_choice(model)
-
     decoding = {
         "messages": build_messages(prompt, resolution, float(duration)),
         "seed": int(seed),
@@ -971,6 +1033,11 @@ def rewrite_t2va(
         "top_k": int(settings["top_k"]),
         "repetition_penalty": float(settings["repetition_penalty"]),
     }
+
+    if settings.get("gguf_runtime") == RUNTIME_REMOTE:
+        return _gguf_text(settings, progress=progress, **decoding)
+
+    choice = _resolve_model_choice(model)
 
     if choice.fmt == FORMAT_GGUF:
         if choice.local:
@@ -1241,6 +1308,21 @@ def run_messages(
 
     ``label`` only names the caller in the log line and the caption.
     """
+    if settings.get("gguf_runtime") == RUNTIME_REMOTE:
+        return remote_engine.rewrite(
+            messages=messages,
+            server_url=settings.get("server_url"),
+            server_model=settings.get("server_model"),
+            seed=int(seed),
+            greedy=greedy,
+            max_new_tokens=int(settings["max_new_tokens"]),
+            temperature=float(settings["temperature"]),
+            top_p=float(settings["top_p"]),
+            top_k=int(settings["top_k"]),
+            repetition_penalty=float(settings["repetition_penalty"]),
+            progress=progress,
+            label=label,
+        )
     choice = _resolve_writer_choice(model)
     if choice.local:
         model_path = choice.reference
@@ -2319,49 +2401,75 @@ class MiniMaxH3ReferenceCaption:
                     progress=progress,
                 )
             else:
-                choice = _resolve_captioner_choice(model)
-                if choice.local:
-                    model_path, mmproj_path = choice.reference, choice.mmproj
+                target = remote_target(settings)
+                if target is not None:
+                    caption = mtmd_engine.describe(
+                        model_path="",
+                        mmproj_path="",
+                        instruction=asked,
+                        image=image,
+                        audio=audio,
+                        video=video,
+                        max_frames=int(max_frames),
+                        gpu_layers=int(settings["gpu_layers"]),
+                        n_ctx=int(context_size),
+                        seed=int(seed),
+                        greedy=True,
+                        max_new_tokens=min(int(settings["max_new_tokens"]), 1024),
+                        temperature=float(settings["temperature"]),
+                        top_p=float(settings["top_p"]),
+                        top_k=int(settings["top_k"]),
+                        device=settings["device"],
+                        backend=settings["llama_backend"],
+                        auto_download=False,
+                        progress=progress,
+                        remote_url=target[0],
+                        remote_model=target[1],
+                    )
                 else:
-                    model_path, mmproj_path = _ensure_pair(
-                        choice.reference, choice.file, choice.mmproj, "Captioner",
-                        settings["auto_download"], progress,
-                    )
+                    choice = _resolve_captioner_choice(model)
+                    if choice.local:
+                        model_path, mmproj_path = choice.reference, choice.mmproj
+                    else:
+                        model_path, mmproj_path = _ensure_pair(
+                            choice.reference, choice.file, choice.mmproj, "Captioner",
+                            settings["auto_download"], progress,
+                        )
 
-                header = discovery.gguf_header(mmproj_path)
-                if audio is not None and not header["audio"]:
-                    raise RuntimeError(
-                        f"'{os.path.basename(mmproj_path)}' was built without an audio encoder, so "
-                        f"this model cannot hear the clip. Pick a captioner whose label lists "
-                        f"'audio'."
-                    )
-                if (image is not None or video is not None) and not header["vision"]:
-                    raise RuntimeError(
-                        f"'{os.path.basename(mmproj_path)}' was built without a vision encoder, so "
-                        f"this model cannot see. Pick a captioner whose label lists 'vision'."
-                    )
+                    header = discovery.gguf_header(mmproj_path)
+                    if audio is not None and not header["audio"]:
+                        raise RuntimeError(
+                            f"'{os.path.basename(mmproj_path)}' was built without an audio encoder, so "
+                            f"this model cannot hear the clip. Pick a captioner whose label lists "
+                            f"'audio'."
+                        )
+                    if (image is not None or video is not None) and not header["vision"]:
+                        raise RuntimeError(
+                            f"'{os.path.basename(mmproj_path)}' was built without a vision encoder, so "
+                            f"this model cannot see. Pick a captioner whose label lists 'vision'."
+                        )
 
-                caption = mtmd_engine.describe(
-                    model_path=model_path,
-                    mmproj_path=mmproj_path,
-                    instruction=asked,
-                    image=image,
-                    audio=audio,
-                    video=video,
-                    max_frames=int(max_frames),
-                    gpu_layers=int(settings["gpu_layers"]),
-                    n_ctx=int(context_size),
-                    seed=int(seed),
-                    greedy=True,
-                    max_new_tokens=min(int(settings["max_new_tokens"]), 1024),
-                    temperature=float(settings["temperature"]),
-                    top_p=float(settings["top_p"]),
-                    top_k=int(settings["top_k"]),
-                    device=settings["device"],
-                    backend=settings["llama_backend"],
-                    auto_download=settings["auto_download"],
-                    progress=progress,
-                )
+                    caption = mtmd_engine.describe(
+                        model_path=model_path,
+                        mmproj_path=mmproj_path,
+                        instruction=asked,
+                        image=image,
+                        audio=audio,
+                        video=video,
+                        max_frames=int(max_frames),
+                        gpu_layers=int(settings["gpu_layers"]),
+                        n_ctx=int(context_size),
+                        seed=int(seed),
+                        greedy=True,
+                        max_new_tokens=min(int(settings["max_new_tokens"]), 1024),
+                        temperature=float(settings["temperature"]),
+                        top_p=float(settings["top_p"]),
+                        top_k=int(settings["top_k"]),
+                        device=settings["device"],
+                        backend=settings["llama_backend"],
+                        auto_download=settings["auto_download"],
+                        progress=progress,
+                    )
             memory.keep(
                 unique_id, "MiniMaxH3ReferenceCaption", (caption,), given, task="caption"
             )

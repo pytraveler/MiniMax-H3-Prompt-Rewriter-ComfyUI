@@ -73,7 +73,15 @@ MERGE_LORA = (MERGE_AUTO, MERGE_ON, MERGE_OFF)
 RUNTIME_AUTO = "auto"
 RUNTIME_WHEEL = "llama-cpp-python"
 RUNTIME_BINARY = "llama.cpp"
-GGUF_RUNTIMES = (RUNTIME_AUTO, RUNTIME_WHEEL, RUNTIME_BINARY)
+RUNTIME_REMOTE = "remote (llama.cpp server)"
+GGUF_RUNTIMES = (RUNTIME_AUTO, RUNTIME_WHEEL, RUNTIME_BINARY, RUNTIME_REMOTE)
+
+#: Where this pack looks for an already-running llama.cpp server by default.
+#:
+#: llama-swap and a plain ``llama-server`` both speak the OpenAI-compatible
+#: chat API, so the node asks whatever is listening here. The Options node's
+#: ``server_url`` widget overrides it per workflow.
+DEFAULT_SERVER_URL = "http://127.0.0.1:9090"
 
 OUTPUT_FIELDS = (
     "integrated_multimodal_description",
