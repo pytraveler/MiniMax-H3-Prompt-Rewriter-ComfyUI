@@ -74,6 +74,7 @@ from .nodes import (
     _report,
     _resolve_adapter,
     _verify_base_model,
+    remote_target,
 )
 from .progress import NodeProgress, refuse
 from .prompt_template_omni import (
@@ -469,6 +470,7 @@ def _room_for(n_ctx: int, budget: int, model_path: str, progress: NodeProgress) 
 def _with_media(
     references, model_path, mmproj_path, adapter_path, messages,
     settings, seed, greedy, keep_loaded, max_frames, progress,
+    target=None,
 ) -> str:
     """Run the multimodal path: one asset per marker, in order."""
     if keep_loaded:
@@ -494,7 +496,10 @@ def _with_media(
             attachments=attachments,
             adapter_path=adapter_path,
             gpu_layers=int(settings["gpu_layers"]),
-            n_ctx=_room_for(int(settings["n_ctx"]), budget, model_path, progress),
+            n_ctx=(
+                _room_for(int(settings["n_ctx"]), budget, model_path, progress)
+                if not target else int(settings["n_ctx"])
+            ),
             seed=int(seed),
             greedy=greedy,
             max_new_tokens=int(settings["max_new_tokens"]),
@@ -505,6 +510,8 @@ def _with_media(
             backend=settings["llama_backend"],
             auto_download=settings["auto_download"],
             progress=progress,
+            remote_url=(target[0] if target else ""),
+            remote_model=(target[1] if target else ""),
         )
 
 
@@ -532,6 +539,37 @@ def rewrite_omni(
     wanted = normalize_task(task)
     references = list(references or [])
     check_task(wanted, references, progress.node_id)
+
+    target = remote_target(settings)
+    if target is not None:
+        messages = build_messages(
+            prompt, wanted, resolution, float(duration), tuple(r.kind for r in references)
+        )
+        decoding = dict(
+            seed=int(seed),
+            greedy=greedy,
+            max_new_tokens=int(settings["max_new_tokens"]),
+            temperature=float(settings["temperature"]),
+            top_p=float(settings["top_p"]),
+            top_k=int(settings["top_k"]),
+            repetition_penalty=float(settings["repetition_penalty"]),
+        )
+        if references:
+            return _with_media(
+                references, "", "", None, messages,
+                settings, seed, greedy, keep_loaded, max_frames, progress, target,
+            )
+        system, user = render(messages)
+        return _gguf_text(
+            settings,
+            progress=progress,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            **decoding,
+        )
+
     choice = _resolve_model_choice(model)
 
     if choice.fmt == FORMAT_TRANSFORMERS:

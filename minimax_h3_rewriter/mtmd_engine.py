@@ -380,6 +380,8 @@ def describe(
     system_prompt: str | None = None,
     progress: NodeProgress | None = None,
     server=None,
+    remote_url: str = "",
+    remote_model: str = "",
 ) -> str:
     """Fetch the runtime if needed, describe the attachments once, and return the text.
 
@@ -401,6 +403,14 @@ def describe(
     same seed, the same instruction and the same system turn -- see
     ``DEFAULT_SYSTEM``, which is the one of those four that had to be stated
     rather than assumed -- so which one ran is not visible in the answer.
+
+    ``remote_url`` and ``remote_model`` switch the whole run to an already
+    running llama.cpp server, exactly as the rest of the pack routes text
+    generation when the Options node says 'remote (llama.cpp server)': the
+    model files, the projector and this machine's VRAM are not involved, and
+    the attachments go over the wire as content parts. ``remote_url`` being
+    set wins over ``server`` -- there is nothing to keep open when the model
+    lives elsewhere.
     """
     device = devices.validate(device)
     if system_prompt is None:
@@ -412,10 +422,6 @@ def describe(
         )
     if attachments is not None and not attachments:
         raise ValueError("nothing to describe: 'attachments' is empty.")
-
-    binary = server.binary if server is not None else llamacpp.ensure_mtmd(
-        backend, auto_download, progress
-    )
 
     with media.Workspace() as workspace:
         note = ""
@@ -431,6 +437,36 @@ def describe(
             ]
         if note:
             instruction = f"{note}\n\n{instruction}"
+
+        if remote_url:
+            from . import remote_engine
+
+            if progress is not None:
+                progress.text(
+                    f"Describing on {remote_engine.normalize_url(remote_url)}\n"
+                    f"{' + '.join(notes)}",
+                    force=True,
+                )
+            text = remote_engine.caption(
+                instruction=instruction,
+                attachments=attachments,
+                system_prompt=system_prompt,
+                server_url=remote_url,
+                server_model=remote_model,
+                seed=seed,
+                greedy=greedy,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                media_marker=None,
+                progress=progress,
+            )
+            return answer_only(text.replace("\r\n", "\n"))
+
+        binary = server.binary if server is not None else llamacpp.ensure_mtmd(
+            backend, auto_download, progress
+        )
 
         command = None
         if server is None:

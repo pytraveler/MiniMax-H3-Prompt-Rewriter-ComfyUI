@@ -66,6 +66,7 @@ from .nodes import (
     caption_question,
     captioner_choices,
     next_index,
+    remote_target,
     slot_instructions,
     writer_choices,
 )
@@ -595,16 +596,22 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         if assets:
             kinds = {asset.kind for asset in assets}
             model_path = mmproj_path = None
+            target = remote_target(settings)
+            remote_url = target[0] if target else ""
+            remote_model = target[1] if target else ""
             if clip is None:
-                choice = _resolve_captioner_choice(caption_model)
-                if choice.local:
-                    model_path, mmproj_path = choice.reference, choice.mmproj
+                if target is not None:
+                    model_path = mmproj_path = ""
                 else:
-                    model_path, mmproj_path = _ensure_pair(
-                        choice.reference, choice.file, choice.mmproj, "Captioner",
-                        settings["auto_download"], progress,
-                    )
-                _check_encoders(mmproj_path, kinds)
+                    choice = _resolve_captioner_choice(caption_model)
+                    if choice.local:
+                        model_path, mmproj_path = choice.reference, choice.mmproj
+                    else:
+                        model_path, mmproj_path = _ensure_pair(
+                            choice.reference, choice.file, choice.mmproj, "Captioner",
+                            settings["auto_download"], progress,
+                        )
+                    _check_encoders(mmproj_path, kinds)
             else:
                 clip_caption.check(clip, kinds)
 
@@ -676,6 +683,8 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                             auto_download=settings["auto_download"],
                             progress=progress,
                             server=batch,
+                            remote_url=remote_url,
+                            remote_model=remote_model,
                         )
 
                     caption = " ".join(caption.split())

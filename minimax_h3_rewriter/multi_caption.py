@@ -30,6 +30,7 @@ its nodes, so an old install loses this node alone instead of all of them.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 
@@ -48,9 +49,12 @@ from .nodes import (
     caption_question,
     captioner_choices,
     next_index,
+    remote_target,
     slot_instructions,
 )
 from .progress import NodeProgress
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -398,16 +402,22 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
 
         kinds = {asset.kind for asset in assets}
         model_path = mmproj_path = None
+        target = remote_target(settings)
+        remote_url = target[0] if target else ""
+        remote_model = target[1] if target else ""
         if described > 0 and clip is None:
-            choice = _resolve_captioner_choice(model)
-            if choice.local:
-                model_path, mmproj_path = choice.reference, choice.mmproj
+            if target is not None:
+                model_path = mmproj_path = ""
             else:
-                model_path, mmproj_path = _ensure_pair(
-                    choice.reference, choice.file, choice.mmproj, "Captioner",
-                    settings["auto_download"], progress,
-                )
-            _check_encoders(mmproj_path, kinds)
+                choice = _resolve_captioner_choice(model)
+                if choice.local:
+                    model_path, mmproj_path = choice.reference, choice.mmproj
+                else:
+                    model_path, mmproj_path = _ensure_pair(
+                        choice.reference, choice.file, choice.mmproj, "Captioner",
+                        settings["auto_download"], progress,
+                    )
+                _check_encoders(mmproj_path, kinds)
         elif described > 0:
             clip_caption.check(clip, kinds)
 
@@ -478,6 +488,8 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
                             auto_download=settings["auto_download"],
                             progress=progress,
                             server=batch,
+                            remote_url=remote_url,
+                            remote_model=remote_model,
                         )
 
                 caption = " ".join(caption.split())

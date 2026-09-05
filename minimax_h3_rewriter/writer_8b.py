@@ -57,6 +57,7 @@ from .nodes import (
     _report,
     _resolve_adapter,
     _verify_base_model,
+    remote_target,
 )
 from .progress import NodeProgress, announce
 from .prompt_template_8b import build_messages, expected_image_count, normalize_task
@@ -311,6 +312,7 @@ def _with_transformers(
 def _with_frames(
     frames, model_path, mmproj_path, adapter_path, system, user,
     settings, seed, greedy, keep_loaded, progress,
+    target=None,
 ) -> str:
     """Run the multimodal path: one picture per marker, in order."""
     if keep_loaded:
@@ -346,6 +348,8 @@ def _with_frames(
             backend=settings["llama_backend"],
             auto_download=settings["auto_download"],
             progress=progress,
+            remote_url=(target[0] if target else ""),
+            remote_model=(target[1] if target else ""),
         )
 
 
@@ -372,6 +376,30 @@ def rewrite_8b(
     """
     wanted = normalize_task(task)
     frames = frames_for(wanted, first_frame, last_frame, progress)
+
+    target = remote_target(settings)
+    if target is not None:
+        system, user = render(build_messages(prompt, wanted, resolution, duration))
+        decoding = dict(
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            seed=int(seed),
+            greedy=greedy,
+            max_new_tokens=int(settings["max_new_tokens"]),
+            temperature=float(settings["temperature"]),
+            top_p=float(settings["top_p"]),
+            top_k=int(settings["top_k"]),
+            repetition_penalty=float(settings["repetition_penalty"]),
+        )
+        if frames:
+            return _with_frames(
+                frames, "", "", None, system, user, settings, seed, greedy,
+                keep_loaded, progress, target,
+            )
+        return _gguf_text(settings, progress=progress, **decoding)
+
     choice = _resolve_model_choice(model)
 
     if choice.fmt == FORMAT_TRANSFORMERS:
