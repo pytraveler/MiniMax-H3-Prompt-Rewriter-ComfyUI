@@ -165,7 +165,10 @@ def _refuse_problem(choice: str) -> None:
     if choice.startswith(PROBLEM_PREFIX):
         raise RuntimeError(
             f"{choice[len(PROBLEM_PREFIX):]}\n\nFix {catalog.user_file()} — the 'Model list' "
-            f"button opens it — then refresh the browser tab. ComfyUI need not restart."
+            f"button opens a window with 'Open models.json' in it — then refresh the browser "
+            f"tab. ComfyUI need not restart. The window itself will not write to a file it "
+            f"cannot parse, since saving over one would replace your entries with the "
+            f"packaged list."
         )
 
 

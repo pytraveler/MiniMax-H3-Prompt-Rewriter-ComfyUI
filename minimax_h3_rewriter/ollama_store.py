@@ -52,7 +52,6 @@ from . import discovery, paths
 log = logging.getLogger(__name__)
 
 STORE_ENV = "MINIMAX_H3_OLLAMA_MODELS"
-CATALOG_KEY = "ollama_stores"
 
 OLLAMA_ENV = "OLLAMA_MODELS"
 

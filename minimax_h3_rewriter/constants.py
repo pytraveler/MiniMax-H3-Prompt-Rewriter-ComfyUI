@@ -20,8 +20,6 @@ DURATION_MIN = 0.1
 DURATION_DEFAULT = 10.0
 DURATION_STEP = 0.1
 DURATION_CEILING = 600.0
-DURATION_PROPERTY = "max_duration"
-DURATION_PROPERTY_DEFAULT = 30.0
 
 DURATION_LEAD = "Target clip length in seconds; drives shot count and pacing."
 

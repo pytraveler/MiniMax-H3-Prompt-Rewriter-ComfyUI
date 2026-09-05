@@ -29,10 +29,6 @@ def _model_list(node: str) -> dict:
         "path": catalog.user_file(),
         "writable": writable,
         "problem": refusal,
-        "widgets": [
-            {"widget": one.widget, "section": one.section}
-            for one in model_sections.for_node(node)
-        ],
         "sections": [model_sections.listing(one) for one in wanted],
     }
 

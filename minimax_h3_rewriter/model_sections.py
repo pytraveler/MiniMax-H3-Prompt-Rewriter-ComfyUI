@@ -143,9 +143,12 @@ SECTIONS: dict[str, SectionSpec] = {
 class NodeSection:
     """One dropdown on one node, and the list it is fed from.
 
-    The widget name is half of it. Without it the window can list the right
-    entries and still have no way to put a freshly added one into the dropdown
-    the person is looking at.
+    Python only ever needs the section: ``sections_of`` is what the window's
+    request is answered from. The widget name is carried anyway because the
+    browser needs it -- an entry added from one node belongs in the dropdown of
+    every other node fed from that list -- and the copy that does the work is
+    the one in ``model_list_button.js``. Keeping the name here is what lets
+    ``test_model_sections`` compare the two tables whole instead of half.
     """
 
     widget: str
@@ -510,7 +513,10 @@ def check(section: str, entry: dict) -> dict:
 
 
 LOCAL_PREFIX = "on disk: "
+OLLAMA_PREFIX = "ollama: "
 PROBLEM_PREFIX = "!! "
+
+SCANNED_PREFIXES = (LOCAL_PREFIX, OLLAMA_PREFIX)
 
 
 def listing(section: str) -> dict:
@@ -537,7 +543,7 @@ def listing(section: str) -> dict:
         "default_format": found.default_format,
         "mmproj": found.mmproj,
         "entries": entries,
-        "found": [one for one in choices(section) if one.startswith(LOCAL_PREFIX)],
+        "found": [one for one in choices(section) if one.startswith(SCANNED_PREFIXES)],
         "restorable": catalog.restorable(section),
     }
 

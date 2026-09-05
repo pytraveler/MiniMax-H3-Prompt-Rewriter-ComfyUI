@@ -11,8 +11,12 @@ the same thing; the release workflow refuses a tag that disagrees with
 ### Changed
 
 - **`duration` is the same widget on all nine nodes now, and it takes both
-  number types.** Two nodes had a `FLOAT` slider in tenths of a second; the other
-  seven had an `INT` box that stopped at 15. The socket is `FLOAT,INT`
+  number types.** It had four shapes for one number: two nodes had a `FLOAT`
+  slider in tenths of a second, five had an `INT` box that stopped at 15, the
+  Omni writer had a `FLOAT` box in half-seconds with that same ceiling, and
+  Prompt Check had a `FLOAT` box already reaching 600, because prompts collected
+  from elsewhere are often longer than this pack's own writers were asked for.
+  The socket is `FLOAT,INT`
   everywhere, so an `INT` primitive, a node that counts frames and a `FLOAT` off
   a maths node all wire straight in with no converter between, and the widget is
   a float in tenths on every one of them.
@@ -65,10 +69,14 @@ the same thing; the release workflow refuses a tag that disagrees with
 
   Everything still lives in the same `models.json`, and **Open models.json** in
   the footer still opens it, for the two things the window deliberately leaves
-  alone: the `adapters` sections and a path to a network share. The models found
-  in your ComfyUI model folders are listed too, greyed out and not editable --
-  they are offered in the dropdown, so their absence from the editor read as
-  something the window had lost.
+  alone: the `adapters` sections and a path to a network share. The models the
+  pack found by itself -- in your ComfyUI model folders or in an Ollama store --
+  are listed too, greyed out and not editable: they are offered in the dropdown,
+  so their absence from the editor read as something the window had lost.
+
+  While the file cannot be written -- it does not parse, or it could not be
+  created in the user directory -- every button that would write is dead and the
+  reason is printed in the footer.
 
   Adding or deleting a model updates the dropdowns in the open graph straight
   away, on every node fed from that list and inside subgraphs, without a browser

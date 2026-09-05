@@ -12,6 +12,7 @@ is the first time anything has judged an entry before it reached a download.
 import ast
 import importlib
 import json
+import os
 import pathlib
 import re
 import sys
@@ -83,9 +84,21 @@ def test_every_list_can_build_its_dropdown():
 def test_the_prefixes_match_the_nodes():
     """Copied rather than imported, because this module must not load the nodes."""
     source = (ROOT / _PKG / "nodes.py").read_text(encoding="utf-8")
-    found = dict(re.findall(r'^(LOCAL_PREFIX|PROBLEM_PREFIX) = "([^"]*)"', source, re.MULTILINE))
+    names = "LOCAL_PREFIX|OLLAMA_PREFIX|PROBLEM_PREFIX"
+    found = dict(re.findall(rf'^({names}) = "([^"]*)"', source, re.MULTILINE))
     assert found["LOCAL_PREFIX"] == sections.LOCAL_PREFIX
+    assert found["OLLAMA_PREFIX"] == sections.OLLAMA_PREFIX
     assert found["PROBLEM_PREFIX"] == sections.PROBLEM_PREFIX
+
+
+def test_every_scanned_prefix_is_listed_as_one():
+    """The window shows a scanned entry only if its prefix is in ``SCANNED_PREFIXES``.
+
+    An entry the scan puts in the dropdown and the window leaves out reads as
+    something the window has lost -- which is the whole reason it lists them.
+    ``ollama:`` was exactly that until it was added here.
+    """
+    assert set(sections.SCANNED_PREFIXES) == {sections.LOCAL_PREFIX, sections.OLLAMA_PREFIX}
 
 
 def test_the_module_does_not_import_the_nodes():
@@ -189,6 +202,10 @@ def test_a_network_path_is_refused_in_every_field(field):
         sections.clean_entry("captioners", entry)
 
 
+@pytest.mark.skipif(
+    os.name != "nt",
+    reason="'//host/share' names a UNC share on Windows only; elsewhere it is an ordinary path",
+)
 def test_forward_slashes_are_the_same_network_path():
     with pytest.raises(RuntimeError):
         sections.clean_entry("writers", dict(GGUF, repo="//attacker.example/share"))

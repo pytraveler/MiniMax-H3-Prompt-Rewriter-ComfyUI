@@ -1745,9 +1745,10 @@ because the adapters take different architectures and an entry from one list
 will not load in another's node. The Universal Rewriter therefore opens on three
 tabs and the captioner on one. Under the tabs is what that list requires — the
 architecture, the block count and width, whether a projector is needed and which
-encoders it has to carry — and below the entries, greyed out, the models found in
-your ComfyUI model folders: those are offered in the dropdown too, and there is
-nothing to edit, because they are files on disk rather than lines in a file.
+encoders it has to carry — and below the entries, greyed out, the models the pack
+found by itself, in your ComfyUI model folders or in an Ollama store: those are
+offered in the dropdown too, and there is nothing to edit, because they are files
+on disk rather than lines in a file.
 
 ![The Model list window over the graph, headed “Model list” above the line “The models this node offers. Entries are kept in models.json in the ComfyUI user directory, so they outlive an update of the pack and are shared by every workflow.” Two tabs, Captioners lit and Guided writers beside it, over what that list requires: GGUF only, one file run by llama.cpp rather than a folder of safetensors; any architecture as long as the file is a language model with an embedded chat template; and a pair — the model and its ‘mmproj’ projector, from the same conversion. Below them two entries badged FROM THE PACK — Qwen2.5-Omni-3B, a 3.4 GB download needing about 5 GB, and Qwen2.5-Omni-7B, 5.8 GB needing about 8 — each showing its format, repository, file and projector in monospace, with Edit and Delete buttons at the right. Under a rule, “Found in your model folders. These are offered too, and there is nothing to edit: they are files on disk, not entries in the file.” heads three unbuttoned rows: on disk: Qwen3VL-8B-Instruct-Q4\_K\_M.gguf [+mmproj, vision, 5.4 GB], and the Omni 3B and 7B pairs, both marked vision and audio](docs/model_list_dialog.png)
 
@@ -1778,7 +1779,9 @@ an authentication attempt against the host it names. A path typed into
 `models.json` by hand is still unrestricted — that file does not travel. And it
 refuses to write at all while the file does not parse, since saving over it
 would replace your own entries with the packaged list; it shows the parse error
-and leaves only **Open models.json**.
+and every button that would write is dead, leaving **Open models.json**. What it
+lists in that state is the packaged copy, because that is what the dropdowns are
+offering too until the file parses again.
 
 Editing an entry's name, download size, VRAM note or note changes what the
 dropdown reads, and saved workflows remember that string. The form says so
@@ -1989,8 +1992,11 @@ rebuilt every time a dropdown is filled. Opening a ComfyUI tab should not boot a
 virtual machine.
 
 `ollama rm` takes a model out of the dropdowns the way deleting any other file
-does. What your workflow saves is the name and the tag rather than the path, so
-re-pulling the same tag — even at a different quantisation — leaves it working.
+does. What your workflow saves is the label rather than the path, so re-pulling
+the same tag leaves it working — the store is content-addressed, and the same
+files land back where they were. The label carries the size, though, and a
+different quantisation is a different size, so re-pulling `qwen3:8b` at another
+quant comes back as a choice you have to pick again.
 
 ## Where the weights go
 

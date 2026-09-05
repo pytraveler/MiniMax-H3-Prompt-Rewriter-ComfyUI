@@ -387,7 +387,7 @@ function openEntryForm(section, held, onSaved) {
     name.focus();
 }
 
-function entryCard(section, held, reload) {
+function entryCard(section, held, reload, writable) {
     const card = element("div", "mmxmod-card");
     const body = element("div", "mmxmod-body");
 
@@ -423,6 +423,13 @@ function entryCard(section, held, reload) {
         await refreshVue();
         reload();
     });
+    if (!writable) {
+        const why = "The file cannot be written right now -- see the message in the footer.";
+        for (const button of [change, drop]) {
+            button.disabled = true;
+            button.title = why;
+        }
+    }
     acts.append(change, drop);
     card.appendChild(acts);
     return card;
@@ -506,7 +513,9 @@ function openModelList(node) {
         for (const line of section.requirements) needs.appendChild(element("li", "", line));
         about.appendChild(needs);
 
-        for (const held of section.entries) cards.appendChild(entryCard(section, held, load));
+        for (const held of section.entries) {
+            cards.appendChild(entryCard(section, held, load, payload.writable));
+        }
         if (!section.entries.length) {
             cards.appendChild(
                 element("div", "mmxlib-none", "Nothing in this list. 'Add a model' puts one here.")
