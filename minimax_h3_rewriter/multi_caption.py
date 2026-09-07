@@ -405,7 +405,7 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
             else:
                 model_path, mmproj_path = _ensure_pair(
                     choice.reference, choice.file, choice.mmproj, "Captioner",
-                    settings["auto_download"], progress,
+                    settings, progress,
                 )
             _check_encoders(mmproj_path, kinds)
         elif described > 0:

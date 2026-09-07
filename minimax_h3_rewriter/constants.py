@@ -75,6 +75,10 @@ RUNTIME_WHEEL = "llama-cpp-python"
 RUNTIME_BINARY = "llama.cpp"
 GGUF_RUNTIMES = (RUNTIME_AUTO, RUNTIME_WHEEL, RUNTIME_BINARY)
 
+DOWNLOADER_BUILTIN = "built-in"
+DOWNLOADER_HUB = "huggingface_hub"
+DOWNLOADERS = (DOWNLOADER_BUILTIN, DOWNLOADER_HUB)
+
 OUTPUT_FIELDS = (
     "integrated_multimodal_description",
     "overall_soundscape",

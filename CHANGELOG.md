@@ -6,6 +6,38 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.22.0 - 2026-09-07
+
+### Added
+
+- **`downloader` on the Options node: the built-in transfer, or `huggingface_hub`.**
+  Somebody reported a 15 GB file arriving at 4-8 MB/s, an hour where the Hugging
+  Face CLI takes five minutes (#16). The reason is not mysterious: this pack
+  moves bytes over one ranged HTTP connection at a time, and the Comfy-Org
+  repositories are Xet-backed, where `hf_xet` fetches the chunks of a single
+  file over many connections at once.
+
+  The default does not move. `huggingface_hub` and `hf_xet` are not dependencies
+  of this pack and are not going to become them -- install them into ComfyUI's
+  own Python and pick the second value, or change nothing and keep the transfer
+  that needs nothing. If the setting asks for a route this installation cannot
+  take, the built-in one runs and says so on the node rather than failing: the
+  value rides inside the workflow, and a graph authored on a machine that has
+  those packages has to still run on a machine that does not.
+
+  It covers Hugging Face repositories only. The llama.cpp binaries come from
+  GitHub releases and the writing guides are one small request each; neither
+  goes through it. Two things are worth knowing before switching mid-download:
+  the two backends park half-finished files in different places, so switching
+  restarts that one file, and `hf_xet`'s chunk cache sits under
+  `~/.cache/huggingface/xet` -- on `C:`, whatever drive the models are on.
+
+  A file already on disk at its full size is never handed to either backend.
+  That is not an optimisation: a finished multi-gigabyte file sitting in the
+  folder with no hub metadata beside it makes `huggingface_hub` read the whole
+  thing back to hash it, on the calling thread, with nothing reported.
+
+
 ## 0.21.0 - 2026-09-05
 
 ### Added

@@ -340,14 +340,14 @@ def _with_transformers(
 
     _verify_base_model(choice.reference, progress, discovery.SHAPE_OMNI, BASE_REPO_OMNI)
     base_dir = _ensure_present(
-        choice.reference, BASE_SPEC_OMNI, settings["auto_download"], progress
+        choice.reference, BASE_SPEC_OMNI, settings, progress
     )
     log.info("[minimax_h3_rewriter.writer_omni] base model: %s", base_dir)
 
     adapter_dir = None
     if settings["use_lora"]:
         adapter_dir = _resolve_adapter(
-            FORMAT_TRANSFORMERS, settings["adapter"], settings["auto_download"], progress,
+            FORMAT_TRANSFORMERS, settings["adapter"], settings, progress,
             catalog.ADAPTERS_OMNI,
         )
 
@@ -545,7 +545,7 @@ def rewrite_omni(
     else:
         model_path, mmproj_path = _ensure_pair(
             choice.reference, choice.file, choice.mmproj, "Base model",
-            settings["auto_download"], progress,
+            settings, progress,
         )
     log.info("[minimax_h3_rewriter.writer_omni] base model: %s", model_path)
 
@@ -559,7 +559,7 @@ def rewrite_omni(
                 + "\nTurn 'use_lora' off to run it as a plain model anyway."
             )
         adapter_path = _resolve_adapter(
-            FORMAT_GGUF, settings["adapter"], settings["auto_download"], progress,
+            FORMAT_GGUF, settings["adapter"], settings, progress,
             catalog.ADAPTERS_OMNI,
         )
 

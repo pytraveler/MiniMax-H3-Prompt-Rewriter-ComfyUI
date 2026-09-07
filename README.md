@@ -571,7 +571,7 @@ tabs in one window — `models` for the 27B tab, `models_8b` for the 8B one,
 Everything you rarely touch, kept off the main node. Leave it unconnected and the
 rewriter uses the decoding parameters the adapter was published with.
 
-![The Rewriter Options node, one output socket and seventeen widgets: max_new_tokens, temperature, top_p, top_k, repetition_penalty, attn_implementation, the adapter to apply, use_lora, merge_lora, auto_download, gpu_layers, n_ctx, gguf_runtime, device, llama_backend, trust_remote_code and prompt_file, with a New prompt file button under them](docs/node_options.png)
+![The Rewriter Options node, one output socket named options and twenty widgets: max_new_tokens 2048, temperature 0.70, top_p 0.80, top_k 20, repetition_penalty 1.05, attn_implementation sdpa, the adapter to apply, use_lora true, merge_lora auto, auto_download true, gpu_layers -1, n_ctx 8192, gguf_runtime auto, device auto, llama_backend auto, trust_remote_code false, prompt_file global, self_check warnings and notes, fix_once false, and downloader on built-in at the foot, with a New prompt file button under them](docs/node_options.png)
 
 | Input | Default | Purpose |
 |---|---|---|
@@ -583,6 +583,7 @@ rewriter uses the decoding parameters the adapter was published with.
 | `use_lora` | on | Turn off for the plain base-model baseline |
 | `merge_lora` | `auto` | Fold the adapter into the weights at load — twice the tokens a second, see below |
 | `auto_download` | on | Turn off to fail loudly instead of fetching 52 GB |
+| `downloader` | `built-in` | Which code fetches a Hugging Face repository — see below |
 | `device` | `auto` | Which GPU runs the language model — see below |
 | `trust_remote_code` | **off** | Allow a checkpoint to run the Python it ships with — see below |
 | `prompt_file` | `global` | Which set of saved prompts the nodes wired to this one work in — see [the prompt library](#the-prompt-library) |
@@ -701,6 +702,46 @@ one device and it is `cuda:0`, for the subprocesses too.
 The values are deliberately plain rather than `cuda:1 · RTX 4090`: a label with
 the card's name reads better and breaks every saved workflow the day the card is
 replaced. The tooltip names what is in each slot.
+
+#### `downloader` — the built-in transfer, or `huggingface_hub`
+
+The default moves the bytes itself: one ranged HTTP connection at a time,
+resumable, needing nothing installed. That is the right floor for something
+nobody opted into, and on a fast link it is fine.
+
+It is not fine on a 30 GB checkpoint over a connection that gives one stream 8
+MB/s. The Comfy-Org repositories are **Xet-backed**, and `hf_xet` fetches the
+chunks of a *single* file over many connections at once — which is the whole of
+the difference behind "the CLI took five minutes and the node took an hour".
+Setting `downloader` to `huggingface_hub` takes that route instead:
+
+```
+python -m pip install huggingface_hub hf_xet
+```
+
+into ComfyUI's own Python, then restart. Neither package is a dependency of this
+pack, and **nothing fails if they are missing**: the node logs the install line,
+notes it in the caption, and downloads with the built-in transfer. That matters
+because the setting travels inside the workflow, and a graph authored on a
+machine that has them should still run on one that does not.
+
+**It covers Hugging Face repositories only** — base models, GGUF writers, LoRA
+adapters, a model and its projector. The llama.cpp binaries come from GitHub
+releases and the two writing guides are one small request each; neither goes
+through this setting.
+
+**Half-finished files are not interchangeable.** The built-in transfer parks
+bytes in `<name>.part` beside the file; `huggingface_hub` parks them under
+`.cache/huggingface` inside the destination folder. Switching in the middle of a
+download restarts that one file and leaves the other's leftovers to delete by
+hand. A file that is already complete is never fetched twice either way — this
+pack decides what is missing before either backend is called, which also avoids
+`huggingface_hub` re-hashing a finished 30 GB file to adopt it.
+
+One thing worth knowing about disk: `hf_xet` keeps a chunk cache at
+`~/.cache/huggingface/xet` (`HF_XET_CACHE`), which on Windows is on `C:` whatever
+drive the models live on. The free-space check this pack runs before a download
+only looks at the destination.
 
 ### MiniMax-H3 Prompt Writer (T2VA/I2VA/FL2VA/L2VA)
 

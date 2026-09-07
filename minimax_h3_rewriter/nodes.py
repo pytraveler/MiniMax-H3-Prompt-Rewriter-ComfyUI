@@ -22,6 +22,7 @@ from . import (
     gguf_engine,
     guide_prompt,
     guides,
+    hub_sync,
     library,
     llamacpp,
     media,
@@ -37,6 +38,9 @@ from .constants import (
     ATTN_IMPLEMENTATIONS,
     BASE_MODEL_REPO,
     BASE_SKIP_SUFFIXES,
+    DOWNLOADER_BUILTIN,
+    DOWNLOADER_HUB,
+    DOWNLOADERS,
     GGUF_RUNTIMES,
     MERGE_AUTO,
     MERGE_LORA,
@@ -78,6 +82,7 @@ DEFAULT_OPTIONS = {
     "use_lora": True,
     "merge_lora": MERGE_AUTO,
     "auto_download": True,
+    "downloader": DOWNLOADER_BUILTIN,
     "gpu_layers": -1,
     "n_ctx": 8192,
     "gguf_runtime": RUNTIME_AUTO,
@@ -350,9 +355,37 @@ def _verify_base_model(
     )
 
 
-def _fetch(repo_id: str, dest_dir: str, allow, skip_suffixes, progress: NodeProgress) -> None:
-    reporter = TransferReporter(progress, 1, f"Downloading {repo_id}")
-    download.sync_repo(
+def _fetch(
+    repo_id: str,
+    dest_dir: str,
+    allow,
+    skip_suffixes,
+    progress: NodeProgress,
+    downloader: str = DOWNLOADER_BUILTIN,
+) -> None:
+    """Mirror a repository, through whichever transfer the options asked for.
+
+    This is the one place the two backends meet. They write the same files to
+    the same places and differ only in how fast they get there, so an option
+    this installation cannot honour falls back instead of refusing: the value
+    rides inside the workflow, and a graph authored on a machine that has
+    huggingface_hub should still run on one that does not.
+    """
+    title = f"Downloading {repo_id}"
+    backend = download
+    if downloader == DOWNLOADER_HUB:
+        if hub_sync.available():
+            backend = hub_sync
+        else:
+            log.warning(
+                "[minimax_h3_rewriter._fetch] '%s' was asked for but is not installed here, "
+                "so the built-in transfer is used instead.\n%s",
+                DOWNLOADER_HUB, hub_sync.INSTALL_HINT,
+            )
+            title += f" (no {DOWNLOADER_HUB} here, using the built-in transfer)"
+
+    reporter = TransferReporter(progress, 1, title)
+    backend.sync_repo(
         repo_id,
         dest_dir,
         allow=allow,
@@ -363,8 +396,12 @@ def _fetch(repo_id: str, dest_dir: str, allow, skip_suffixes, progress: NodeProg
     )
 
 
-def _ensure_present(value: str, spec: dict, auto_download: bool, progress: NodeProgress) -> str:
-    """Return a local directory holding the model, downloading it when allowed."""
+def _ensure_present(value: str, spec: dict, settings: dict, progress: NodeProgress) -> str:
+    """Return a local directory holding the model, downloading it when allowed.
+
+    Takes the whole options dict rather than the one flag it used to, because
+    whether to download and how to download it are both read here now.
+    """
     repo_id, local_dir = resolve_source(value, spec["default_repo"])
     if spec["complete"](local_dir):
         return local_dir
@@ -374,19 +411,22 @@ def _ensure_present(value: str, spec: dict, auto_download: bool, progress: NodeP
             f"{spec['label']} was not found in '{local_dir}'. Point it at a Hugging Face "
             f"repository id (for example '{spec['default_repo']}') or a complete local folder."
         )
-    if not auto_download:
+    if not settings["auto_download"]:
         raise RuntimeError(
             f"{spec['label']} is missing from '{local_dir}' and auto_download is off. "
             f"Enable it, or fetch '{repo_id}' manually into that folder."
         )
 
-    _fetch(repo_id, local_dir, spec["allow"], spec["skip_suffixes"], progress)
+    _fetch(
+        repo_id, local_dir, spec["allow"], spec["skip_suffixes"], progress,
+        settings.get("downloader", DOWNLOADER_BUILTIN),
+    )
     if not spec["complete"](local_dir):
         raise RuntimeError(f"{spec['label']} is still incomplete after downloading into '{local_dir}'.")
     return local_dir
 
 
-def _ensure_file(repo_id: str, filename: str, label: str, auto_download: bool, progress: NodeProgress) -> str:
+def _ensure_file(repo_id: str, filename: str, label: str, settings: dict, progress: NodeProgress) -> str:
     """Return a local path to one file of a repository, fetching it when allowed."""
     if not filename:
         raise RuntimeError(f"{label}: no file name given for repository '{repo_id}'.")
@@ -408,20 +448,23 @@ def _ensure_file(repo_id: str, filename: str, label: str, auto_download: bool, p
     destination = os.path.join(models_root(), filename)
     if os.path.isfile(destination) and os.path.getsize(destination) > 0:
         return destination
-    if not auto_download:
+    if not settings["auto_download"]:
         raise RuntimeError(
             f"{label} is missing from '{destination}' and auto_download is off. "
             f"Enable it, or fetch '{filename}' from '{repo_id}' into that folder."
         )
 
-    _fetch(repo_id, models_root(), (filename,), (), progress)
+    _fetch(
+        repo_id, models_root(), (filename,), (), progress,
+        settings.get("downloader", DOWNLOADER_BUILTIN),
+    )
     if not os.path.isfile(destination):
         raise RuntimeError(f"{label}: '{filename}' was not present after downloading from '{repo_id}'.")
     return destination
 
 
 def _ensure_pair(
-    repo_id: str, file: str, mmproj: str, label: str, auto_download: bool, progress: NodeProgress
+    repo_id: str, file: str, mmproj: str, label: str, settings: dict, progress: NodeProgress
 ) -> tuple[str, str]:
     """Return local paths to a model and its projector, fetching both if allowed.
 
@@ -453,13 +496,16 @@ def _ensure_pair(
             f"{label}: '{repo_id}' is not a folder on this machine. Give an existing folder "
             f"holding both '{file}' and '{mmproj}', or a Hugging Face repository id."
         )
-    if not auto_download:
+    if not settings["auto_download"]:
         raise RuntimeError(
             f"{label} is missing from '{directory}' and auto_download is off. Enable it, or "
             f"fetch '{file}' and '{mmproj}' from '{repo_id}' into that folder."
         )
 
-    _fetch(repo_id, directory, (file, mmproj), (), progress)
+    _fetch(
+        repo_id, directory, (file, mmproj), (), progress,
+        settings.get("downloader", DOWNLOADER_BUILTIN),
+    )
     if not complete():
         raise RuntimeError(
             f"{label}: '{file}' and '{mmproj}' were not both present after downloading from "
@@ -598,7 +644,7 @@ def _announce_adapter(fmt: str, value: str, path: str) -> None:
 def _resolve_adapter(
     fmt: str,
     setting: str,
-    auto_download: bool,
+    settings: dict,
     progress: NodeProgress,
     section: str = catalog.ADAPTERS_27B,
 ) -> str:
@@ -612,7 +658,7 @@ def _resolve_adapter(
     """
     value = _resolve_adapter_choice((setting or "").strip())
     _refuse_remote(value)
-    path = _locate_adapter(fmt, value, auto_download, progress, section)
+    path = _locate_adapter(fmt, value, settings, progress, section)
     _announce_adapter(fmt, value, path)
     return path
 
@@ -620,7 +666,7 @@ def _resolve_adapter(
 def _locate_adapter(
     fmt: str,
     value: str,
-    auto_download: bool,
+    settings: dict,
     progress: NodeProgress,
     section: str = catalog.ADAPTERS_27B,
 ) -> str:
@@ -636,7 +682,7 @@ def _locate_adapter(
                 f"matches the model, or pick a GGUF base model to go with it."
             )
         return _ensure_present(
-            value, dict(ADAPTER_SPEC, default_repo=default), auto_download, progress
+            value, dict(ADAPTER_SPEC, default_repo=default), settings, progress
         )
 
     spec = catalog.adapter(FORMAT_GGUF, section)
@@ -649,7 +695,7 @@ def _locate_adapter(
             source = _adapter_source(value)
             repo = source.repo if source is not None else (spec.repo if spec.configured else "")
             if repo:
-                return _ensure_file(repo, value, "Prompt-rewriter LoRA", auto_download, progress)
+                return _ensure_file(repo, value, "Prompt-rewriter LoRA", settings, progress)
         raise RuntimeError(
             f"Prompt-rewriter LoRA: '{value}' does not exist, and is not a file name that "
             f"could be fetched from '{spec.repo or 'the configured adapter repository'}'."
@@ -667,7 +713,7 @@ def _locate_adapter(
             f"adapters.gguf.repo in {catalog.user_file()}. Turning 'use_lora' off runs the "
             "plain base model instead." + hint
         )
-    return _ensure_file(spec.repo, spec.file, "Prompt-rewriter LoRA", auto_download, progress)
+    return _ensure_file(spec.repo, spec.file, "Prompt-rewriter LoRA", settings, progress)
 
 
 def _gguf_text(settings: dict, **common) -> str:
@@ -889,6 +935,37 @@ class MiniMaxH3RewriterOptions:
                         ),
                     },
                 ),
+                "downloader": (
+                    list(DOWNLOADERS),
+                    {
+                        "default": DOWNLOADER_BUILTIN,
+                        "tooltip": (
+                            "Which code moves the bytes when a model is fetched from Hugging "
+                            "Face. The default is this pack's own transfer, which needs nothing "
+                            "installed and pulls one ranged connection at a time.\n\n"
+                            "'huggingface_hub' is worth picking for the large weights. The "
+                            "Comfy-Org repositories are Xet-backed, and with 'hf_xet' installed "
+                            "the chunks of a single file come down over many connections at "
+                            "once -- the difference between an evening and a coffee on a 30 GB "
+                            "model. Neither package is a dependency of this pack: install them "
+                            "into ComfyUI's own Python, and if they are not importable the "
+                            "built-in transfer runs instead and says so on the node. Nothing "
+                            "fails.\n\n"
+                            "It covers Hugging Face repositories only -- base models, GGUF "
+                            "writers, LoRA adapters, a model and its projector. The llama.cpp "
+                            "binaries come from GitHub releases and the two writing guides are "
+                            "one small request each; neither goes through this.\n\n"
+                            "Half-finished files are not interchangeable between the two. The "
+                            "built-in transfer parks bytes in '<name>.part' beside the file, "
+                            "huggingface_hub parks them under '.cache/huggingface' inside the "
+                            "folder. Switching in the middle of a download restarts that one "
+                            "file and leaves the other's leftovers behind to delete by hand. A "
+                            "file that is already complete is never fetched twice either way.\n\n"
+                            "Cancelling stops between files at once; inside a file it can take "
+                            "a moment on the Xet path."
+                        ),
+                    },
+                ),
             },
         }
 
@@ -977,7 +1054,7 @@ def rewrite_t2va(
             model_path = choice.reference
         else:
             model_path = _ensure_file(
-                choice.reference, choice.file, "Base model", settings["auto_download"], progress
+                choice.reference, choice.file, "Base model", settings, progress
             )
         log.info("[minimax_h3_rewriter.rewrite] base model: %s", model_path)
         adapter_path = None
@@ -990,7 +1067,7 @@ def rewrite_t2va(
                     + "\nTurn 'use_lora' off to run it as a plain model anyway."
                 )
             adapter_path = _resolve_adapter(
-                FORMAT_GGUF, settings["adapter"], settings["auto_download"], progress
+                FORMAT_GGUF, settings["adapter"], settings, progress
             )
         common = dict(
             model_path=model_path,
@@ -1005,12 +1082,12 @@ def rewrite_t2va(
         return _gguf_text(settings, **common)
 
     _verify_base_model(choice.reference, progress)
-    base_dir = _ensure_present(choice.reference, BASE_SPEC, settings["auto_download"], progress)
+    base_dir = _ensure_present(choice.reference, BASE_SPEC, settings, progress)
     log.info("[minimax_h3_rewriter.rewrite] base model: %s", base_dir)
     adapter_dir = None
     if settings["use_lora"]:
         adapter_dir = _resolve_adapter(
-            FORMAT_TRANSFORMERS, settings["adapter"], settings["auto_download"], progress
+            FORMAT_TRANSFORMERS, settings["adapter"], settings, progress
         )
     return engine.rewrite(
         base_dir=base_dir,
@@ -1246,7 +1323,7 @@ def run_messages(
         model_path = choice.reference
     else:
         model_path = _ensure_file(
-            choice.reference, choice.file, "Writer model", settings["auto_download"], progress
+            choice.reference, choice.file, "Writer model", settings, progress
         )
 
     if discovery.gguf_header(model_path)["kind"] == "adapter":
@@ -2325,7 +2402,7 @@ class MiniMaxH3ReferenceCaption:
                 else:
                     model_path, mmproj_path = _ensure_pair(
                         choice.reference, choice.file, choice.mmproj, "Captioner",
-                        settings["auto_download"], progress,
+                        settings, progress,
                     )
 
                 header = discovery.gguf_header(mmproj_path)
