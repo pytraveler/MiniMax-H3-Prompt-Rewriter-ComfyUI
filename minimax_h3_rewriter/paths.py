@@ -37,6 +37,26 @@ def models_root() -> str:
     return root
 
 
+def embeddings_root() -> str:
+    """Return ComfyUI's own embeddings folder, creating it on first use.
+
+    Not ``models_root()``: this one is not ours to place. ``embedding:`` reads
+    the directory ComfyUI hands the tokenizer and nothing else, so a file
+    anywhere else is a file the prompt cannot name. The folder is registered by
+    ComfyUI itself, and the fallback is only for a build that renamed it.
+    """
+    import folder_paths
+
+    try:
+        registered = folder_paths.get_folder_paths("embeddings")
+    except KeyError:
+        registered = []
+
+    root = registered[0] if registered else os.path.join(folder_paths.models_dir, "embeddings")
+    os.makedirs(root, exist_ok=True)
+    return root
+
+
 def local_dir_for_repo(repo_id: str) -> str:
     return os.path.join(models_root(), repo_id.rstrip("/").split("/")[-1])
 

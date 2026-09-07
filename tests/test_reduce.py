@@ -85,6 +85,27 @@ class TestStrip:
         assert ". The cat pauses" in body
         assert ". the cat" not in body
 
+    def test_an_embedding_token_keeps_its_small_letter(self):
+        """ComfyUI tests ``word.startswith("embedding:")`` and nothing else.
+
+        So a capital there is not a cosmetic slip: the token is dropped in
+        silence and the effect it names never arrives. The sentence around it
+        is still capitalised as usual.
+        """
+        text = (
+            "integrated_multimodal_description: A cat walks. "
+            "embedding:minimaxh3_bullet_time the camera holds.\n\n"
+            "overall_soundscape: rain on leaves."
+        )
+        stripped = reduce.strip(text)
+        assert "embedding:minimaxh3_bullet_time" in stripped.body
+        assert "Embedding:" not in stripped.body
+        assert stripped.audio.startswith("Rain")
+
+    def test_a_body_that_opens_on_a_token_is_not_capitalised_either(self):
+        text = "integrated_multimodal_description: embedding:minimaxh3_dark_magic a cat walks."
+        assert reduce.strip(text).body.startswith("embedding:minimaxh3_dark_magic")
+
     def test_no_double_spaces_or_stranded_punctuation_survive(self):
         for text in (I2VA, REF2VA):
             body = reduce.strip(text).body

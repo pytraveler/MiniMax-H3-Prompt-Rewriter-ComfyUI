@@ -50,6 +50,31 @@ def body_field(names: tuple[str, ...] = OUTPUT_FIELDS) -> str:
     return names[0] if names else ""
 
 
+BODY_FIELDS = ("detailed_description", OUTPUT_FIELDS[0])
+
+
+def body_offset(text: str, names: tuple[str, ...] = ALL_FIELDS) -> int | None:
+    """Where the description begins inside ``text`` itself, or None if unlabelled.
+
+    ``split_sections`` answers what each field says; this answers where one of
+    them starts, which is a different question and only worth asking for one
+    field. Something that has to put a few characters into a prompt and hand
+    the rest of it on untouched cannot go through the sections: rebuilding the
+    text from them would silently reformat every other field on the way past.
+
+    The offset lands after the label and after whatever spaces follow the
+    colon, so text inserted there opens the description. It may sit directly on
+    a newline when the field starts on the line below its label.
+    """
+    seen: dict[str, int] = {}
+    for match in _pattern(names).finditer(text or ""):
+        seen.setdefault(match.group(1).lower(), match.end())
+    for name in BODY_FIELDS:
+        if name in seen:
+            return seen[name]
+    return None
+
+
 def split_sections(
     text: str,
     names: tuple[str, ...] = OUTPUT_FIELDS,

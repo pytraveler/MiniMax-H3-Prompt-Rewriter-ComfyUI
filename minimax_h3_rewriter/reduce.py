@@ -34,9 +34,7 @@ from dataclasses import dataclass, field
 
 from . import checks
 from .constants import OUTPUT_FIELDS, REF_OUTPUT_FIELDS
-from .fields import ALL_FIELDS, split_sections
-
-BODY_FIELDS = ("detailed_description", OUTPUT_FIELDS[0])
+from .fields import ALL_FIELDS, BODY_FIELDS, split_sections
 
 AUDIO_FIELDS = OUTPUT_FIELDS[1:]
 
@@ -100,6 +98,20 @@ class Stripped:
         return not self.body.strip()
 
 
+def _capitalise(match) -> str:
+    """Raise the first letter of a sentence, unless it opens an embedding token.
+
+    ComfyUI's tokenizer tests ``word.startswith("embedding:")`` and nothing
+    else, so ``Embedding:`` is not a smaller mistake than a typo: the token is
+    dropped in silence and the effect it names simply never arrives. A prompt
+    whose sentence begins with one is ordinary -- the node puts it there --
+    and one capital letter would cost the whole of it.
+    """
+    if match.string.startswith("embedding:", match.start(2)):
+        return match.group(0)
+    return match.group(1) + match.group(2).upper()
+
+
 def _tidy_prose(text: str) -> str:
     """Close up the gaps that removing a tag or a marker leaves behind."""
     text = _SPACE_BEFORE_PUNCT.sub(r"\1", text)
@@ -108,7 +120,7 @@ def _tidy_prose(text: str) -> str:
     text = re.sub(r"^[ \t]*[,;:]\s*", "", text, flags=re.MULTILINE)
     text = _BLANK_RUN.sub("\n\n", text)
     text = "\n".join(line.strip() for line in text.split("\n")).strip()
-    return _SENTENCE_START.sub(lambda m: m.group(1) + m.group(2).upper(), text)
+    return _SENTENCE_START.sub(_capitalise, text)
 
 
 def strip(text: str) -> Stripped:

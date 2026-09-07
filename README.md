@@ -93,6 +93,7 @@ If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2va
   - [MiniMax-H3 Prompt Check](#minimax-h3-prompt-check)
   - [MiniMax-H3 Prompt Reducer](#minimax-h3-prompt-reducer)
   - [MiniMax-H3 Reduce Prompt (any LLM)](#minimax-h3-reduce-prompt-any-llm)
+  - [MiniMax-H3 Effect Embeddings](#minimax-h3-effect-embeddings)
   - [MiniMax-H3 Reference Adapter](#minimax-h3-reference-adapter)
   - [MiniMax-H3 Prompt Presets](#minimax-h3-prompt-presets)
   - [The duration widget](#the-duration-widget)
@@ -1457,6 +1458,21 @@ What remains is translation quality rather than translation refusal: a small
 model leaves the occasional word untranslated. That is the model, and a larger
 one leaves fewer.
 
+#### Effect tokens through the reducer
+
+An [effect embedding](#minimax-h3-effect-embeddings) written into the description
+comes out the other side untouched, small `e` and all — the capitalisation that
+tidies the start of a sentence knows to leave one alone. A token placed *above*
+the first field label does not survive, because the head of a prompt is dropped
+along with the alignment sentence and everything else that is not the description
+or the sound. That is the reducer's contract rather than an oversight: what it
+hands back is a reusable line, and the head of an H3 prompt binds it to
+particular reference frames.
+
+Worth knowing too: the word count on both this node and the check counts a token
+as one word. Its real cost in prompt positions is on the embeddings node's
+`tokens` output.
+
 #### One loop worth knowing
 
 Reducer → edit the line → writer → [Prompt Check](#minimax-h3-prompt-check).
@@ -1478,6 +1494,118 @@ here, so the scene your model receives is already clean.
 The same four axes steer it, `format` joins the two outputs the way it does on
 [Guide Prompt](#minimax-h3-guide-prompt-any-llm), and the fourth output is
 `scene`, as above.
+
+### MiniMax-H3 Effect Embeddings
+
+MiniMax published ten effect embeddings alongside H3 — bullet time, dark magic,
+fire breath, the Truman Show pull-back, and six more. This node puts them into a
+prompt.
+
+They are not keywords, and the difference matters for everything below. Each file
+holds a single tensor of shape `[N, 5120]`: fifty to a hundred and forty
+positions of prompt that have **already been through the text encoder**, saved as
+numbers. Writing `embedding:minimaxh3_bullet_time` in the text is not a request
+for bullet time in words — it is an instruction to ComfyUI's tokenizer to splice
+those positions into the sequence at that point. So an effect costs prompt
+*length* rather than adjectives, it arrives at full strength or not at all, and
+no rewording of it is possible. There is nothing to phrase.
+
+| Effect | Positions | Effect | Positions |
+| --- | --- | --- | --- |
+| Art is explosion | 50 | Kiss camera | 97 |
+| Dark magic | 59 | Fire breath | 118 |
+| Truman show | 90 | Blooming flowers | 123 |
+| Bullet time | 94 | Spiral ascent | 131 |
+| Storm magic | 137 | Four seasons | 142 |
+
+**This needs ComfyUI 0.33.0 or newer.** That is the release where `embedding:`
+started reaching the MiniMax-H3 tokenizer; on anything older the token is read as
+ordinary words. The node checks your version and says so.
+
+![The MiniMax-H3 Effect Embeddings node beside a Show Any node. Three outputs run down its right edge — prompt, wired across to the other node, then tokens and findings. Below them a text box holds the tail of a Ref2VA prompt, the non_diegetic_music field describing a slow ethereal ambient score. Under it the placement widget reads "top of the prompt". Then the grid of ten, each row a checkbox, a name and a cost: Art is explosion 50 tok, Blooming flowers 123 tok, Bullet time 94 tok, Dark magic 59 tok, Fire breath 118 tok, Four seasons 142 tok, Kiss camera 97 tok, Spiral ascent 131 tok, Storm magic 137 tok, Truman show 90 tok. Only Art is explosion is ticked, its box green. A line under the grid reads "1 selected, 50 tokens", and the caption under the node reads "Art is explosion — 50 tokens - top of the prompt". There is no download button. The node ran in 0.012s. The Show Any node displays the result: "embedding:minimaxh3_art_is_explosion" alone on the first line, a blank line, then subject_definitions, summary, retention_analysis and detailed_description as they were written](docs/node_effect_embeddings.png)
+
+*Twelve milliseconds, because nothing here is loaded or generated — the node
+writes forty characters into a text and reads ten file headers. The download
+button is absent rather than disabled: all ten are on disk, so there is nothing
+to fetch and no reason for the row to take up space. The costs in the right-hand
+column are read out of the files themselves, not from a table in this pack. This
+is the `top of the prompt` placement, which is why the token sits alone above
+`subject_definitions` — and why, on this prompt, the `findings` output is saying
+that the blank lines below it will reach H3 as single spaces.*
+
+| Input | What it is for |
+| --- | --- |
+| `prompt` | The prompt to put the tokens into — a writer node's output, a loaded file, something typed. It is passed through character for character apart from the tokens themselves. |
+| `placement` | Where the tokens go: the start of the description, the top of the prompt, or the end. Not a matter of taste — see below. |
+| `effects` | The grid of ten. A tick, the name, what it costs, and a mark on the ones that are not downloaded yet. |
+
+| Output | What it is |
+| --- | --- |
+| `prompt` | The prompt with the tokens in it. |
+| `tokens` | How many positions the chosen effects take up — read out of each file's own header, so it is the real number rather than a table in this pack. |
+| `findings` | What the node noticed, one per line. Empty when there is nothing to say. |
+
+Files are fetched by the button on the node into ComfyUI's own
+`models/embeddings` folder, which is the only place `embedding:` looks. All ten
+come to about ten megabytes. Running the node twice does not stack the tokens —
+it takes its own back out before it puts them in — so unticking an effect removes
+it from a prompt that already had it.
+
+#### Every way this fails is a silent one
+
+That is the reason it is a node at all rather than something you type. ComfyUI
+drops a token it cannot use with one line in the console and no other sign: the
+video generates, it simply generates without the effect, looking exactly like a
+prompt that never asked for one. Three ways that happens, all of them things the
+self-check now looks for:
+
+- **A capital letter.** The test is `word.startswith("embedding:")` and nothing
+  else, so `Embedding:` is not a smaller mistake than a typo. (The Prompt Reducer
+  used to introduce one by capitalising the start of a sentence. It no longer
+  does.)
+- **A token stuck to the word in front of it.** Tokens are found after
+  whitespace, or at the very start of the text. `a cat.embedding:x` is four
+  ordinary words.
+- **A full stop on the end of the name.** A trailing comma is stripped by
+  ComfyUI and forgiven; a full stop is looked for as part of the file name. This
+  one is worth knowing precisely, because it is a trap that hides on Windows:
+  the path layer there drops a trailing dot, so `embedding:minimaxh3_dark_magic.`
+  loads on Windows and quietly loses the effect on Linux and macOS. The prompt
+  you share is not the prompt they run.
+
+Weights do not work either — `(embedding:x:0.8)` is read as literal text, because
+H3 tokenizes with weights disabled. There is no way to ask for a weaker effect.
+
+#### Placement is not a matter of taste
+
+ComfyUI's tokenizer joins everything that follows a token onto one line: the text
+after `embedding:name`, up to the next token, goes through `' '.join(text.split())`
+before H3 sees it. A token at the top of a prompt therefore flattens every blank
+line between the fields below it into a single space.
+
+`start of the description` — the default — opens the description field itself,
+after its label. That is the field the writers put the scene in and the field
+every downstream node reads, and it is the position an effect was meant to
+modify. The fields below it are flattened.
+
+`end of the prompt` puts the tokens last. Nothing follows them, so nothing is
+flattened, and the prompt reaches H3 with its field separators intact.
+
+`top of the prompt` puts them above everything, before the alignment sentence.
+
+A prompt with no field labels at all has no description to open, so it falls back
+to the top and says so on the `findings` output.
+
+One thing to know if you use the Reducer: a token above the first field label is
+dropped by it, along with the rest of the prompt's head. The reducer keeps the
+description and the sound, not what sits above them. A token inside the
+description survives.
+
+What is *not* known here: whether two of these combine into anything sensible.
+They are separate pieces of encoded prompt, and asking for a spiral ascent
+through four seasons is asking the model to reconcile them. The node allows any
+combination because there is no reason to forbid one; whether it is worth
+generating is yours to find out.
 
 ### MiniMax-H3 Reference Adapter
 
@@ -1702,6 +1830,14 @@ it looks at:
 - **The alignment line.** I2VA, FL2VA and L2VA open with a fixed sentence
   telling H3 where the reference frames land; its absence is worth knowing
   about before a render finds out.
+- **Effect embedding tokens.** The one rule here that is not MiniMax's: a
+  capital `Embedding:`, a token stuck to the word in front of it, or a full stop
+  on the end of a name is a token ComfyUI will drop in silence. It is in the
+  self-check because the failure has the same shape as all the others — nothing
+  in the output says so — and because that is where you look when
+  [an effect did nothing](#minimax-h3-effect-embeddings). A name that is not one
+  of the ten is a note rather than a warning: it may well be your own textual
+  inversion.
 
 ![A warning toast titled "Self-check: MiniMax-H3 Universal Writer", listing three warnings marked with an exclamation point — 5 fields missing from the answer, naming subject_definitions, summary, retention_analysis, overall_soundscape and non_diegetic_music with the advice to lower the temperature or try a larger writer model; the description has no Shot 1, shots being how H3 reads structure; Picture 1 and Picture 2 connected but never cited, the model still receiving them with no say in what they are for — and one note marked with a dash: detailed_description is 1286 words where the guide suggests 350–500](docs/self_check_alert.png)
 

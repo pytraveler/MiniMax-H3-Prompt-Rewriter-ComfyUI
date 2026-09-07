@@ -11,6 +11,12 @@ reference tags that point at media the task can or does have. Findings are
 said, never enforced -- a prompt that trips a rule still ships, because the
 model is sometimes right to bend one and the person is the judge. Warnings
 are things H3 will likely misread; notes are things the guide merely suggests.
+
+One rule is not the guides': ``_embeddings`` reads a prompt against ComfyUI's
+tokenizer rather than against MiniMax's advice. It is here anyway because the
+failure it catches is the same shape as all the others -- something the model
+never sees, with nothing in the output to say so -- and because a person
+looking for why an effect did nothing looks at the self-check first.
 """
 
 from __future__ import annotations
@@ -18,6 +24,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .embeddings import IDENTIFIER, NAMES as EFFECT_NAMES
 from .fields import body_field
 
 WARN = "warn"
@@ -80,6 +87,8 @@ LANGUAGE = re.compile(r"^\s*\[[A-Za-z]")
 SUBJECT = re.compile(r"<Subject\s+(\d+)>")
 RUN = re.compile(r"([^\s])\1{79,}")
 
+ANY_EMBEDDING = re.compile(r"embedding:\S+", re.IGNORECASE)
+
 REF_WORDS = (350, 500)
 
 LOOP_TAIL = 1500
@@ -117,13 +126,23 @@ def looping(text: str):
     ``<Subject 2>`` and so on, and the changing digit breaks the period after
     sixty-odd characters. The smallest period wins, so a run of one character
     is reported as that character rather than as some multiple of it.
+
+    Embedding tokens are taken out before any of that. A prompt carrying ten
+    effects is ``embedding:a embedding:b ...`` -- a fixed unit at a short
+    period, which is exactly the shape this looks for, and the finding is not
+    merely a spurious warning: ``looping`` is a live stop condition for all
+    three engines, and "loop" is in ``repair.FIXABLE``, so a false positive
+    burns a whole extra generation on text that was right. Each token leaves
+    its own trailing space behind, so two hundred of them make two hundred
+    spaces -- under ``LOOP_SPAN``, and not a repeat anybody would report.
     """
-    tail = (text or "").rstrip()[-LOOP_TAIL:]
+    text = ANY_EMBEDDING.sub("", text or "")
+    tail = text.rstrip()[-LOOP_TAIL:]
     for period in range(1, min(LOOP_PERIOD, len(tail) // LOOP_REPEATS) + 1):
         span = _repeated_suffix(tail, period)
         if span >= LOOP_SPAN and span // period >= LOOP_REPEATS:
             return tail[-period:], span
-    match = RUN.search(text or "")
+    match = RUN.search(text)
     if match:
         return match.group(1), len(match.group(0))
     return None
@@ -181,6 +200,7 @@ def review(
 
     issues = []
     issues += _loop(text)
+    issues += _embeddings(text)
     issues += _fields(sections, names)
     issues += _alignment(text, wanted)
     issues += _shots(body, duration)
@@ -238,6 +258,78 @@ def _loop(text) -> list:
             "loop",
         )
     ]
+
+
+def _embeddings(text) -> list:
+    """Effect tokens that ComfyUI will drop without saying so.
+
+    Read against ``comfy/sd1_clip.py`` rather than against the prompt guides.
+    Three ways a token that looks right is not one, and all three fail the same
+    way: the tokenizer writes one line to the console and the video generates
+    without the effect, looking exactly like a prompt that never asked for it.
+
+    The whole text is read, head included. A token above the first field label
+    is in an odd place, but it is in the prompt, and this rule's job is to say
+    whether it will work rather than whether it is well placed.
+    """
+    issues = []
+    capitalised, glued, stopped, unknown = [], [], [], []
+
+    for match in ANY_EMBEDDING.finditer(text or ""):
+        word = match.group(0)
+        name = word[len(IDENTIFIER):]
+
+        if not word.startswith(IDENTIFIER):
+            capitalised.append(word)
+            continue
+        if match.start() and not text[match.start() - 1].isspace():
+            glued.append(word)
+            continue
+        if name.endswith("."):
+            stopped.append(word)
+            continue
+        if name.rstrip(",") not in EFFECT_NAMES:
+            unknown.append(name.rstrip(","))
+
+    if capitalised:
+        issues.append(Issue(
+            WARN,
+            f"{_said(capitalised)} -- the check for an embedding is case-sensitive, so a "
+            "capital E means the token is read as ordinary words and the effect never arrives",
+            "embedding",
+        ))
+    if glued:
+        issues.append(Issue(
+            WARN,
+            f"{_said(glued)} -- an embedding token is only recognised after a space or at the "
+            "very start of the prompt, and this one is stuck to the character before it",
+            "embedding",
+        ))
+    if stopped:
+        issues.append(Issue(
+            WARN,
+            f"{_said(stopped)} -- the name ends in a full stop, which is looked for on disk as "
+            "part of the file name. A trailing comma is stripped by ComfyUI and forgiven; a full "
+            "stop is only forgiven on Windows, where the path layer drops it, so this prompt "
+            "works there and quietly loses the effect on Linux and macOS",
+            "embedding",
+        ))
+    if unknown:
+        issues.append(Issue(
+            INFO,
+            f"{_said(unknown)} -- not one of MiniMax-H3's ten effects. Fine if it is your own "
+            "textual inversion; otherwise check the spelling, because a name with no file "
+            "behind it is dropped in silence",
+            "embedding",
+        ))
+    return issues
+
+
+def _said(words) -> str:
+    """Up to three offenders, listed once each, in the order they appear."""
+    seen = list(dict.fromkeys(words))
+    shown = ", ".join(f"'{word}'" for word in seen[:3])
+    return shown if len(seen) <= 3 else f"{shown} and {len(seen) - 3} more"
 
 
 def _fields(sections, names) -> list:

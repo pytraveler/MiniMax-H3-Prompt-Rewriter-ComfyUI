@@ -6,6 +6,63 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.23.0 - 2026-09-07
+
+### Added
+
+- **`MiniMax-H3 Effect Embeddings`: the ten published effects, put into a
+  prompt.** Somebody asked for support for them (#15). They are not keywords --
+  each file is a single `[N, 5120]` tensor, fifty to a hundred and forty
+  positions of prompt that have already been through the text encoder -- so an
+  effect costs prompt length rather than adjectives and arrives at full strength
+  or not at all.
+
+  The node ticks them off a grid that says what each one costs and which are on
+  disk, fetches the missing ones into ComfyUI's own `models/embeddings` folder,
+  and reports the real position count read out of each file's safetensors
+  header. It is idempotent: unticking an effect takes its token back out.
+
+  It is a node rather than a line you type because every way this fails is
+  silent. ComfyUI drops a token it cannot use with one line in the console and
+  nothing else -- the video generates, without the effect, looking exactly like
+  a prompt that never asked for one. Needs ComfyUI 0.33.0 or newer, which is
+  where `embedding:` started reaching the MiniMax-H3 tokenizer.
+
+- **The self-check reads embedding tokens.** A capital `Embedding:`, a token
+  stuck to the word in front of it, or a full stop on the end of a name is a
+  token that will be dropped in silence; a name that is not one of the ten is a
+  note rather than a warning, because it may well be your own textual inversion.
+  The one rule in that module that is ComfyUI's rather than MiniMax's, and it is
+  there because the failure has the same shape as all the others.
+
+  It is deliberately not in `repair.FIXABLE`. The token was put there by a node,
+  deterministically; a regeneration would not reproduce it, and the repair
+  instruction would quote the finding back into the writer's prompt.
+
+- **`placement` says where the tokens go, and it is not a matter of taste.**
+  ComfyUI's tokenizer joins everything that follows a token onto one line, so a
+  token at the top of a prompt flattens every blank line between the fields
+  below it before H3 sees them. `end of the prompt` is the placement that leaves
+  them alone; the default opens the description field, which is the position an
+  effect was meant to modify. The node says on its `findings` output when line
+  breaks are being flattened.
+
+### Fixed
+
+- **A prompt carrying effect tokens was read as a model stuck in a loop.**
+  `embedding:a embedding:b ...` is a fixed unit repeating at a short period,
+  which is exactly the shape `checks.looping` looks for. Worse than a spurious
+  warning: that function is also a live stop condition for all three engines,
+  and `"loop"` is in `repair.FIXABLE`, so the pack would have burned a second
+  generation mending text a node wrote on purpose. Tokens are taken out before
+  the text is read, and a real loop beside them is still found.
+
+- **The Prompt Reducer capitalised `embedding:` at the start of a sentence.**
+  ComfyUI's test is `word.startswith("embedding:")` and nothing else, so
+  `Embedding:` is not a cosmetic slip -- the token is dropped and the effect
+  never arrives. The tidying that raises the first letter of a sentence now
+  leaves one alone.
+
 ## 0.22.0 - 2026-09-07
 
 ### Added

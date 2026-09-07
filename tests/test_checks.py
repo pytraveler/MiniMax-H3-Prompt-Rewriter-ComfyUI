@@ -332,6 +332,83 @@ def test_legitimate_repetition_is_not_a_loop():
     assert checks.looping("") is None
 
 
+def test_embedding_tokens_are_not_a_loop():
+    """A prompt carrying effects repeats a fixed unit at a short period.
+
+    That is the exact shape this rule looks for, and getting it wrong costs
+    more than a stray warning: ``looping`` is a live stop condition for the
+    three engines, and "loop" is in ``repair.FIXABLE``, so the pack would burn
+    a second generation trying to mend text a node wrote on purpose.
+    """
+    group = " ".join(f"embedding:minimaxh3_effect_{n}" for n in range(10)) + " "
+    assert checks.looping("Opening line. " + group * 30) is None
+    assert checks.looping("Opening line. " + "embedding:minimaxh3_bullet_time " * 40) is None
+    assert checks.looping("EMBEDDING:Some_Other_Pack_Entirely " * 40) is None
+
+
+def test_a_loop_beside_the_tokens_is_still_a_loop():
+    """Taking them out must not take the cycle in the words with them."""
+    found = checks.looping("embedding:minimaxh3_dark_magic " + "shot 1 " * 300)
+    assert found and found[0].strip() == "shot 1"
+
+
+def codes(text):
+    return [(issue.level, issue.code) for issue in checks._embeddings(text)]
+
+
+def test_a_working_embedding_token_is_not_worth_a_word():
+    assert codes("A cat. embedding:minimaxh3_dark_magic walks along a fence.") == []
+    assert codes("embedding:minimaxh3_dark_magic opens the prompt, which is allowed.") == []
+    assert codes("A cat. embedding:minimaxh3_dark_magic, walks.") == []
+
+
+def test_the_word_embedding_in_a_sentence_is_not_a_token():
+    """The tokenizer needs a name straight after the colon, and this has none."""
+    assert codes("An embedding: a learned vector of 5120 numbers per position.") == []
+
+
+def test_a_capital_letter_is_a_warning():
+    """word.startswith("embedding:") is case-sensitive, and nothing says so."""
+    found = checks._embeddings("A cat. Embedding:minimaxh3_dark_magic walks.")
+    assert [(issue.level, issue.code) for issue in found] == [(checks.WARN, "embedding")]
+    assert "case-sensitive" in found[0].message
+
+
+def test_a_token_stuck_to_the_word_in_front_is_a_warning():
+    found = checks._embeddings("A cat.embedding:minimaxh3_dark_magic walks.")
+    assert [(issue.level, issue.code) for issue in found] == [(checks.WARN, "embedding")]
+
+
+def test_a_full_stop_on_the_name_is_a_warning_and_a_comma_is_not():
+    assert codes("A cat. embedding:minimaxh3_dark_magic. Walks.") == [(checks.WARN, "embedding")]
+    assert codes("A cat. embedding:minimaxh3_dark_magic, walks.") == []
+
+
+def test_a_name_that_is_not_one_of_the_ten_is_only_a_note():
+    """It may well be somebody's own textual inversion, which is their business."""
+    assert codes("A cat. embedding:my_own_inversion walks.") == [(checks.INFO, "embedding")]
+
+
+def test_the_same_mistake_ten_times_is_said_once():
+    text = " ".join("Embedding:minimaxh3_dark_magic" for _ in range(10))
+    found = checks._embeddings("Opening. " + text)
+    assert len(found) == 1
+
+
+def test_an_embedding_finding_reaches_the_review():
+    issues = review("[Shot 1] A street.Embedding:minimaxh3_dark_magic cuts to a door.")
+    assert any(issue.code == "embedding" for issue in issues)
+
+
+def test_an_embedding_is_not_something_to_generate_again():
+    """The token was put there by a node, deterministically.
+
+    A regeneration would not reproduce it, and repair.instruct would quote the
+    finding -- token and all -- back into the writer's prompt.
+    """
+    assert "embedding" not in repair.FIXABLE
+
+
 def test_a_clean_answer_still_says_nothing():
     body = "[Shot 1] A quiet street. [Shot 2] At 00:04.000, the camera cuts to a door."
     assert review(body) == []

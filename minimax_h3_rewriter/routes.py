@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from . import catalog, guides, library, memory, model_sections, presets
+from . import catalog, embeddings, guides, library, memory, model_sections, paths, presets
 
 log = logging.getLogger(__name__)
 
@@ -456,6 +456,30 @@ def register() -> None:
         """What this entry actually is, as far as that can be known without weights."""
         body = await request.json()
         return await answered(_check_entry, body.get("section") or "", body.get("entry") or {})
+
+    def _effects() -> dict:
+        directory = paths.embeddings_root()
+        return {"ok": True, "dir": directory, "effects": embeddings.state(directory)}
+
+    @routes.get(f"{PREFIX}/embeddings")
+    async def embeddings_state(request):
+        """The ten effects: which are on this disk, and what each costs in tokens."""
+        return await answered(_effects)
+
+    @routes.post(f"{PREFIX}/embeddings/download")
+    async def embeddings_download(request):
+        """Fetch the ones that are missing -- about ten megabytes for all ten.
+
+        The built-in transfer, always: the ``downloader`` option belongs to the
+        nodes, and this is a button on a dialog that has no options node behind
+        it. On this size the choice would not be worth the sentence explaining
+        it.
+        """
+        def fetch():
+            made = embeddings.fetch(paths.embeddings_root())
+            return {**_effects(), "downloaded": made["files"], "bytes": made["bytes"]}
+
+        return await answered(fetch)
 
 
 try:
