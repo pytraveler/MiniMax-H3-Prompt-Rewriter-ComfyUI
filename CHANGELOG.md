@@ -6,6 +6,32 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.23.1 - 2026-09-08
+
+### Added
+
+- **`README_ZH.md`: the whole README in Simplified Chinese.** 
+  This is the full text rather than a summary: the same 43 sections in the same
+  order, the same screenshots, the same tables and the same measurements.
+
+  It says at the top what it is. The author does not read Chinese, the
+  translation was made by an AI, mistakes are worth an issue, and where the two
+  pages disagree the English one is right.
+
+  Node names, widget names, answer fields, paths, environment variables and
+  model names stay in English -- the policy the Languages section already
+  states for the Russian locale. They are identifiers, and a translated
+  identifier matches nothing on the node, in the workflow JSON, in this
+  changelog or in a search box. A node's section heading keeps its English name
+  and adds a Chinese gloss after it, so the name can still be copied into
+  ComfyUI's node search.
+
+  `tools/toc.py` writes its contents list and its anchors like it does for the
+  other two, and the doc tests cover it the same way: 43 sections, 43 internal
+  links, every one of them resolving.
+
+  The node interface itself is not translated. `locales/zh/` is a separate job.
+
 ## 0.23.0 - 2026-09-07
 
 ### Added

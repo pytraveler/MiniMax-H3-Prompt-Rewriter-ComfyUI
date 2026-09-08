@@ -4,7 +4,7 @@
 На входе короткий промпт — на выходе структурированное описание аудио-видео сцены
 для [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3). Полностью локально.
 
-[English version](README.md) · [История изменений](CHANGELOG_RU.md)
+[English version](README.md) · [中文版](README_ZH.md) · [История изменений](CHANGELOG_RU.md)
 
 <p align="center">
   <a href="https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI?display_name=tag"></a>

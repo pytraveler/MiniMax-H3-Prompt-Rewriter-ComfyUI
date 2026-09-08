@@ -88,7 +88,8 @@ jobs:
           done
           for needed in __init__.py minimax_h3_rewriter/nodes.py minimax_h3_rewriter/models.json \
                         web/js/model_list_button.js pyproject.toml requirements.txt \
-                        README.md README_RU.md CHANGELOG.md CHANGELOG_RU.md LICENSE; do
+                        README.md README_RU.md README_ZH.md \
+                        CHANGELOG.md CHANGELOG_RU.md LICENSE; do
             echo "$listed" | grep -qxF "$PREFIX/$needed" || {
               echo "::error::$needed is missing from $ARCHIVE"
               exit 1

@@ -30,6 +30,7 @@ FENCE = re.compile(r"^\s*(```|~~~)")
 FILES = {
     "README.md": {"title": "Contents", "intro": None},
     "README_RU.md": {"title": "Содержание", "intro": None},
+    "README_ZH.md": {"title": "目录", "intro": None},
 }
 
 
