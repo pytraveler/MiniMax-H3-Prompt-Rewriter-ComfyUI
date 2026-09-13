@@ -22,6 +22,7 @@ for _module_name, _label in (
     ("universal_rewriter", "Universal Rewriter"),
     ("reduce_node", "Prompt Reducer"),
     ("embedding_node", "Effect Embeddings"),
+    ("trigger_node", "LoRA Triggers"),
 ):
     try:
         _module = importlib.import_module(f".minimax_h3_rewriter.{_module_name}", __name__)

@@ -8,6 +8,7 @@ import {
     onRefresh,
     replaceWithDom,
     repaintOn,
+    tickBox,
     told,
     widgetNamed,
 } from "./mmx_controls.js";
@@ -31,11 +32,6 @@ const STYLE = `
     height: ${ROW_H}px; padding: 0 4px; border-radius: 3px; cursor: pointer;
     color: var(--input-text, #ddd); }
 .mmx-fx-row:hover { background: var(--comfy-input-bg, #2b2b2b); }
-.mmx-fx-box { flex: 0 0 12px; height: 12px; border-radius: 3px;
-    border: 1px solid var(--border-color, #6a6a6a); background: #2b2b2b;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 9px; line-height: 1; color: #fff; }
-.mmx-fx-on .mmx-fx-box { background: #4a9d5b; border-color: #4a9d5b; }
 .mmx-fx-name { flex: 1 1 auto; overflow: hidden; white-space: nowrap;
     text-overflow: ellipsis; }
 .mmx-fx-cost { flex: 0 0 auto; color: var(--descrip-text, #999); }
@@ -87,11 +83,9 @@ function rowsFor(node) {
 
 function buildRow(node, effect, chosen) {
     const row = document.createElement("div");
-    row.className = "mmx-fx-row" + (chosen[effect.name] === true ? " mmx-fx-on" : "");
+    row.className = "mmx-fx-row";
 
-    const box = document.createElement("div");
-    box.className = "mmx-fx-box";
-    box.textContent = chosen[effect.name] === true ? "x" : "";
+    const box = tickBox(chosen[effect.name] === true);
 
     const name = document.createElement("span");
     name.className = "mmx-fx-name";

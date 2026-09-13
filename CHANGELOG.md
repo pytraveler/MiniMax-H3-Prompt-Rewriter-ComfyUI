@@ -6,6 +6,106 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.24.0 - 2026-09-13
+
+### Added
+
+- **`MiniMax-H3 LoRA Triggers`: the words an adapter answers to, kept with the
+  workflow and put back into the prompt.** A LoRA trained with a trigger in the
+  caption prefix does nothing at all until that word is in the text, and no
+  other node in the pack has any reason to keep it: the writers write prose, the
+  reducer shortens it, the self-check judges it, and a word that exists to wake
+  an adapter three nodes later is exactly what all three drop. So it gets typed
+  in by hand after every run and lost on the next one -- the only place in the
+  pipeline where finished text is edited by hand, and the one part of a prompt
+  that cannot be regenerated.
+
+  One row is one adapter: a grip, a tick, a name for your own use, the words
+  that go in verbatim, a mark saying which part of the prompt they go into, and
+  a cross. A row can hold several words separated by commas, which is what an
+  adapter with more than one trigger needs; they are checked and added one at a
+  time, so a row is never half-duplicated. Rows are dragged by the grip into the
+  order you want them, and that order is not decoration -- rows sharing a
+  placement are written into the prompt in list order. Outputs are the prompt,
+  the words this run actually added, and `findings`.
+
+  The list is drawn with the pack's own DOM toolkit rather than on the canvas,
+  so it survives ComfyUI's Nodes 2.0 renderer.
+
+- **Placement is per row, not per node.** Five positions: the description, the
+  soundscape and the music open their own field after its label, and the top and
+  the end of the prompt are positions rather than fields -- which is why those
+  two still work on a text carrying no labels at all. The mark in the row is
+  short on purpose; seeing where every word is bound for without opening
+  anything is half of what the list is for. Where these overlap the effect
+  embeddings node they are worded identically, because they name the same place.
+
+  The field set differs by task -- three for T2VA, six for Ref2VA -- and the
+  node only ever sees a text, so a placement naming a field this prompt has not
+  got falls back to the top and says so on `findings`. Unlike an embedding
+  token, ordinary words do not flatten the line breaks under them, so the top of
+  the prompt is a safe place here.
+
+- **It checks for the word rather than removing it, and that is the difference
+  from the effect embeddings node.** Those ten tokens are known strings and can
+  be cut back out, which is how unticking one removes it. These words are
+  somebody's own: cutting out a trigger spelled `detail` would eat the prose it
+  was sitting in. So a word already in the text is not added a second time --
+  matched on word boundaries, case-insensitively -- and unticking a row stops it
+  being added rather than taking it away, because the word may well have come
+  from the writer. Running the same text through twice changes nothing, which is
+  what the node needs to be safe at the tail of a graph that gets run again and
+  again.
+
+- **A field that says `N/A` is pointed out rather than mended.** Ref2VA prompts
+  are full of `non_diegetic_music: N/A`, and words put at the start of one leave
+  a field that names something and then says there is none of it. The node says
+  so on `findings` and changes nothing else. Replacing the marker would be the
+  louder lie -- the field would then claim there *is* music, called `ohwx face`,
+  and the self-check reads that field -- and dropping the words would be the node
+  overruling a placement that was asked for on purpose. Both are decisions about
+  somebody else's prompt, which is exactly what this node does not make.
+
+- **Nothing is read out of the LoRA files, and that is not a shortfall.** Of
+  forty-four adapters on the machine this was written on, one carried
+  `trigger_word`, one carried an empty `trigger_words`, and none carried
+  `ss_tag_frequency`. The pack can read a safetensors header already
+  (`embeddings.header`), so this is not about cost -- the data is not there, and
+  an adapter often answers to several words where the metadata has room for one.
+  The list is yours.
+
+- **`bypass` on both of the nodes that write into a finished prompt.** The
+  pack's own switch, with the purple badge in the title bar the writers have:
+  the prompt goes through untouched, `tokens` comes back 0, `added` and
+  `findings` empty, and no file header is read.
+
+  ComfyUI's own bypass is not the same thing on a node like this, which is why
+  the switch exists. It stands an input in for each output by matching types,
+  and there are three outputs here and one socket to fill them from. Measured on
+  the triggers node: `prompt` arrives, `findings` is handed the whole prompt as
+  though it were a finding, and `added` loses its link altogether -- leaving
+  whatever it fed with no input at all. On the embeddings node `tokens` is an
+  INT with no INT input to stand in for it, so that link goes the same way.
+  Nothing reports any of it.
+
+  Neither node runs a model, so this is not about VRAM: it is about judging a
+  prompt with the words in and with the words out, without unwiring anything.
+  Switching it on stops words being added; it does not take out words the text
+  arrived with.
+
+- **A seventh example workflow: `7 - LoRA triggers and effects`.** The bundled
+  presets into the check into both of the nodes that write into a finished
+  prompt, ending in four previews: the prompt, the words this run added, and
+  what each of the two noticed. It loads nothing and downloads nothing -- the
+  prompt comes from the thousand that ship with the pack.
+
+  The list is set up with four rows, one per placement, so the marks read as a
+  column, and the wiring makes the ordering rule visible: the check measures the
+  text before either node lengthens it. The fourth row is switched off, which is
+  the shortest way to show what that does and what it deliberately does not. The
+  card the template browser draws beside it comes from `tools/template_cards.py`
+  like the other six.
+
 ## 0.23.1 - 2026-09-08
 
 ### Added

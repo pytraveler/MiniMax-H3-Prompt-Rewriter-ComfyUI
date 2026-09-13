@@ -94,6 +94,7 @@ If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2va
   - [MiniMax-H3 Prompt Reducer](#minimax-h3-prompt-reducer)
   - [MiniMax-H3 Reduce Prompt (any LLM)](#minimax-h3-reduce-prompt-any-llm)
   - [MiniMax-H3 Effect Embeddings](#minimax-h3-effect-embeddings)
+  - [MiniMax-H3 LoRA Triggers](#minimax-h3-lora-triggers)
   - [MiniMax-H3 Reference Adapter](#minimax-h3-reference-adapter)
   - [MiniMax-H3 Prompt Presets](#minimax-h3-prompt-presets)
   - [The duration widget](#the-duration-widget)
@@ -160,7 +161,7 @@ Or install it from the Comfy registry through ComfyUI-Manager.
 
 ### Example workflows
 
-Six workflows ship with the pack and appear in ComfyUI's template browser
+Seven workflows ship with the pack and appear in ComfyUI's template browser
 (*Workflow → Browse Templates*) under this node pack's name once it is
 installed. Each is a card of its own and each runs on its own: nothing is
 bypassed on open, and there is no second branch to mute before pressing Run.
@@ -173,13 +174,13 @@ bypassed on open, and there is no second branch to mute before pressing Run.
 | 4 | **Ready-made prompts** — a thousand finished ones, picked in a browser with their frames | nothing at all |
 | 5 | **Prompt to video** — ComfyUI's text-to-video template with the writer in front of it | the MiniMax-H3 weights |
 | 6 | **References to video** — the same for Ref2VA, the pictures reaching writer and generator both | the MiniMax-H3 ref2va weights |
+| 7 | **LoRA triggers and effects** — the words an adapter answers to, and MiniMax's ten effects, put into a finished prompt | nothing at all |
 
-The first four never load a MiniMax-H3 checkpoint: they end at the text, which
-is what most of this pack is for. The last two are ComfyUI's own gallery
-templates with the generator folded into a single subgraph box, so what is on
-screen is the prompt side plus one node — the checkpoints they name are the
-ones the stock templates use, and ComfyUI offers to download any that are
-missing.
+Only 5 and 6 load a MiniMax-H3 checkpoint. The rest end at the text, which is
+what most of this pack is for. Those two are ComfyUI's own gallery templates
+with the generator folded into a single subgraph box, so what is on screen is
+the prompt side plus one node — the checkpoints they name are the ones the
+stock templates use, and ComfyUI offers to download any that are missing.
 
 Every one carries a **Read me first** note: what it does, what it downloads,
 what to set before pressing Run, and where to go next. The image loaders in 3
@@ -1522,22 +1523,24 @@ no rewording of it is possible. There is nothing to phrase.
 started reaching the MiniMax-H3 tokenizer; on anything older the token is read as
 ordinary words. The node checks your version and says so.
 
-![The MiniMax-H3 Effect Embeddings node beside a Show Any node. Three outputs run down its right edge — prompt, wired across to the other node, then tokens and findings. Below them a text box holds the tail of a Ref2VA prompt, the non_diegetic_music field describing a slow ethereal ambient score. Under it the placement widget reads "top of the prompt". Then the grid of ten, each row a checkbox, a name and a cost: Art is explosion 50 tok, Blooming flowers 123 tok, Bullet time 94 tok, Dark magic 59 tok, Fire breath 118 tok, Four seasons 142 tok, Kiss camera 97 tok, Spiral ascent 131 tok, Storm magic 137 tok, Truman show 90 tok. Only Art is explosion is ticked, its box green. A line under the grid reads "1 selected, 50 tokens", and the caption under the node reads "Art is explosion — 50 tokens - top of the prompt". There is no download button. The node ran in 0.012s. The Show Any node displays the result: "embedding:minimaxh3_art_is_explosion" alone on the first line, a blank line, then subject_definitions, summary, retention_analysis and detailed_description as they were written](docs/node_effect_embeddings.png)
+![The MiniMax-H3 Effect Embeddings node beside a Show Any node. Two badges sit above the title bar: the pack's own, and a grey one reading "bypass". Three outputs run down the right edge — prompt, wired across to the other node, then tokens and findings. Below them a text box holds a three-field T2VA prompt: integrated_multimodal_description: A cat walks along a fence at dusk, overall_soundscape: Wind in the grass, non_diegetic_music: N/A. Under it the placement widget reads "start of the description". Then the grid of ten, each row a checkbox, a name and a cost: Art is explosion 50 tok, Blooming flowers 123 tok, Bullet time 94 tok, Dark magic 59 tok, Fire breath 118 tok, Four seasons 142 tok, Kiss camera 97 tok, Spiral ascent 131 tok, Storm magic 137 tok, Truman show 90 tok. Three are ticked — Art is explosion, Dark magic and Fire breath — their boxes green with a white tick. A line under the grid reads "3 selected, 227 tokens", and below it the bypass widget reads false. There is no download button. The Show Any node displays the result: the three tokens run together after the integrated_multimodal_description label and in front of the sentence, then overall_soundscape and non_diegetic_music exactly as they were written](docs/node_effect_embeddings.png)
 
-*Twelve milliseconds, because nothing here is loaded or generated — the node
-writes forty characters into a text and reads ten file headers. The download
-button is absent rather than disabled: all ten are on disk, so there is nothing
-to fetch and no reason for the row to take up space. The costs in the right-hand
-column are read out of the files themselves, not from a table in this pack. This
-is the `top of the prompt` placement, which is why the token sits alone above
-`subject_definitions` — and why, on this prompt, the `findings` output is saying
-that the blank lines below it will reach H3 as single spaces.*
+*Nothing here is loaded or generated — the node writes a hundred characters into
+a text and reads ten file headers. The download button is absent rather than
+disabled: all ten are on disk, so there is nothing to fetch and no reason for the
+row to take up space. The costs in the right-hand column are read out of the
+files themselves, not from a table in this pack, and 50 + 59 + 118 is the 227
+under the grid. This is the `start of the description` placement, which is why
+the three tokens open the description field rather than sitting above it — and
+why the blank lines that follow them will reach H3 as single spaces, which the
+`findings` output says out loud.*
 
 | Input | What it is for |
 | --- | --- |
 | `prompt` | The prompt to put the tokens into — a writer node's output, a loaded file, something typed. It is passed through character for character apart from the tokens themselves. |
 | `placement` | Where the tokens go: the start of the description, the top of the prompt, or the end. Not a matter of taste — see below. |
 | `effects` | The grid of ten. A tick, the name, what it costs, and a mark on the ones that are not downloaded yet. |
+| `bypass` | Hand `prompt` through and put no tokens in it. `tokens` comes back 0, `findings` empty, no file header is read. The node's title bar carries the switch as a badge, like the writers. |
 
 | Output | What it is |
 | --- | --- |
@@ -1606,6 +1609,156 @@ They are separate pieces of encoded prompt, and asking for a spiral ascent
 through four seasons is asking the model to reconcile them. The node allows any
 combination because there is no reason to forbid one; whether it is worth
 generating is yours to find out.
+
+### MiniMax-H3 LoRA Triggers
+
+A LoRA trained with a trigger word in its caption prefix does nothing at all
+until that word is in the prompt. This node keeps the list of those words on the
+node, with the workflow, and puts them back into a finished prompt.
+
+Nothing upstream knows about them. The writers write prose, the reducer shortens
+it, the self-check judges it — and a word whose only job is to wake an adapter
+three nodes later is exactly the sort of thing all three drop. So it gets typed
+in by hand after every run, and lost on the next one. That is the only place in
+the whole pipeline where finished text has to be edited by hand, and it is the
+one part of a prompt that cannot be regenerated.
+
+One row is one adapter: a grip, a tick, a name for your own use, the words that
+go into the prompt verbatim, a short mark saying where they go, and a cross to
+remove the row. A row can hold several words separated by commas, which is what
+an adapter with more than one trigger needs — they are checked and added one at a
+time, so a row is never half-duplicated. Triggers that want different parts of
+the prompt want different rows.
+
+Drag a row by its grip to move it. The order is not decoration: rows sharing a
+placement are written into the prompt in list order, which is the order they read
+in.
+
+![The MiniMax-H3 LoRA Triggers node beside a Show Any node. Two badges sit above the title bar: the pack's own, and a grey one reading "bypass". Three outputs run down the right edge — prompt, wired across to the other node, then added and findings. Below them a text box holds a three-field T2VA prompt: integrated_multimodal_description: A cat walks along a fence at dusk, overall_soundscape: Wind in the grass, non_diegetic_music: N/A. Under it two rows of the list. Each is a drag grip, a green checkbox with a white tick, a field for the name, a wider one for the words, a placement mark and a cross: "Facial realism" holding "ohwx face" marked body, and "Neon" holding "neon glow, wet asphalt" marked top. The two marks line up in a column, and so do the two pairs of fields. A line under them reads "2 on of 2", then the bypass widget reading false, then a full-width button, "add a trigger". The Show Any node displays the result: "neon glow, wet asphalt" alone on the first line, a blank line, then integrated_multimodal_description opening with "ohwx face." in front of the sentence, and overall_soundscape and non_diegetic_music exactly as they were written](docs/node_lora_triggers.png)
+
+*Two rows, two placements, one pass. `ohwx face` opened the description — after
+the label and in front of the prose, which is the position a caption-prefix
+trigger was trained in — while the second row went to the top carrying two
+triggers at once, checked and written as two. Nothing was taken out to manage
+it: run the same text through again and `added` comes back empty, because both
+words are already there. The placement marks are a fixed column, which is what
+keeps the fields starting and ending on the same pixel in every row; drag a row
+by its grip to change the order they are written in.*
+
+| Input | What it is for |
+| --- | --- |
+| `prompt` | The prompt to put the words into — a writer node's output, a reducer's, a loaded file, something typed. It is passed through character for character apart from the inserted words. |
+| `triggers` | The list. A grip, a tick, a name, the words, the placement mark, a cross; a button below adds a row. Saved with the workflow. |
+| `bypass` | Hand `prompt` through and add nothing. The text goes out exactly as it came in; `added` and `findings` come back empty. The node's title bar carries the switch as a badge, like the writers. |
+
+| Output | What it is |
+| --- | --- |
+| `prompt` | The prompt with the words in it. |
+| `added` | The words this run actually put in, comma separated. Empty when every switched-on trigger was already there, which is the normal state on a second run. |
+| `findings` | What the node did and noticed, one per line. Empty when there is nothing to say. |
+
+Driving it from the API rather than from the interface, the widget takes the JSON
+array of `{name, words, where, on}` objects the interface writes — and two
+friendlier shapes as well, because they are what anyone writes first: a plain
+array of strings is read as a list of trigger words, and text that is not JSON at
+all is read as one row's worth of words.
+
+#### Where each word goes
+
+The mark in the row is short on purpose. Seeing where every word is bound for
+without opening anything is half of what the list is for, and five full dropdowns
+would not fit across a node at any sensible width. Clicking the mark opens the
+choice.
+
+| Mark | Placement | Where it lands |
+| --- | --- | --- |
+| `body` | `start of the description` | Opens the description field itself, after its label. |
+| `top` | `top of the prompt` | Above everything, before the field labels. |
+| `sound` | `start of the soundscape` | Opens `overall_soundscape`, after its label. |
+| `music` | `start of the music` | Opens `non_diegetic_music`, after its label. |
+| `end` | `end of the prompt` | Last, after everything. |
+
+The description is the default and usually the right answer: it is the field the
+writers put the scene in, the field every downstream node reads, and the position
+a caption-prefix trigger was trained in. The top and the end are positions rather
+than fields, which is why those two still work on a text carrying no labels at
+all.
+
+The field set differs by task — three for T2VA, six for Ref2VA — and the node
+only ever sees a text, which does not say which task wrote it. So a placement
+naming a field this particular prompt has not got is not an error: the words go
+to the top instead and the `findings` output says so.
+
+A field that is there but says `N/A` gets a note of its own. Ref2VA prompts are
+full of `non_diegetic_music: N/A`, and words put at the start of one leave a
+field that names something and then says there is none of it. The node says so
+and changes nothing else. Replacing the marker would have the field claim there
+*is* music, called `ohwx face` — and the self-check reads that field; dropping
+the words would be the node overruling a placement you asked for. Both are
+decisions about your prompt, and this node does not make those.
+
+One difference from the effect embeddings worth knowing, because the habit does
+not carry over: ordinary words do not flatten the line breaks below them.
+ComfyUI's tokenizer joins everything after an `embedding:` token onto one line,
+but only after one. The top of the prompt is a safe place here.
+
+#### It never takes anything out
+
+This is where the node parts company with `MiniMax-H3 Effect Embeddings`, and the
+reason is worth stating. Those ten tokens are strings known in advance, so the
+node can cut its own back out before it puts them in — which is how unticking an
+effect removes it. These words are yours. Cutting out a trigger spelled `detail`
+would eat a hole in the prose it was sitting in.
+
+So the rule here is presence, not removal:
+
+- A word already in the text is **not added a second time** — matched on word
+  boundaries and without regard for case, so `man` is not found inside `woman`
+  and `Ohwx man` counts as `ohwx man`. It is reported on `findings`.
+- **Unticking a row stops it being added. It does not take it away.** The word
+  may well have come from the writer, and removing somebody else's word is not
+  this node's call.
+
+Running the same text through twice therefore changes nothing, which is what the
+node needs in order to be safe at the tail of a graph that gets run again and
+again.
+
+#### `bypass` rather than Ctrl+B
+
+Both of these nodes carry the pack's own `bypass` switch, with the same purple
+badge in the title bar the writers have: click the badge or tick the widget, and
+the prompt goes through untouched.
+
+ComfyUI's own bypass is not the same thing on a node like this. It stands an
+input in for each output by matching types, and there are three outputs here and
+one socket to fill them from. Measured on the triggers node: `prompt` arrives,
+`findings` is handed the whole prompt as though it were a finding, and `added`
+loses its link altogether — which leaves whatever it fed with no input at all.
+On the embeddings node `tokens` is an INT with no INT input to stand in for it,
+so that link goes the same way. None of it is reported anywhere.
+
+#### Put it at the very end of the graph
+
+After the reducer and after `MiniMax-H3 Prompt Check`. Triggers add words, and
+the check counts words against a ceiling — a node that lengthens the text after
+it has been measured is fine, one that lengthens it before is arguing with the
+measurement. And anything that rewrites the prompt downstream of this will drop
+the words again, which is the failure this node exists to prevent.
+
+#### What it does not promise
+
+Only LoRAs that were trained with a trigger in the caption prefix. Sliders and
+turbo accelerators need no word at all — they work by weight — and on most
+machines those are the majority of what is installed. A trigger list will do
+nothing for them, and that is not a fault in the list.
+
+Nothing is read out of the LoRA files, and that is a finding rather than a
+shortfall. Of forty-four adapters on the machine this was written on, one carried
+`trigger_word`, one carried an empty `trigger_words`, and none carried
+`ss_tag_frequency`. The pack can read a safetensors header already, so this is
+not about cost: the data is not there. And an adapter often answers to several
+words where the metadata has room for one. The list is yours to keep, which is
+also what makes it worth keeping.
 
 ### MiniMax-H3 Reference Adapter
 

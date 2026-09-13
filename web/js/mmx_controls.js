@@ -26,9 +26,21 @@ const RATIO_ROW_H = 38;
 
 const BASE_STYLE_ID = "minimax-h3-controls-style";
 
+const TICK_SVG =
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'" +
+    "%3E%3Cpolyline points='3.4,7.3 6,10.1 10.9,3.9' fill='none' stroke='%23fff'" +
+    " stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E";
+
 const BASE_STYLE = `
 .mmx-note { font-size: 11px; color: var(--descrip-text, #999);
     font-family: system-ui, sans-serif; }
+
+.mmx-tick { flex: 0 0 14px; width: 14px; height: 14px; box-sizing: border-box;
+    border-radius: 3px; cursor: pointer; background: #2B2B2B;
+    border: 1px solid #6A6A6A; }
+.mmx-tick.mmx-on { background-color: #4A9D5B; border-color: #4A9D5B;
+    background-image: url("${TICK_SVG}"); background-repeat: no-repeat;
+    background-position: center; background-size: 14px 14px; }
 
 .mmx-buttons { display: flex; width: 100%; height: 100%; gap: 6px;
     font-family: system-ui, sans-serif; }
@@ -53,8 +65,6 @@ const BASE_STYLE = `
 .mmx-seg.mmx-shut { opacity: 0.4; cursor: not-allowed; }
 .mmx-seg.mmx-on.mmx-shut { background: #8A3B3B; opacity: 1; }
 
-/* Tabs are the same control with a different promise: the strip below them
-   changes, so they are attached to it rather than floating in a box. */
 .mmx-seg-row.mmx-tabs { border: 0; border-radius: 0; gap: 3px;
     border-bottom: 2px solid #3B7DD8; align-items: stretch; }
 .mmx-tabs .mmx-seg { flex-direction: column; justify-content: center; gap: 1px;
@@ -67,25 +77,14 @@ const BASE_STYLE = `
 .mmx-ratios { display: flex; flex-wrap: wrap; align-content: center;
     justify-content: center; gap: ${RATIO_GAP}px; width: 100%; height: 100%;
     overflow: hidden; font-family: system-ui, sans-serif; }
-/* min-width is what makes a narrow node wrap the row instead of clipping it: a
-   column narrower than its rectangle would cut the rectangle off, since that one
-   is not allowed to shrink. ratiosHeight counts the same way and asks the node
-   for the rows. max-width is for the other end -- on a wide node the columns
-   would otherwise stretch and leave each rectangle alone in a field of nothing,
-   and a part-filled second row would stretch its one item across the whole. */
 .mmx-ratio { flex: 1 1 0; min-width: ${RATIO_ITEM_W}px; max-width: ${RATIO_ITEM_MAX}px;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 3px; cursor: pointer;
     user-select: none; touch-action: none; border-radius: 5px;
     border: 1px solid transparent; }
 .mmx-ratio.mmx-on { border-color: #3B7DD8; background: rgba(59, 125, 216, 0.16); }
-/* Driven from the aspect_ratio socket: dimmed, nothing lit, clicks refused.
-   Nothing is lit on purpose -- a highlighted square would be naming a ratio the
-   run is not going to use. */
 .mmx-ratios.mmx-driven { opacity: 0.4; }
 .mmx-ratios.mmx-driven .mmx-ratio { cursor: not-allowed; }
-/* Without flex: 0 0 auto these are shrunk to fit and every ratio draws the
-   same rectangle, which is the one thing the control exists to show. */
 .mmx-box { flex: 0 0 auto; box-sizing: border-box;
     border: 1.5px solid var(--descrip-text, #999); border-radius: 2px; }
 .mmx-ratio.mmx-on .mmx-box { border-color: #7FB2F5;
@@ -105,6 +104,13 @@ export function installStyle(id, css) {
 
 export function installBaseStyle() {
     installStyle(BASE_STYLE_ID, BASE_STYLE);
+}
+
+export function tickBox(on) {
+    installBaseStyle();
+    const box = document.createElement("div");
+    box.className = "mmx-tick" + (on ? " mmx-on" : "");
+    return box;
 }
 
 export const BUTTON_H = 24;

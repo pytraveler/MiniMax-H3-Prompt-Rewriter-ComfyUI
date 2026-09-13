@@ -103,6 +103,21 @@ CARDS = [
             "video",
         ],
     },
+    {
+        "number": "7",
+        "name": "7 - LoRA triggers and effects",
+        "title": "LoRA triggers and effects",
+        "line": "The words an adapter needs, and the ten effects, put into a finished prompt.",
+        "cost": "Nothing is loaded; ten megabytes if you want the effects.",
+        "accent": LIGHT,
+        "chain": [
+            "Prompt Presets",
+            "Prompt Check",
+            "Embeddings",
+            "LoRA Triggers",
+            "H3 prompt",
+        ],
+    },
 ]
 
 

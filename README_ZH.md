@@ -98,6 +98,7 @@ ComfyUI 节点。输入一句简短的提示词，输出一段结构化、可直
   - [MiniMax-H3 Prompt Reducer 提示词精简器](#minimax-h3-prompt-reducer-提示词精简器)
   - [MiniMax-H3 Reduce Prompt (any LLM) 精简提示词](#minimax-h3-reduce-prompt-any-llm-精简提示词)
   - [MiniMax-H3 Effect Embeddings 特效嵌入](#minimax-h3-effect-embeddings-特效嵌入)
+  - [MiniMax-H3 LoRA Triggers LoRA 触发词](#minimax-h3-lora-triggers-lora-触发词)
   - [MiniMax-H3 Reference Adapter 参考素材适配器](#minimax-h3-reference-adapter-参考素材适配器)
   - [MiniMax-H3 Prompt Presets 提示词预设](#minimax-h3-prompt-presets-提示词预设)
   - [时长小部件](#时长小部件)
@@ -161,7 +162,7 @@ python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\MiniMax-H3-Prom
 
 ### 示例工作流
 
-节点包自带六个工作流。装好之后，它们会出现在 ComfyUI 的模板浏览器里
+节点包自带七个工作流。装好之后，它们会出现在 ComfyUI 的模板浏览器里
 （*Workflow → Browse Templates*），归在本节点包的名字下面。每一个都是独立的一张
 卡片，也都能独立跑起来：打开时没有任何节点被绕过，也不必先静音另一条分支才能
 按下运行。
@@ -174,9 +175,10 @@ python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\MiniMax-H3-Prom
 | 4 | **Ready-made prompts** —— 一千条现成的提示词，在浏览器里连着画面一起挑 | 什么都不需要 |
 | 5 | **Prompt to video** —— ComfyUI 自带的文生视频模板，前面接上写作节点 | MiniMax-H3 的权重 |
 | 6 | **References to video** —— 同样的东西，换成 Ref2VA，图片同时送到写作节点和生成器 | MiniMax-H3 的 ref2va 权重 |
+| 7 | **LoRA triggers and effects** —— 适配器要听的那些词，和 MiniMax 的十个特效，放进一段写好的提示词里 | 什么都不需要 |
 
-前四个自始至终不会加载 MiniMax-H3 检查点：它们到文本为止就结束了，而这正是本节点包
-大部分内容存在的意义。后两个是 ComfyUI 自己图库里的模板，把生成那一半折进了一个
+会加载 MiniMax-H3 检查点的只有 5 和 6。其余的到文本为止就结束了，而这正是本节点包
+大部分内容存在的意义。那两个是 ComfyUI 自己图库里的模板，把生成那一半折进了一个
 子图方框，所以屏幕上剩下的就是提示词这一侧再加一个节点 —— 它们点名的检查点就是
 官方模板用的那些，缺了哪个 ComfyUI 会主动提出替你下载。
 
@@ -1349,20 +1351,21 @@ MiniMax 随 H3 一起发布了十个特效嵌入 —— 子弹时间、黑魔法
 MiniMax-H3 的分词器；在更旧的版本上，这个 token 会被当成普通词句来读。节点会检查
 你的版本并把这件事说出来。
 
-![MiniMax-H3 特效嵌入节点，旁边一个 Show Any 节点。右侧从上到下三个输出 —— prompt（接到另一个节点去了）、tokens 和 findings。它们下面的文本框里是一段 Ref2VA 提示词的尾巴，non_diegetic_music 字段描述的是一段缓慢空灵的氛围配乐。再下面 placement 小部件写着 “top of the prompt”。然后是那十个一格的网格，每一行一个复选框、一个名字和一份开销：Art is explosion 50 tok、Blooming flowers 123 tok、Bullet time 94 tok、Dark magic 59 tok、Fire breath 118 tok、Four seasons 142 tok、Kiss camera 97 tok、Spiral ascent 131 tok、Storm magic 137 tok、Truman show 90 tok。只有 Art is explosion 打了勾，方框是绿的。网格下面一行写着 “1 selected, 50 tokens”，节点底下的说明写着 “Art is explosion — 50 tokens - top of the prompt”。没有下载按钮。节点跑了 0.012 秒。Show Any 节点显示着结果：第一行孤零零一个 “embedding:minimaxh3_art_is_explosion”，一个空行，然后是原样的 subject_definitions、summary、retention_analysis 和 detailed_description](docs/node_effect_embeddings.png)
+![MiniMax-H3 特效嵌入节点，旁边一个 Show Any 节点。标题栏上方有两个徽标：节点包自己的那个，和一个写着 “bypass” 的灰色徽标。右侧从上到下三个输出 —— prompt（接到另一个节点去了）、tokens 和 findings。它们下面的文本框里是一段三个字段的 T2VA 提示词：integrated_multimodal_description: A cat walks along a fence at dusk、overall_soundscape: Wind in the grass、non_diegetic_music: N/A。再下面 placement 小部件写着 “start of the description”。然后是那十个一格的网格，每一行一个复选框、一个名字和一份开销：Art is explosion 50 tok、Blooming flowers 123 tok、Bullet time 94 tok、Dark magic 59 tok、Fire breath 118 tok、Four seasons 142 tok、Kiss camera 97 tok、Spiral ascent 131 tok、Storm magic 137 tok、Truman show 90 tok。打了勾的有三个 —— Art is explosion、Dark magic 和 Fire breath —— 它们的方框是绿的，里面一个白色的勾。网格下面一行写着 “3 selected, 227 tokens”，再下面 bypass 小部件写着 false。没有下载按钮。Show Any 节点显示着结果：三个 token 连成一串，跟在 integrated_multimodal_description 标签后面、那句话前面，然后是原样的 overall_soundscape 和 non_diegetic_music](docs/node_effect_embeddings.png)
 
-*十二毫秒，因为这里什么都不加载、什么都不生成 —— 节点往一段文字里写了四十个字符，
-读了十个文件头。下载按钮是不见了，而不是变灰：十个全在硬盘上，所以没什么可取的，
-那一行也没有理由占地方。右边那一列的开销是从文件本身读出来的，不是本节点包里的一张
-表。这是 `top of the prompt` 那一档，所以 token 孤零零地待在 `subject_definitions`
-上面 —— 也正因如此，在这段提示词上，`findings` 输出正在说：它下面那些空行到达 H3
-时会变成一个个空格。*
+*这里什么都不加载、什么都不生成 —— 节点往一段文字里写了一百个字符，读了十个文件头。
+下载按钮是不见了，而不是变灰：十个全在硬盘上，所以没什么可取的，那一行也没有理由占
+地方。右边那一列的开销是从文件本身读出来的，不是本节点包里的一张表；50 + 59 + 118
+就是网格底下那个 227。这是 `start of the description` 那一档，所以这三个 token 是把
+描述字段打开了，而不是待在它上面 —— 也正因如此，它们下面那些空行到达 H3 时会变成一个
+个空格，而 `findings` 输出把这件事说了出来。*
 
 | 输入 | 用来做什么 |
 |---|---|
 | `prompt` | 要把 token 放进去的那段提示词 —— 某个写作节点的输出、加载进来的一个文件，或者手打的东西。除了 token 本身，它是一个字符不差地穿过去的。 |
 | `placement` | token 放在哪儿：描述的开头、提示词的顶上，或者末尾。这不是审美问题 —— 见下文。 |
 | `effects` | 那个十格的网格。一个勾、一个名字、它花多少，以及还没下载的那些身上的标记。 |
+| `bypass` | 让 `prompt` 直接穿过去，一个 token 也不放。`tokens` 返回 0，`findings` 为空，也不去读任何文件头。这个开关像写作节点那样，在节点标题栏上有一个徽标。 |
 
 | 输出 | 是什么 |
 |---|---|
@@ -1420,6 +1423,129 @@ token 活得下来。
 这里*不*知道的是：这些特效两个凑在一起，能不能凑出什么讲得通的东西。它们是各自独立
 的、已经编码好的提示词片段，而要一次穿过四季的螺旋上升，等于是让模型自己去调和它们。
 节点允许任意组合，因为没有理由去禁止哪一种；值不值得生成，由你自己去发现。
+
+### MiniMax-H3 LoRA Triggers LoRA 触发词
+
+一个在标注前缀里带着触发词训练出来的 LoRA，只要那个词不在提示词里，就什么都不做。
+这个节点把这些词的清单留在节点上、跟着工作流一起存下来，并把它们放回写好的提示词里。
+
+上游没有谁知道它们的存在。写作节点写散文，精简器把它缩短，自检去评判它 —— 而一个
+唯一的用处是让三个节点之后的适配器醒过来的词，正是这三者都会丢掉的东西。于是它在
+每次运行之后被手打进去，又在下一次运行时丢掉。这是整条流水线上唯一一处要手改成品
+文本的地方，也是提示词里唯一无法重新生成的部分。
+
+一行就是一个适配器：一个抓手、一个勾、一个你自己看的名字、会原样进入提示词的那些词、
+一个说明它们去哪儿的短标记，以及一个删掉这一行的叉。一行里可以放好几个词，用逗号隔开 ——
+带不止一个触发词的适配器要的正是这个；它们是一个一个地检查、一个一个地放进去的，
+所以一行永远不会只重复一半。要去提示词不同部位的触发词，要用不同的行。
+
+拽住抓手就能把一行挪走。次序不是装饰：同一个放置档位上的几行，是按清单里的先后写进
+提示词的，读起来也就是那个先后。
+
+![MiniMax-H3 LoRA 触发词节点，旁边一个 Show Any 节点。标题栏上方有两个徽标：节点包自己的那个，和一个写着 “bypass” 的灰色徽标。右侧从上到下三个输出 —— prompt（接到另一个节点去了）、added 和 findings。它们下面的文本框里是一段三个字段的 T2VA 提示词：integrated_multimodal_description: A cat walks along a fence at dusk、overall_soundscape: Wind in the grass、non_diegetic_music: N/A。再下面是清单的两行。每一行都是一个拖拽抓手、一个打了白勾的绿色复选框、一个放名字的输入框、一个更宽的放词的输入框、一个放置标记和一个叉：“Facial realism” 里放着 “ohwx face”，标记是 body；“Neon” 里放着 “neon glow, wet asphalt”，标记是 top。两个标记排成一列，两对输入框也是。它们下面一行写着 “2 on of 2”，再下面 bypass 小部件写着 false，然后是一个通栏按钮 “add a trigger”。Show Any 节点显示着结果：第一行孤零零一个 “neon glow, wet asphalt”，一个空行，然后 integrated_multimodal_description 以 “ohwx face.” 开头、接着才是那句话，而 overall_soundscape 和 non_diegetic_music 原样不动](docs/node_lora_triggers.png)
+
+*两行、两个档位、一趟跑完。`ohwx face` 把描述打开了 —— 在标签之后、散文之前，正是
+一个来自标注前缀的触发词受训时所处的位置 —— 而第二行一次带着两个触发词去了顶上，
+它们是分开检查、分开写进去的。为此并不需要拿走任何东西：把同一段文本再跑一遍，
+`added` 会是空的，因为两个词都已经在里面了。放置标记排成固定的一列，正是它让每一行
+的输入框都从同一个像素开始、到同一个像素结束；拽住某一行的抓手，就能改变它们被写进去
+的先后。*
+
+| 输入 | 用来做什么 |
+|---|---|
+| `prompt` | 要把词放进去的那段提示词 —— 某个写作节点的输出、精简器的输出、加载进来的一个文件，或者手打的东西。除了放进去的那些词，它是一个字符不差地穿过去的。 |
+| `triggers` | 那份清单。一个抓手、一个勾、一个名字、那些词、放置标记、一个叉；下面的按钮加一行。跟工作流一起存下来。 |
+| `bypass` | 让 `prompt` 直接穿过去，什么都不加。文字进来什么样出去就什么样；`added` 和 `findings` 返回空。这个开关像写作节点那样，在节点标题栏上有一个徽标。 |
+
+| 输出 | 是什么 |
+|---|---|
+| `prompt` | 放好词的那段提示词。 |
+| `added` | 这一次运行真正放进去的词，用逗号隔开。当所有打了勾的触发词本来就在里面时它是空的 —— 第二次运行时这是正常状态。 |
+| `findings` | 节点做了什么、注意到什么，一行一条。没什么可说时它是空的。 |
+
+如果是通过 API 而不是界面来驱动它：这个小部件收界面写出来的那种
+`{name, words, where, on}` 对象的 JSON 数组 —— 另外还收两种更省事的写法，因为那是
+任何人最先会写的东西。一个普通的字符串数组会被读成一份触发词清单；根本不是 JSON 的
+一段文本，会被读成一行的那些词。
+
+#### 每个词去哪儿
+
+行里的标记短是故意的。什么都不展开就能一眼看出每个词要去哪儿，这是这份清单一半的
+意义所在；而五个完整的下拉框，在任何合理的节点宽度上都排不下。点一下标记就能改。
+
+| 标记 | 放置档位 | 落在哪儿 |
+|---|---|---|
+| `body` | `start of the description` | 打开描述字段本身，紧接在它的标签后面。 |
+| `top` | `top of the prompt` | 在一切之上，在字段标签前面。 |
+| `sound` | `start of the soundscape` | 打开 `overall_soundscape`，紧接在它的标签后面。 |
+| `music` | `start of the music` | 打开 `non_diegetic_music`，紧接在它的标签后面。 |
+| `end` | `end of the prompt` | 在最后，在一切之后。 |
+
+描述是默认档，通常也是对的那个：那是写作节点放场景的字段，是下游每个节点都会读的
+字段，也正是一个来自标注前缀的触发词受训时所处的位置。顶上和末尾是位置而不是字段
+—— 所以在一段根本没有标签的文本上，还能用的只有这两个。
+
+字段集合按任务而不同 —— T2VA 三个，Ref2VA 六个 —— 而节点看见的永远只是一段文字，
+文字并不会说它是哪个任务写的。所以一个档位指名了这段提示词并没有的字段，这不是错误：
+那些词改去顶上，`findings` 输出会把这件事说出来。
+
+一个在、但写着 `N/A` 的字段，会另外得到一条提示。Ref2VA 的提示词里到处都是
+`non_diegetic_music: N/A`，而放在这种字段开头的词，会留下一个既说出了什么、又紧接着
+说这东西没有的字段。节点把这件事说出来，别的什么都不改。把那个标记换掉，等于让这个
+字段声称音乐是有的、叫作 `ohwx face` —— 而自检会读这个字段；把那些词丢掉，又等于
+节点推翻了你要的那个放置档位。这两样都是关于你这段提示词的决定，而这个节点不做这种
+决定。
+
+有一处和特效嵌入的区别值得知道，因为那边的习惯不能照搬过来：普通的词不会把它们下面
+的换行压平。ComfyUI 的分词器只会把 `embedding:` token 之后的东西并成一行 —— 也只在
+它之后。在这里，提示词的顶上是个安全的地方。
+
+#### 它从不拿走任何东西
+
+这正是它和 `MiniMax-H3 Effect Embeddings` 分道扬镳的地方，理由值得说清楚。那十个
+token 是事先就知道的字符串，所以那个节点能在放进去之前先把自己上一次放的取出来 ——
+去掉某个特效的勾之所以能把它拿走，就是这个道理。而这里的词是你自己的。把一个写成
+`detail` 的触发词剪掉，就是在它待着的那段散文上剪出一个窟窿。
+
+所以这里的规矩是另一条 —— 检查在不在，而不是拿走：
+
+- 已经在文本里的词**不会被放第二遍** —— 按词边界匹配、不分大小写，所以 `man` 不会
+  在 `woman` 里被找到，而 `Ohwx man` 算作 `ohwx man`。这件事会写进 `findings`。
+- **去掉勾，只是不再添加。它不会拿走。** 那个词很可能本来就是写作节点写的，而删掉
+  别人的词不是这个节点该做的决定。
+
+因此，同一段文本跑两遍什么都不会变 —— 而这正是这个节点要待在一张会被一遍遍运行的图
+的尾巴上所需要的。
+
+#### 用 `bypass`，而不是 Ctrl+B
+
+这两个节点都带着本节点包自己的 `bypass` 开关，标题栏上有和写作节点一样的紫色徽标：
+点一下徽标，或者把那个小部件勾上，提示词就原封不动地穿过去。
+
+在这样的节点上，ComfyUI 自己的旁路做的不是同一件事。它按类型给每个输出找一个输入
+来顶替，而这里有三个输出、只有一个插槽可用。在触发词节点上实测：`prompt` 到了，
+`findings` 收到的是整段提示词、仿佛那是一条发现，而 `added` 干脆把连线丢了 ——
+于是它下面那个节点什么输入都没有。在特效嵌入节点上，`tokens` 是 INT，没有 INT 输入
+能顶替它，那根连线也是同样的下场。这些事情哪儿都不会报出来。
+
+#### 把它放在图的最末尾
+
+放在精简器之后，也放在 `MiniMax-H3 Prompt Check` 之后。触发词会增加词数，而检查会
+数词数并和上限比较：一个在文本被量过之后才把它加长的节点没问题，一个在量之前就加长
+它的节点，是在和这次测量较劲。而任何在它下游重写提示词的东西，都会把这些词再丢一次
+—— 那正是这个节点存在所要防的事。
+
+#### 它不承诺什么
+
+只管那些在标注前缀里带着触发词训练出来的 LoRA。滑块类和 turbo 加速类根本不需要词
+—— 它们靠权重工作 —— 而在多数机器上，装着的多半正是这一类。一份触发词清单对它们
+毫无用处，而这不是清单的毛病。
+
+不会从 LoRA 文件里读任何东西，而这是一个结论，不是一处偷工。在写下这段话的这台机器
+上的四十四个适配器里，有一个带着 `trigger_word`，有一个带着空的 `trigger_words`，
+没有一个带着 `ss_tag_frequency`。这个节点包本来就会读 safetensors 的文件头，所以问题
+不在成本上：数据根本就不在那儿。而元数据里只有一个词的位置，适配器却常常不止听一个词。
+清单归你来管 —— 而这也正是它值得管的原因。
 
 ### MiniMax-H3 Reference Adapter 参考素材适配器
 

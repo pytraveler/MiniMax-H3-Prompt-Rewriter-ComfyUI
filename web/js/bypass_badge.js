@@ -11,6 +11,7 @@ const WRITERS = [
 ];
 const CAPTIONERS = ["MiniMaxH3ReferenceCaption", "MiniMaxH3MultiReferenceCaption"];
 const REDUCERS = ["MiniMaxH3PromptReducer"];
+const INSERTERS = ["MiniMaxH3EffectEmbeddings", "MiniMaxH3LoraTriggers"];
 
 const TITLE_COLOR = "#5B3A7E";
 const BODY_COLOR = "#3A2750";
@@ -34,7 +35,7 @@ function chosenName(node) {
 const BADGES = [
     {
         widget: "bypass",
-        nodes: [...WRITERS, ...CAPTIONERS, ...REDUCERS],
+        nodes: [...WRITERS, ...CAPTIONERS, ...REDUCERS, ...INSERTERS],
         on: () => "BYPASSED",
         off: "bypass",
         onBg: "#7A3FA0",

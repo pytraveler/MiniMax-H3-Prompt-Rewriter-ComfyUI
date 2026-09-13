@@ -1,0 +1,681 @@
+{
+  "id": "22724818-8bdd-49f5-83bf-44dba4ce972d",
+  "revision": 0,
+  "last_node_id": 9,
+  "last_link_id": 16,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "MiniMaxH3PromptPresets",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        440,
+        620
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "preset",
+          "name": "preset",
+          "type": "STRING",
+          "widget": {
+            "name": "preset"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            9
+          ]
+        },
+        {
+          "localized_name": "integrated_multimodal_description",
+          "name": "integrated_multimodal_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "overall_soundscape",
+          "name": "overall_soundscape",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "non_diegetic_music",
+          "name": "non_diegetic_music",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "seconds",
+          "name": "seconds",
+          "type": "FLOAT",
+          "links": [
+            10
+          ]
+        },
+        {
+          "localized_name": "width",
+          "name": "width",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "height",
+          "name": "height",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Pick a ready-made prompt",
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "6588e1b9215a285ca53e137b1f16be8631ee3277",
+        "Node name for S&R": "MiniMaxH3PromptPresets"
+      },
+      "widgets_values": [
+        "000317"
+      ],
+      "widgets_values_named": {
+        "preset": "000317"
+      }
+    },
+    {
+      "id": 2,
+      "type": "MiniMaxH3PromptCheck",
+      "pos": [
+        500,
+        0
+      ],
+      "size": [
+        420,
+        460
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "options",
+          "name": "options",
+          "shape": 7,
+          "type": "H3_REWRITER_OPTIONS",
+          "link": null
+        },
+        {
+          "label": "ref_0",
+          "localized_name": "references.ref_0",
+          "name": "references.ref_0",
+          "shape": 7,
+          "type": "IMAGE,VIDEO,AUDIO",
+          "link": null
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": 9
+        },
+        {
+          "localized_name": "task",
+          "name": "task",
+          "type": "COMBO",
+          "widget": {
+            "name": "task"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "duration",
+          "name": "duration",
+          "type": "FLOAT,INT",
+          "widget": {
+            "name": "duration"
+          },
+          "link": 10
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            11
+          ]
+        },
+        {
+          "localized_name": "integrated_multimodal_description",
+          "name": "integrated_multimodal_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "subject_definitions",
+          "name": "subject_definitions",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "summary",
+          "name": "summary",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "retention_analysis",
+          "name": "retention_analysis",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "detailed_description",
+          "name": "detailed_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "overall_soundscape",
+          "name": "overall_soundscape",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "non_diegetic_music",
+          "name": "non_diegetic_music",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "findings",
+          "name": "findings",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Measure it before anything is added",
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "6588e1b9215a285ca53e137b1f16be8631ee3277",
+        "Node name for S&R": "MiniMaxH3PromptCheck",
+        "max_duration": 30
+      },
+      "widgets_values": [
+        "",
+        "T2VA",
+        10
+      ],
+      "widgets_values_named": {
+        "prompt": "",
+        "task": "T2VA",
+        "duration": 10
+      }
+    },
+    {
+      "id": 3,
+      "type": "MiniMaxH3EffectEmbeddings",
+      "pos": [
+        950,
+        0
+      ],
+      "size": [
+        450,
+        760
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": 11
+        },
+        {
+          "localized_name": "placement",
+          "name": "placement",
+          "type": "COMBO",
+          "widget": {
+            "name": "placement"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "effects",
+          "name": "effects",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "effects"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "bypass",
+          "name": "bypass",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "bypass"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            12
+          ]
+        },
+        {
+          "localized_name": "tokens",
+          "name": "tokens",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "findings",
+          "name": "findings",
+          "type": "STRING",
+          "links": [
+            15
+          ]
+        }
+      ],
+      "title": "Add an effect",
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "6588e1b9215a285ca53e137b1f16be8631ee3277",
+        "Node name for S&R": "MiniMaxH3EffectEmbeddings"
+      },
+      "widgets_values": [
+        "",
+        "end of the prompt",
+        "{\"minimaxh3_bullet_time\": true}",
+        false
+      ],
+      "widgets_values_named": {
+        "prompt": "",
+        "placement": "end of the prompt",
+        "effects": "{\"minimaxh3_bullet_time\": true}",
+        "bypass": false
+      }
+    },
+    {
+      "id": 4,
+      "type": "MiniMaxH3LoraTriggers",
+      "pos": [
+        1430,
+        0
+      ],
+      "size": [
+        540,
+        580
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": 12
+        },
+        {
+          "localized_name": "triggers",
+          "name": "triggers",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "triggers"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "bypass",
+          "name": "bypass",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "bypass"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            13
+          ]
+        },
+        {
+          "localized_name": "added",
+          "name": "added",
+          "type": "STRING",
+          "links": [
+            14
+          ]
+        },
+        {
+          "localized_name": "findings",
+          "name": "findings",
+          "type": "STRING",
+          "links": [
+            16
+          ]
+        }
+      ],
+      "title": "Add your LoRA trigger words",
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "6588e1b9215a285ca53e137b1f16be8631ee3277",
+        "Node name for S&R": "MiniMaxH3LoraTriggers"
+      },
+      "widgets_values": [
+        "",
+        "[{\"name\":\"Character LoRA\",\"words\":\"ohwx face\",\"where\":\"start of the description\",\"on\":true},{\"name\":\"Film look LoRA\",\"words\":\"analog film look, halation\",\"where\":\"top of the prompt\",\"on\":true},{\"name\":\"Foley LoRA\",\"words\":\"crisp foley\",\"where\":\"start of the soundscape\",\"on\":true},{\"name\":\"Slow motion LoRA\",\"words\":\"extreme slow motion\",\"where\":\"end of the prompt\",\"on\":false}]",
+        false
+      ],
+      "widgets_values_named": {
+        "prompt": "",
+        "triggers": "[{\"name\":\"Character LoRA\",\"words\":\"ohwx face\",\"where\":\"start of the description\",\"on\":true},{\"name\":\"Film look LoRA\",\"words\":\"analog film look, halation\",\"where\":\"top of the prompt\",\"on\":true},{\"name\":\"Foley LoRA\",\"words\":\"crisp foley\",\"where\":\"start of the soundscape\",\"on\":true},{\"name\":\"Slow motion LoRA\",\"words\":\"extreme slow motion\",\"where\":\"end of the prompt\",\"on\":false}]",
+        "bypass": false
+      }
+    },
+    {
+      "id": 5,
+      "type": "PreviewAny",
+      "pos": [
+        2010,
+        0
+      ],
+      "size": [
+        580,
+        580
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "The finished prompt",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.5",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 6,
+      "type": "PreviewAny",
+      "pos": [
+        2010,
+        620
+      ],
+      "size": [
+        580,
+        180
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 14
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Words this run added",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.5",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 7,
+      "type": "PreviewAny",
+      "pos": [
+        2010,
+        830
+      ],
+      "size": [
+        580,
+        180
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 15
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "What the effects node noticed",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.5",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 8,
+      "type": "PreviewAny",
+      "pos": [
+        2010,
+        1040
+      ],
+      "size": [
+        580,
+        180
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "What the triggers node noticed",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.5",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 9,
+      "type": "MarkdownNote",
+      "pos": [
+        -680,
+        0
+      ],
+      "size": [
+        620,
+        1300
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Read me first",
+      "properties": {},
+      "widgets_values": [
+        "# 7 - LoRA triggers and effects\n\nTwo nodes that write into a **finished** prompt rather than producing\none: MiniMax's ten effect embeddings, and the trigger words your LoRA\nadapters answer to. The prompt here comes from the thousand that ship\nwith the pack, so nothing is loaded and nothing is downloaded to run it.\n\n## Why the trigger words need a node\n\nA LoRA trained with a trigger word in its caption prefix does nothing at\nall until that word is in the text. Nothing upstream knows that: the\nwriters write prose, the reducer shortens it, the self-check judges it,\nand a word whose only job is to wake an adapter further down the graph is\nexactly what all three drop. So it gets typed in by hand after every run\nand lost on the next one.\n\nThe effects are the other half of the same job. They are not keywords --\neach is fifty to a hundred and forty positions of prompt that have\nalready been through the text encoder, spliced in where\n`embedding:name` sits.\n\n## The order is the lesson\n\n**Both belong at the very end.** The check measures the prompt *before*\nanything is added: it counts words against a ceiling, and a node that\nlengthens the text after the measurement is fine, while one that\nlengthens it before is arguing with it. Anything that rewrites the prompt\ndownstream of these two drops what they put in.\n\n## What is set up here\n\nThe triggers node carries four rows, one per placement, so you can see at\na glance where each lands:\n\n- `ohwx face` opens the **description**, after its label -- the position a\n  caption-prefix trigger was trained in, and the usual answer.\n- `analog film look, halation` goes to the **top**. One row, two triggers:\n  commas split them, and each is checked and written on its own.\n- `crisp foley` opens the **soundscape**.\n- `extreme slow motion` is switched **off**, and note what that means. It\n  stops the words being added. It does not take them out of a prompt that\n  already has them -- they may have come from the writer, and removing\n  somebody else's words is not this node's business.\n\nReplace all four with the words your own adapters answer to, and drag the\nrows by their grips into the order you want them written in. The list is\nsaved with the workflow. Nothing is read out of the LoRA files: the word\nis almost never in one, and an adapter often answers to several where the\nmetadata has room for a single one.\n\n**Bullet time** is ticked on the effects node. If its file is not on disk\nyet, press the download button there -- all ten come to about ten\nmegabytes -- or untick it. The node says which are missing on `findings`\nrather than letting the token be dropped in silence further down.\n\n## Running it twice changes nothing\n\nNeither node stacks. The effects node takes its own tokens back out\nbefore it puts them in; the triggers node never removes anything and\nsimply does not add a word that is already there. **Words this run added**\ncomes back empty on a second run of the same text, which is the normal\nstate rather than a fault.\n\n## bypass, not Ctrl+B\n\nBoth nodes carry this pack's own `bypass` switch, with the purple badge\nin the title bar. ComfyUI's own bypass is not the same thing here: it\nstands an input in for each output by matching types, and there are three\noutputs against one socket, so `findings` is handed the whole prompt and\n`added` loses its link altogether -- with nothing reported anywhere.\n\n## Where to go next\n\nSend **The finished prompt** to MiniMax-H3; *5 - Prompt to video* shows\nthe generator side. The LoRA loaders themselves are ComfyUI's own -- this\npack only makes sure the words they need are in the text."
+      ],
+      "widgets_values_named": {
+        "text": "# 7 - LoRA triggers and effects\n\nTwo nodes that write into a **finished** prompt rather than producing\none: MiniMax's ten effect embeddings, and the trigger words your LoRA\nadapters answer to. The prompt here comes from the thousand that ship\nwith the pack, so nothing is loaded and nothing is downloaded to run it.\n\n## Why the trigger words need a node\n\nA LoRA trained with a trigger word in its caption prefix does nothing at\nall until that word is in the text. Nothing upstream knows that: the\nwriters write prose, the reducer shortens it, the self-check judges it,\nand a word whose only job is to wake an adapter further down the graph is\nexactly what all three drop. So it gets typed in by hand after every run\nand lost on the next one.\n\nThe effects are the other half of the same job. They are not keywords --\neach is fifty to a hundred and forty positions of prompt that have\nalready been through the text encoder, spliced in where\n`embedding:name` sits.\n\n## The order is the lesson\n\n**Both belong at the very end.** The check measures the prompt *before*\nanything is added: it counts words against a ceiling, and a node that\nlengthens the text after the measurement is fine, while one that\nlengthens it before is arguing with it. Anything that rewrites the prompt\ndownstream of these two drops what they put in.\n\n## What is set up here\n\nThe triggers node carries four rows, one per placement, so you can see at\na glance where each lands:\n\n- `ohwx face` opens the **description**, after its label -- the position a\n  caption-prefix trigger was trained in, and the usual answer.\n- `analog film look, halation` goes to the **top**. One row, two triggers:\n  commas split them, and each is checked and written on its own.\n- `crisp foley` opens the **soundscape**.\n- `extreme slow motion` is switched **off**, and note what that means. It\n  stops the words being added. It does not take them out of a prompt that\n  already has them -- they may have come from the writer, and removing\n  somebody else's words is not this node's business.\n\nReplace all four with the words your own adapters answer to, and drag the\nrows by their grips into the order you want them written in. The list is\nsaved with the workflow. Nothing is read out of the LoRA files: the word\nis almost never in one, and an adapter often answers to several where the\nmetadata has room for a single one.\n\n**Bullet time** is ticked on the effects node. If its file is not on disk\nyet, press the download button there -- all ten come to about ten\nmegabytes -- or untick it. The node says which are missing on `findings`\nrather than letting the token be dropped in silence further down.\n\n## Running it twice changes nothing\n\nNeither node stacks. The effects node takes its own tokens back out\nbefore it puts them in; the triggers node never removes anything and\nsimply does not add a word that is already there. **Words this run added**\ncomes back empty on a second run of the same text, which is the normal\nstate rather than a fault.\n\n## bypass, not Ctrl+B\n\nBoth nodes carry this pack's own `bypass` switch, with the purple badge\nin the title bar. ComfyUI's own bypass is not the same thing here: it\nstands an input in for each output by matching types, and there are three\noutputs against one socket, so `findings` is handed the whole prompt and\n`added` loses its link altogether -- with nothing reported anywhere.\n\n## Where to go next\n\nSend **The finished prompt** to MiniMax-H3; *5 - Prompt to video* shows\nthe generator side. The LoRA loaders themselves are ComfyUI's own -- this\npack only makes sure the words they need are in the text."
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      9,
+      1,
+      0,
+      2,
+      2,
+      "STRING"
+    ],
+    [
+      10,
+      1,
+      4,
+      2,
+      4,
+      "FLOAT"
+    ],
+    [
+      11,
+      2,
+      0,
+      3,
+      0,
+      "STRING"
+    ],
+    [
+      12,
+      3,
+      0,
+      4,
+      0,
+      "STRING"
+    ],
+    [
+      13,
+      4,
+      0,
+      5,
+      0,
+      "STRING"
+    ],
+    [
+      14,
+      4,
+      1,
+      6,
+      0,
+      "STRING"
+    ],
+    [
+      15,
+      3,
+      2,
+      7,
+      0,
+      "STRING"
+    ],
+    [
+      16,
+      4,
+      2,
+      8,
+      0,
+      "STRING"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.5,
+      "offset": [
+        800.0,
+        120.0
+      ]
+    },
+    "frontendVersion": "1.49.6"
+  },
+  "version": 0.4
+}

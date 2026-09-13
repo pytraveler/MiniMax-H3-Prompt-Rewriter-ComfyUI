@@ -92,6 +92,18 @@ FINDINGS_TOOLTIP = (
     "Empty when there is nothing to say. Route it into a text preview to keep it in sight."
 )
 
+BYPASS_TOOLTIP = (
+    "Hand 'prompt' straight to the output and put no tokens into it. The text goes out as "
+    "it came in, 'tokens' comes back 0, 'findings' empty, and no file header is read.\n\n"
+    "ComfyUI's own bypass (Ctrl+B) is not the same thing here. It stands an input in for "
+    "each output by matching types, and this node has three outputs and one socket to fill "
+    "them from, so only 'prompt' can come through honestly: 'tokens' is an INT and there is "
+    "no INT input to stand in for it, so that link is dropped and leaves whatever it fed "
+    "with no input at all. This switch is the one that does what it says.\n\n"
+    "Note what it does not do: switching it on stops tokens being added, it does not take "
+    "out tokens that are already in the text coming in."
+)
+
 TOKENS_TOOLTIP = (
     "How many positions of the prompt the chosen effects take up once expanded.\n\n"
     "Read out of the safetensors header of each file that is present, so it is the real "
@@ -158,6 +170,9 @@ class MiniMaxH3EffectEmbeddings(io.ComfyNode):
                     optional=True,
                     tooltip=EFFECTS_TOOLTIP,
                 ),
+                io.Boolean.Input(
+                    "bypass", default=False, optional=True, tooltip=BYPASS_TOOLTIP
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="prompt"),
@@ -168,9 +183,13 @@ class MiniMaxH3EffectEmbeddings(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, prompt, placement=embeddings.BODY, effects="{}"):
+    def execute(cls, prompt, placement=embeddings.BODY, effects="{}", bypass=False):
         node_id = cls.hidden.unique_id
         progress = NodeProgress(node_id)
+
+        if bypass:
+            progress.finish("bypassed")
+            return io.NodeOutput(str(prompt or ""), 0, "")
 
         names = embeddings.chosen(effects)
         text, note = embeddings.insert(prompt, names, placement)
