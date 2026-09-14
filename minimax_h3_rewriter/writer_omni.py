@@ -45,6 +45,7 @@ from . import (
     media,
     memory,
     mtmd_engine,
+    previews,
     snapshot,
 )
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
@@ -830,6 +831,7 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         empty = ("",) * len(ALL_FIELDS)
 
         connected, switched_off = arrange(references, reference_layout)
+        previews.announce(cls.hidden.unique_id, (references or {}).items())
         handed_on = slot_bundle(
             ()
             if normalize_task(task) == TEXT_TASK

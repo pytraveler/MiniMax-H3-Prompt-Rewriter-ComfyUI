@@ -101,27 +101,65 @@ def unpack(value) -> list:
     return [value]
 
 
-def from_bundle(bundle) -> tuple[list, int]:
+def _bundle_values(bundle, key) -> list | None:
+    """One key of the bundle as a list, or None when reading it failed."""
+    try:
+        values = bundle.get(key) or []
+    except Exception:
+        return None
+    return list(values) if isinstance(values, (list, tuple)) else [values]
+
+
+def from_bundle(bundle, as_clip=None) -> tuple[list, int]:
     """``(items, unreadable)`` out of another pack's reference bundle.
 
     Every step is optional and every failure is counted rather than raised.
     This is the one place in the pack that reads a format it does not own, and
     a bundle that has changed shape should cost a reference, not the run.
+
+    A clip in that bundle is not a VIDEO but its frames: an IMAGE batch under
+    "videos", with the soundtrack at the same position under "video_audios".
+    Read by value alone it is a picture, and split it is a hundred of them, so
+    ``as_clip(frames, sound)`` turns it back into a clip, taking its soundtrack
+    along. Without it -- or for a sound whose clip is not frames -- the old
+    reading stands and the soundtrack is a sound of its own.
     """
     if not hasattr(bundle, "get"):
         return [], 0
 
+    groups = {key: _bundle_values(bundle, key) for key in BUNDLE_KEYS}
+    unreadable = sum(1 for values in groups.values() if values is None)
+    groups = {key: values or [] for key, values in groups.items()}
+
+    taken: set[int] = set()
+    clips: list = []
+    if as_clip is not None:
+        tracks = groups["video_audios"]
+        for position, value in enumerate(groups["videos"]):
+            if kind_of(value) != "image":
+                clips.append(value)
+                continue
+            track = tracks[position] if position < len(tracks) else None
+            sound = track if kind_of(track) == "audio" else None
+            try:
+                clips.append(as_clip(value, sound))
+            except Exception as error:
+                unreadable += 1
+                log.info(
+                    "[minimax_h3_rewriter.references] a clip in the bundle could not be "
+                    "rebuilt from its frames: %s", error,
+                )
+                continue
+            if sound is not None:
+                taken.add(position)
+        groups["videos"] = clips
+        groups["video_audios"] = [
+            None if position in taken else track for position, track in enumerate(tracks)
+        ]
+
     found: list = []
-    unreadable = 0
     for key in BUNDLE_KEYS:
-        try:
-            values = bundle.get(key) or []
-        except Exception:
-            unreadable += 1
-            continue
-        if not isinstance(values, (list, tuple)):
-            values = [values]
-        for value in values:
+        for value in groups[key]:
             if value is None:
                 continue
             if kind_of(value):

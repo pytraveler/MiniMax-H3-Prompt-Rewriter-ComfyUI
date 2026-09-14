@@ -913,10 +913,31 @@ moves.
 - **Click the band under it** to ask that one reference something other than its
   role's usual question. `+ instr` adds your line to the role's question,
   `= instr` asks it instead; right-click takes it back, hovering reads it out.
+  A square carrying one is ringed in amber for `+` and in orange for `=`, so it
+  does not go unnoticed.
 
 So one socket still produces the four labels Ref2VA allows, and the distinction
 Multi Reference Caption makes structurally — a subject is not a frame — is made
 here on the square instead.
+
+**Every square shows what is plugged into it** — here, on Prompt Rewriter Omni
+and on Multi Reference Caption. A picture shows its thumbnail, a clip its first
+frame with a ▶ in the corner, a sound its waveform with a speaker and the file
+name in small type; the number moves to the corner. Hovering plays a clip and
+flips through a batch of frames, and the tooltip adds the file, the size, the
+frame count and the length. A sound, after a moment's hover, plays its first six
+seconds with the wave lighting up as it goes; a press on the square silences it. A square wired to a loader — Load Image, Load Video,
+Load Audio or VideoHelperSuite's loaders, through reroutes too — shows the file
+straight away, before anything runs. One fed through other nodes shows what
+reached the node on its last run, and stays a plain square until then.
+
+![The strip of a Universal Writer set to Ref2VA, with eleven reference rows, ref_9 unticked. Its squares, left to right: pic over ref_0 showing a black cat with a 1 in the corner, ringed in amber with an amber "+ instr" band; pic over ref_1 showing a wooden fence, 2, ringed in orange with an orange "= instr" band; pic over ref_2 showing a man in a car, 3; vid over ref_3 showing a man walking down a street with a play mark, 1; aud over ref_4 and ref_5, each a speaker and a waveform, 1 and 2; vid over ref_6 showing a figure in a dinosaur mask with a play mark, 2; on the second row pic over ref_7 showing a jewelled turtle, 4; aud over ref_8 with a speaker, a truncated file name, a waveform and 3; and aud over ref_9, dimmed, with its name and waveform still drawn and "--" for a number. Under the strip the task switch with Ref2VA lit, the aspect ratios with 16:9 chosen and duration 10.0](docs/node_ref_strip.png)
+
+*Pictures, clips and sounds tell apart at a glance, and so do two sounds: ref_8 and
+ref_9 come straight from a loader and show their file names, ref_4 and ref_5 came
+through other nodes and show the wave from the last run. ref_9 is switched off —
+dimmed, numbered `--`, still recognisable. The two squares with an instruction
+are the ones ringed.*
 
 **The task switch and the aspect-ratio picker are the same idea**: the choice is
 the picture rather than a line of text in a dropdown. And the task switch reads
@@ -1128,14 +1149,15 @@ Squares here do not drag and their labels do not cycle, unlike the
 the guide's own order, and the group an asset is plugged into is what names it.
 
 **The band under a square asks that one reference something else.** Dark while it
-is asked its role's usual question, lit once it is not. Click to write the
+is asked its role's usual question, amber once it is not, with a ring of the same
+colour round the whole square. Click to write the
 question, right-click to take it back, hover to read it. It is per reference
 rather than per node on purpose — a node describing a picture, a clip and a sound
 at once has no single question that suits all three.
 
 The checkbox in that little window decides which of two things your text is, and
 the band then says which: `+ instr` for a line **added** to the role's question,
-`= instr`, on a solid band, for one asked **instead** of it. Both are needed.
+`= instr`, on an orange band, for one asked **instead** of it. Both are needed.
 
 | What you write | Which mode | Why the other one fails |
 |---|---|---|
@@ -1788,7 +1810,7 @@ take, so the strip carries on working exactly as it did.
 | Input | What it is for |
 | --- | --- |
 | `items` | References arriving together. Takes any type, because the nodes that produce collections mostly declare none; what each item is gets worked out from the value itself rather than from the wire, and anything that is not an image, a clip or a sound is skipped and counted. |
-| `bundle` | A reference bundle from another pack, if you have one. Its pictures, clips and sounds are read out ahead of anything on `items`, and the audio tracks that come with clips are treated as sounds in their own right. |
+| `bundle` | A reference bundle from another pack, if you have one. Its pictures, clips and sounds are read out ahead of anything on `items`. A clip that arrives as frames goes out as a clip, not as pictures, with its paired audio track inside it; a track not paired with a clip is a sound of its own. |
 | `split_batches` | Whether an image batch becomes one reference per frame, or stays one reference made of several frames. |
 
 That last switch is a real choice rather than a formality. Split, six frames are

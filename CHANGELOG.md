@@ -6,6 +6,53 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.26.0 - 2026-09-14
+
+### Added
+
+- **The reference squares show what is plugged into them.** On Universal Writer,
+  Prompt Rewriter Omni and Multi Reference Caption, a picture shows its
+  thumbnail, a clip its first frame with a play mark in the corner, and a sound
+  its waveform with a speaker and the file name. Hovering plays a clip and flips
+  through a batch of frames; the tooltip adds the file, the size, the frame count
+  and the length. A sound, after a short hover, plays its first six seconds and
+  lights its wave up as it goes; a press on the square stops it. The number moves
+  to a corner of the preview.
+
+  A square wired to a loader -- Load Image, Load Video, Load Audio or
+  VideoHelperSuite's loaders, through reroutes too -- shows the file before
+  anything runs. One fed through other nodes shows what reached the node on its
+  last run: small JPEG thumbnails, 24 waveform bars and a six-second MP3 of each
+  sound are sent to the page, not the media, and a reloaded page asks for them
+  again.
+
+### Changed
+
+- **A reference with its own instruction is hard to miss.** The band under it is
+  amber for `+ instr` and orange for `= instr`, and the whole square gets a ring
+  of the same colour. It used to be a slightly lighter band, and a question set
+  on one reference could go unnoticed for hours.
+
+### Fixed
+
+- **Reference Adapter: a clip from a bundle is a clip again.**
+  That pack puts its clips in the bundle as frames. Read by value they were
+  pictures and, with `split_batches` on, one picture a frame: `video_N` stayed
+  empty, the pictures ran over capacity, and the clip's paired soundtrack took
+  the place of the first standalone sound. The frames now go out as a VIDEO at
+  24 fps with the paired soundtrack inside it. A track not paired with a clip is
+  still a sound of its own.
+
+- **Captioning a high-resolution clip no longer overflows the context.** The
+  captioner took a clip's frames at full size, and llama.cpp charges a picture
+  by its resolution: eight frames of a 1080p clip are over twenty thousand
+  tokens, and a context of 8192 refused the request whole. The pictures are now
+  shrunk to share what the context has left once the answer and the text are set
+  aside -- never more than 768 tokens a frame, which is what Qwen's own video
+  processor allows, and never fewer than 128. A single picture is shrunk only
+  when it would not fit otherwise. This is the captioning in Universal Writer,
+  Multi Reference Caption and Reference Caption.
+
 ## 0.25.0 - 2026-09-14
 
 ### Added

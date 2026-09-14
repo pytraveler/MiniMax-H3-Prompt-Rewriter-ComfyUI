@@ -1,5 +1,6 @@
 import { app } from "../../scripts/app.js";
 import { applyDurationCeiling } from "./duration_limit.js";
+import { previewFor } from "./reference_previews.js";
 import { addSlotSwitches } from "./slot_switches.js";
 import {
     chipElement,
@@ -234,15 +235,15 @@ function beginGesture(node, chip, role, entry, event) {
         else toggleSlot(node, entry.name);
     };
 
-    // Bound to the window, with no pointer capture: moving the chip in the DOM
-    // is what a live reorder does, and that releases capture mid-gesture.
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", finish);
     window.addEventListener("pointercancel", finish);
 }
 
 function buildChip(node, entry) {
-    const { chip, role } = chipElement(entry);
+    const { chip, role, about } = chipElement(
+        entry, false, previewFor(node, entry.name, entry.kind)
+    );
     chip.appendChild(instructionBand(entry.name, entry.role, instructions(node)));
 
     const relabel =
@@ -252,6 +253,7 @@ function buildChip(node, entry) {
     chip.title =
         `${entry.name}: ${entry.role.toLowerCase()}` +
         (entry.on ? ` ${entry.number}` : ", switched off") +
+        (about ? `\n${about}` : "") +
         `\nDrag to reorder, ${relabel}click below the label to switch it off.`;
 
     chip.addEventListener("pointerdown", (event) => beginGesture(node, chip, role, entry, event));

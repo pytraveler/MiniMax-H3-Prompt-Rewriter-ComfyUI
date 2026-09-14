@@ -35,6 +35,7 @@ import logging
 
 from comfy_api.latest import io
 
+from .media import REFERENCE_FPS
 from .nodes import CATEGORY
 from .progress import NodeProgress, announce
 from .references import (
@@ -75,8 +76,8 @@ ITEMS_TOOLTIP = (
 BUNDLE_TOOLTIP = (
     "A reference bundle from another pack, if you have one. Its pictures, clips and sounds "
     "are read out and placed on the sockets below, ahead of anything on 'items'.\n\n"
-    "The audio tracks that come with clips are treated as sounds in their own right, since "
-    "that is what they are to a writer."
+    "A clip that arrives as frames goes out as a clip, not as pictures, with its paired "
+    "audio track inside it. A track that is not paired with a clip is a sound of its own."
 )
 
 SPLIT_TOOLTIP = (
@@ -91,6 +92,17 @@ SUMMARY_TOOLTIP = (
     "What arrived and where it went, including anything skipped or over capacity. Wire it "
     "to a preview when a reference is not turning up where you expected."
 )
+
+
+def clip_of_frames(frames, sound):
+    """A VIDEO out of a bundle's clip frames, which that pack decodes at 24 fps."""
+    from fractions import Fraction
+
+    from comfy_api.latest import InputImpl, Types
+
+    return InputImpl.VideoFromComponents(
+        Types.VideoComponents(images=frames, audio=sound, frame_rate=Fraction(REFERENCE_FPS))
+    )
 
 
 class MiniMaxH3ReferenceAdapter(io.ComfyNode):
@@ -125,7 +137,7 @@ class MiniMaxH3ReferenceAdapter(io.ComfyNode):
         node_id = first(cls.hidden.unique_id)
         progress = NodeProgress(node_id)
 
-        collected, unreadable = from_bundle(first(bundle))
+        collected, unreadable = from_bundle(first(bundle), as_clip=clip_of_frames)
         for value in (items if isinstance(items, list) else [items]):
             if value is not None:
                 collected.extend(unpack(value))

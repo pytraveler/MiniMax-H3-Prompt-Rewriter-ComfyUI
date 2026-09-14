@@ -35,7 +35,7 @@ from dataclasses import dataclass
 
 from comfy_api.latest import io
 
-from . import clip_caption, discovery, media, memory, mtmd_engine
+from . import clip_caption, discovery, media, memory, mtmd_engine, previews
 from .nodes import (
     BYPASS_CAPTION_TOOLTIP,
     CAPTION_LENGTHS,
@@ -355,6 +355,15 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
         given = dict(locals())
         progress = NodeProgress(cls.hidden.unique_id)
         block = (previous or "").strip()
+
+        previews.announce(
+            cls.hidden.unique_id,
+            [
+                pair
+                for group in (subjects, pictures, videos, audios)
+                for pair in (group or {}).items()
+            ],
+        )
 
         if bypass:
             progress.finish("bypassed")

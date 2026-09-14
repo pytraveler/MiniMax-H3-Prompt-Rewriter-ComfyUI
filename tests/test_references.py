@@ -206,6 +206,74 @@ def test_a_clips_own_audio_track_counts_as_a_sound():
     assert counts(sorted_out) == {"image": 0, "video": 0, "audio": 1}
 
 
+def rebuilt(frames, sound):
+    """What the adapter's clip factory is to these tests: a clip holding both."""
+    clip = Clip()
+    clip.frames, clip.sound = frames, sound
+    return clip
+
+
+def test_a_clip_that_arrives_as_frames_stays_a_clip():
+    """The loader decodes clips to frames; read by value they are a hundred pictures."""
+    found, unreadable = references.from_bundle(
+        {"videos": [Batch(154)], "pictures": [Batch()]}, as_clip=rebuilt
+    )
+    sorted_out, _skipped, over = references.sort_out(found, split_batches=True)
+    assert counts(sorted_out) == {"image": 1, "video": 1, "audio": 0}
+    assert over == {"image": 0, "video": 0, "audio": 0}
+    assert sorted_out["video"][0].frames.shape[0] == 154
+    assert unreadable == 0
+
+
+def test_a_paired_soundtrack_goes_inside_its_clip():
+    track, other = sound(), sound()
+    found, _unreadable = references.from_bundle(
+        {"videos": [Batch(30)], "video_audios": [track], "audios": [other]},
+        as_clip=rebuilt,
+    )
+    sorted_out, _skipped, _over = references.sort_out(found, split_batches=True)
+    assert sorted_out["video"][0].sound is track
+    assert sorted_out["audio"] == [other]
+
+
+def test_soundtracks_pair_by_position():
+    """The loader pads a clip without a paired track with None, keeping the rest aligned."""
+    track = sound()
+    found, _unreadable = references.from_bundle(
+        {"videos": [Batch(30, "a"), Batch(30, "b")], "video_audios": [None, track]},
+        as_clip=rebuilt,
+    )
+    sorted_out, _skipped, _over = references.sort_out(found, split_batches=True)
+    assert [clip.sound for clip in sorted_out["video"]] == [None, track]
+    assert sorted_out["audio"] == []
+
+
+def test_a_real_clip_in_the_bundle_keeps_its_track_as_a_sound():
+    clip, track = Clip(), sound()
+    found, _unreadable = references.from_bundle(
+        {"videos": [clip], "video_audios": [track]}, as_clip=rebuilt
+    )
+    assert found == [clip, track]
+
+
+def test_a_clip_that_cannot_be_rebuilt_is_counted_and_its_track_kept():
+    def broken(frames, sound):
+        raise RuntimeError("no")
+
+    track = sound()
+    found, unreadable = references.from_bundle(
+        {"videos": [Batch(30)], "video_audios": [track]}, as_clip=broken
+    )
+    assert found == [track]
+    assert unreadable == 1
+
+
+def test_without_a_clip_factory_frames_are_read_as_before():
+    found, _unreadable = references.from_bundle({"videos": [Batch(6)]})
+    sorted_out, _skipped, _over = references.sort_out(found, split_batches=False)
+    assert counts(sorted_out) == {"image": 1, "video": 0, "audio": 0}
+
+
 def test_the_padding_the_bundle_carries_is_not_a_reference():
     """The lists come padded with None to a fixed length."""
     found, unreadable = references.from_bundle({"pictures": [Batch(), None, None]})

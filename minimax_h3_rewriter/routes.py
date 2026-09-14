@@ -9,7 +9,17 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from . import catalog, embeddings, guides, library, memory, model_sections, paths, presets
+from . import (
+    catalog,
+    embeddings,
+    guides,
+    library,
+    memory,
+    model_sections,
+    paths,
+    presets,
+    previews,
+)
 
 log = logging.getLogger(__name__)
 
@@ -112,6 +122,11 @@ def register() -> None:
         return web.json_response(
             {node: memory.summary(record) for node, record in memory.LAST.items()}
         )
+
+    @routes.get(f"{PREFIX}/previews")
+    async def reference_previews(request):
+        """The last previews every node sent its strip, for a page that reloaded since."""
+        return web.json_response(previews.LAST)
 
     @routes.get(f"{PREFIX}/memory/text")
     async def memory_text(request):

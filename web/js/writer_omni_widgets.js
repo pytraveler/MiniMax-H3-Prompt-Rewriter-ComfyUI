@@ -1,4 +1,5 @@
 import { app } from "../../scripts/app.js";
+import { previewFor } from "./reference_previews.js";
 import { addSlotSwitches } from "./slot_switches.js";
 import {
     CHIP_H_PLAIN,
@@ -214,10 +215,11 @@ function beginGesture(node, chip, entry, event) {
 }
 
 function buildChip(node, entry) {
-    const { chip } = chipElement(entry, true);
+    const { chip, about } = chipElement(entry, true, previewFor(node, entry.name, entry.kind));
     chip.title =
         `${entry.name}: <${entry.role} ${entry.on ? entry.number : "-"}>` +
         (entry.on ? "" : ", switched off") +
+        (about ? `\n${about}` : "") +
         "\nDrag to reorder -- the order is what numbers the labels. Click to switch off.";
 
     chip.addEventListener("pointerdown", (event) => beginGesture(node, chip, entry, event));

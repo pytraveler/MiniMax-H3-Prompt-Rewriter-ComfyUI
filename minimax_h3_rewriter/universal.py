@@ -43,6 +43,7 @@ from . import (
     media,
     memory,
     mtmd_engine,
+    previews,
     snapshot,
 )
 from .constants import (
@@ -553,6 +554,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         empty = ("",) * len(ALL_FIELDS)
 
         assets, skipped = arrange(references, reference_layout)
+        previews.announce(cls.hidden.unique_id, (references or {}).items())
         handed_on = slot_bundle(
             () if task == TEXT_TASK else ((item.slot, item.role, item.value) for item in assets)
         )

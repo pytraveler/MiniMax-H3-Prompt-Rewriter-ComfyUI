@@ -62,6 +62,14 @@ TOKENS_PER_ATTACHMENT = 4096
 
 CONTEXT_FLOOR = 8192
 
+FRAME_MAX_TOKENS = 768
+
+MEDIA_MIN_TOKENS = 128
+
+TEXT_SLACK = 256
+
+TEXT_CHARS_PER_TOKEN = 3.0
+
 VRAM_HEADROOM = 2 * 1024 ** 3
 
 OUT_OF_MEMORY = (
@@ -166,8 +174,8 @@ def _failure_hint(message: str, n_ctx: int) -> str:
         return (
             f"That is the other direction: the pictures did not fit the context, which was "
             f"{size}. Raise 'context_size' -- or 'n_ctx' on the Options node -- or lower "
-            f"'max_frames': mtmd charges a frame by its resolution, so a long clip at full "
-            f"size is expensive."
+            f"'max_frames': the pictures are already shrunk to share the context, but not "
+            f"below {MEDIA_MIN_TOKENS} tokens each, and this many did not fit even so."
         )
     return (
         "Not every multimodal GGUF works here: llama.cpp's mtmd has to understand the "
@@ -241,20 +249,94 @@ def clip_note(count: int, seconds: float) -> str:
     )
 
 
+def expected_attachments(
+    image=None, audio=None, video=None, max_frames: int = media.DEFAULT_MAX_FRAMES
+) -> int:
+    """How many attachments the inputs will make, known before any of them is decoded."""
+    limit = max(int(max_frames), 1)
+    count = limit if video is not None else 0
+    if image is not None:
+        shape = getattr(image, "shape", None)
+        batch = int(shape[0]) if shape is not None and len(shape) == 4 else 1
+        count += min(max(batch, 1), limit)
+    return count + (1 if audio is not None else 0)
+
+
+def media_room(
+    n_ctx: int,
+    model_path: str,
+    instruction: str = "",
+    system_prompt: str = "",
+    max_new_tokens: int = DEFAULT_MAX_TOKENS,
+) -> int | None:
+    """Tokens of context left for the media, or None when the context is not known.
+
+    ``n_ctx`` is what the run asks for, and 0 there is the model's own, read off
+    its header. What is set aside is the answer's ceiling and the text of the
+    turn, counted generously: a turn that overflows is refused whole, after
+    every picture in it has been encoded.
+    """
+    context = int(n_ctx or 0)
+    if context <= 0 and model_path:
+        try:
+            context = int(discovery.gguf_header(model_path).get("context") or 0)
+        except Exception:
+            context = 0
+    if context <= 0:
+        return None
+    text = (len(instruction or "") + len(system_prompt or "")) / TEXT_CHARS_PER_TOKEN
+    return max(0, context - int(max_new_tokens) - int(text) - TEXT_SLACK)
+
+
+def pixels_each(room: int | None, count: int, ceiling: int = 0) -> int:
+    """The ``max_pixels`` that lets ``count`` pictures share ``room`` tokens; 0 leaves them be.
+
+    mtmd charges a picture by its resolution, and nothing on this path used to
+    shrink one: eight frames of a 1080p clip are over twenty thousand tokens,
+    which no 8k context holds. So the room is split between the pictures, and
+    ``ceiling`` caps a share larger than the picture needs -- for a clip's
+    frames, the 768 tokens Qwen's own video processor allows one. Never below
+    ``MEDIA_MIN_TOKENS``: a frame smaller than that says nothing, and a context
+    that tight is better refused with the hint than filled with smudges.
+    """
+    if room is None:
+        tokens = int(ceiling)
+    else:
+        tokens = max(int(room), 0) // max(int(count), 1)
+        if ceiling > 0:
+            tokens = min(tokens, int(ceiling))
+        tokens = max(tokens, MEDIA_MIN_TOKENS)
+    return tokens * media.PATCH ** 2 if tokens > 0 else 0
+
+
 def attachments_from(
     workspace: media.Workspace,
     image=None,
     audio=None,
     video=None,
     max_frames: int = media.DEFAULT_MAX_FRAMES,
+    room: int | None = None,
 ) -> tuple[list[tuple[str, str]], list[str], str]:
-    """Write the connected inputs to disk. Returns ``(attachments, notes, note)``."""
+    """Write the connected inputs to disk. Returns ``(attachments, notes, note)``.
+
+    ``room`` is the context left for the media -- see ``media_room`` -- and the
+    pictures are shrunk to share it. A sound is not shrunk, so it is paid for
+    first. None leaves a picture as it came and holds a clip's frames to
+    ``FRAME_MAX_TOKENS`` only.
+    """
     attachments: list[tuple[str, str]] = []
     notes: list[str] = []
     note = ""
 
+    sound = media.audio_file(audio, workspace) if audio is not None else ""
+    if sound and room is not None:
+        room -= int(media.wav_seconds(sound) * media.AUDIO_TOKENS_PER_SECOND)
+    pictures = expected_attachments(image, None, video, max_frames)
+
     if video is not None:
-        paths, total, seconds = media.video_frames(video, workspace, max_frames)
+        paths, total, seconds = media.video_frames(
+            video, workspace, max_frames, pixels_each(room, pictures, FRAME_MAX_TOKENS)
+        )
         attachments.extend(("image", path) for path in paths)
         notes.append(f"{len(paths)} of {total} video frames" if total > len(paths)
                      else f"video, {len(paths)} frames")
@@ -262,15 +344,19 @@ def attachments_from(
             note = clip_note(len(paths), seconds)
 
     if image is not None:
-        paths = media.image_files(image, workspace, max_frames)
+        batch = expected_attachments(image, None, None, max_frames)
+        paths = media.image_files(
+            image, workspace, max_frames,
+            max_pixels=pixels_each(room, pictures, FRAME_MAX_TOKENS if batch > 1 else 0),
+        )
         attachments.extend(("image", path) for path in paths)
         total = int(getattr(image, "shape", [len(paths)])[0])
         notes.append(
             f"{len(paths)} of {total} frames" if total > len(paths) else f"{len(paths)} image(s)"
         )
 
-    if audio is not None:
-        attachments.append(("audio", media.audio_file(audio, workspace)))
+    if sound:
+        attachments.append(("audio", sound))
         notes.append("audio")
 
     return attachments, notes, note
@@ -420,10 +506,17 @@ def describe(
     with media.Workspace() as workspace:
         note = ""
         if attachments is None:
+            n_ctx = server.n_ctx if server is not None else fit_context(
+                model_path, mmproj_path,
+                expected_attachments(image, audio, video, max_frames), device, n_ctx,
+            )
+            room = media_room(n_ctx, model_path, instruction, system_prompt, max_new_tokens)
             attachments, notes, note = attachments_from(
-                workspace, image, audio, video, max_frames
+                workspace, image, audio, video, max_frames, room
             )
         else:
+            if server is None:
+                n_ctx = fit_context(model_path, mmproj_path, len(attachments), device, n_ctx)
             kinds = dict.fromkeys(kind for kind, _path in attachments)
             notes = [
                 f"{sum(kind == wanted for kind, _path in attachments)} {wanted}(s)"
@@ -434,7 +527,6 @@ def describe(
 
         command = None
         if server is None:
-            n_ctx = fit_context(model_path, mmproj_path, len(attachments), device, n_ctx)
             command = build_command(
                 binary, model_path, mmproj_path, instruction, attachments,
                 gpu_layers, n_ctx, seed, greedy, max_new_tokens, temperature, top_p,
