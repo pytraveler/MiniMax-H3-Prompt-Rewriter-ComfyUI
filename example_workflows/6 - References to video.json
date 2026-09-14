@@ -1,14 +1,14 @@
 {
   "id": "e3f2b845-8f2c-4b5a-9caf-eac1029d3e7e",
   "revision": 0,
-  "last_node_id": 145,
-  "last_link_id": 306,
+  "last_node_id": 146,
+  "last_link_id": 309,
   "nodes": [
     {
       "id": 92,
       "type": "SaveVideo",
       "pos": [
-        -900,
+        -580,
         4840
       ],
       "size": [
@@ -16,7 +16,7 @@
         110
       ],
       "flags": {},
-      "order": 12,
+      "order": 13,
       "mode": 0,
       "inputs": [
         {
@@ -284,7 +284,6 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            284,
             299,
             303
           ]
@@ -347,7 +346,6 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            285,
             300,
             305
           ]
@@ -398,7 +396,7 @@
       "id": 141,
       "type": "2639c39f-c6d9-4ecd-aa62-cede946016e2",
       "pos": [
-        -1420,
+        -1100,
         4840
       ],
       "size": [
@@ -406,7 +404,7 @@
         700
       ],
       "flags": {},
-      "order": 10,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -422,7 +420,7 @@
           "name": "ref_images.ref_image_0",
           "shape": 7,
           "type": "IMAGE",
-          "link": 284
+          "link": 308
         },
         {
           "label": "reference_2",
@@ -430,7 +428,7 @@
           "name": "ref_images.ref_image_1",
           "shape": 7,
           "type": "IMAGE",
-          "link": 285
+          "link": 309
         },
         {
           "localized_name": "prompt",
@@ -866,6 +864,14 @@
           "name": "captions",
           "type": "STRING",
           "links": null
+        },
+        {
+          "localized_name": "references",
+          "name": "references",
+          "type": "H3_REWRITER_REFERENCES",
+          "links": [
+            307
+          ]
         }
       ],
       "title": "Describe the references and write the prompt",
@@ -899,6 +905,167 @@
       ]
     },
     {
+      "id": 146,
+      "type": "MiniMaxH3ReferenceSlots",
+      "pos": [
+        -1420,
+        4840
+      ],
+      "size": [
+        280,
+        560
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "references",
+          "name": "references",
+          "type": "H3_REWRITER_REFERENCES",
+          "link": 307
+        },
+        {
+          "localized_name": "soundtracks",
+          "name": "soundtracks",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "soundtracks"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "picture_1",
+          "name": "picture_1",
+          "type": "IMAGE",
+          "links": [
+            308
+          ]
+        },
+        {
+          "localized_name": "picture_2",
+          "name": "picture_2",
+          "type": "IMAGE",
+          "links": [
+            309
+          ]
+        },
+        {
+          "localized_name": "picture_3",
+          "name": "picture_3",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "picture_4",
+          "name": "picture_4",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "picture_5",
+          "name": "picture_5",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "picture_6",
+          "name": "picture_6",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "picture_7",
+          "name": "picture_7",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "picture_8",
+          "name": "picture_8",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "picture_9",
+          "name": "picture_9",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "video_1",
+          "name": "video_1",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "video_2",
+          "name": "video_2",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "video_3",
+          "name": "video_3",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "video_audio_1",
+          "name": "video_audio_1",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "localized_name": "video_audio_2",
+          "name": "video_audio_2",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "localized_name": "video_audio_3",
+          "name": "video_audio_3",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "localized_name": "audio_1",
+          "name": "audio_1",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "localized_name": "audio_2",
+          "name": "audio_2",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "localized_name": "audio_3",
+          "name": "audio_3",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "localized_name": "summary",
+          "name": "summary",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Hand them on in the writer's order",
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "a59888df88a69385d429b6865ea441e7844f49c9",
+        "Node name for S&R": "MiniMaxH3ReferenceSlots"
+      },
+      "widgets_values": [
+        false
+      ]
+    },
+    {
       "id": 143,
       "type": "MiniMaxH3PromptCheck",
       "pos": [
@@ -910,7 +1077,7 @@
         460
       ],
       "flags": {},
-      "order": 9,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
@@ -1055,7 +1222,7 @@
         320
       ],
       "flags": {},
-      "order": 11,
+      "order": 12,
       "mode": 0,
       "inputs": [
         {
@@ -1100,7 +1267,7 @@
       "title": "Read me first",
       "properties": {},
       "widgets_values": [
-        "# 6 - References to video\n\nComfyUI's own MiniMax-H3 reference-to-video template, with this pack's\nwriter in front of it. Pictures in, a clip with sound out, and the\nreferences carried through into what it generates.\n\n**This is the heavy one.** It needs the MiniMax-H3 weights themselves --\na different diffusion model from the text-to-video one (`ref2va`, not\n`fl2va`), the 32B text encoder and two VAEs. ComfyUI offers to fetch\nwhat is missing; the links are in *Note: Model Links*. Template 3 does\nthe writing half of this with two GGUFs and no video model at all.\n\n## Before the first run\n\n**Choose your own two pictures** in the loaders -- they ship empty,\nbecause a file name saved into a template points at something your\nmachine does not have. They feed the writer and the generator both, so\none choice is enough.\n\n## The chain\n\nThe writer reads each picture and writes the finished H3 prompt from\nwhat it saw. The check reads that prompt against the Ref2VA rules --\nincluding whether the tags in the text match the references actually\nconnected -- and hands it on **untouched**. Then the generator.\n\n**Refer to the pictures by tag, in slot order**, in the writer's own\n`prompt`: `<Picture 1>`, `<Picture 2>`. The captions say what they are;\nyour prompt says what they are for.\n\n## One duration for everything\n\n**Duration (seconds)** drives the writer, the check and the generator's\nframe count from one place. Change it there and nothing falls out of\nstep. **resolution** on the writer and **aspect_ratio** on Resolution\nSelector are the pair still worth keeping matched by hand.\n\n## Room for more\n\nRef2VA takes nine pictures, three clips and three sounds. More sockets\nappear on the writer as you fill them, and the generator has its own\n`ref_videos` and `ref_audios` inside. References arriving **together**\n-- a batch, or a bundle from another pack -- go through a *MiniMax-H3\nReference Adapter* first.\n\n**ref_image_size** on the generator: `match` scales references down to\nthe render size and is faster; `max` keeps up to a 2048px short edge\nfor a stronger likeness, and costs speed on every sampling step."
+        "# 6 - References to video\n\nComfyUI's own MiniMax-H3 reference-to-video template, with this pack's\nwriter in front of it. Pictures in, a clip with sound out, and the\nreferences carried through into what it generates.\n\n**This is the heavy one.** It needs the MiniMax-H3 weights themselves --\na different diffusion model from the text-to-video one (`ref2va`, not\n`fl2va`), the 32B text encoder and two VAEs. ComfyUI offers to fetch\nwhat is missing; the links are in *Note: Model Links*. Template 3 does\nthe writing half of this with two GGUFs and no video model at all.\n\n## Before the first run\n\n**Choose your own two pictures** in the loaders -- they ship empty,\nbecause a file name saved into a template points at something your\nmachine does not have. They go to the writer, and the writer hands\nthem on to the generator, so one choice is enough.\n\n## The chain\n\nThe writer reads each picture and writes the finished H3 prompt from\nwhat it saw. The check reads that prompt against the Ref2VA rules --\nincluding whether the tags in the text match the references actually\nconnected -- and hands it on **untouched**. Then the generator.\n\n*Reference Slots* sits between the writer and the generator. It takes\nwhat the writer numbered and puts `<Picture 1>` on the generator's\nfirst picture socket and `<Picture 2>` on the second. Drag the squares\nin the writer's strip and the prompt and the generator follow together;\nswitch one off and it leaves both.\n\n**Refer to the pictures by tag, in strip order**, in the writer's own\n`prompt`: `<Picture 1>`, `<Picture 2>`. The captions say what they are;\nyour prompt says what they are for.\n\n## One duration for everything\n\n**Duration (seconds)** drives the writer, the check and the generator's\nframe count from one place. Change it there and nothing falls out of\nstep. **resolution** on the writer and **aspect_ratio** on Resolution\nSelector are the pair still worth keeping matched by hand.\n\n## Room for more\n\nRef2VA takes nine pictures, three clips and three sounds. More sockets\nappear on the writer as you fill them, and *Reference Slots* already\nhas an output for each: `video_N`, `video_audio_N` and `audio_N` go to\nthe generator's `ref_videos`, `ref_video_audios` and `ref_audios`, which\nare inside its box -- promote them and wire them across in order.\nReferences arriving **together** -- a batch, or a bundle from another\npack -- go through a *MiniMax-H3 Reference Adapter* first.\n\n**ref_image_size** on the generator: `match` scales references down to\nthe render size and is faster; `max` keeps up to a 2048px short edge\nfor a stronger likeness, and costs speed on every sampling step."
       ],
       "color": "#432",
       "bgcolor": "#653"
@@ -1114,22 +1281,6 @@
       141,
       0,
       "FLOAT"
-    ],
-    [
-      284,
-      137,
-      0,
-      141,
-      1,
-      "IMAGE"
-    ],
-    [
-      285,
-      139,
-      0,
-      141,
-      2,
-      "IMAGE"
     ],
     [
       287,
@@ -1218,6 +1369,30 @@
       144,
       0,
       "STRING"
+    ],
+    [
+      307,
+      142,
+      10,
+      146,
+      0,
+      "H3_REWRITER_REFERENCES"
+    ],
+    [
+      308,
+      146,
+      0,
+      141,
+      1,
+      "IMAGE"
+    ],
+    [
+      309,
+      146,
+      1,
+      141,
+      2,
+      "IMAGE"
     ]
   ],
   "groups": [],

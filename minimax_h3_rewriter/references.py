@@ -1,8 +1,10 @@
-"""Sorting references that arrived together into one reference per socket.
+"""Sorting references into one reference per socket, in both directions.
 
-The arithmetic behind ``reference_adapter``, kept apart from it so it can be
-read and tested without ComfyUI in the room -- the same split the rest of the
-pack uses, with ``checks`` under the writers and ``fields`` under both.
+The arithmetic behind ``reference_adapter``, which feeds the writers, and
+behind ``reference_slots``, which hands on what a writer numbered. Kept apart
+from both so it can be read and tested without ComfyUI in the room -- the same
+split the rest of the pack uses, with ``checks`` under the writers and
+``fields`` under both.
 
 Everything here is defensive on purpose. One of these inputs takes any type at
 all and another reads a bundle format belonging to a different pack, so "this
@@ -182,3 +184,170 @@ def summarise(sorted_out: dict, skipped: int, over: dict, unreadable: int) -> tu
 
     lines.extend(troubles)
     return "\n".join(lines), " ".join(troubles)
+
+
+SLOTS_TYPE = "H3_REWRITER_REFERENCES"
+
+SLOTS_OUTPUT_TOOLTIP = (
+    "The references this node numbered, in the order its labels count them, for 'MiniMax-H3 "
+    "Reference Slots' to hand on to MiniMaxH3ReferenceToVideo. That node numbers references by "
+    "the socket they arrive on, so wiring the same assets to it by hand agrees with this "
+    "node's labels only until a reference is reordered or switched off.\n\n"
+    "Switched-off references are not in it, and it is empty when the task writes from text "
+    "alone. Nothing is decoded here: a clip travels as it arrived."
+)
+
+_GROUP_OF_ROLE = {"Picture": "pictures", "Video": "videos", "Audio": "audios"}
+
+
+def slot_bundle(entries) -> dict:
+    """A writer's references, grouped the way MiniMaxH3ReferenceToVideo takes them.
+
+    ``entries`` is ``(slot, role, value)`` in the writer's own order, and the
+    order within each group is kept, because it is the numbering: the second
+    picture here is ``<Picture 2>`` in the prompt and on the far node alike.
+
+    A picture used as a *subject* goes after every picture. The generator has
+    no subject socket and calls it ``<Picture N>`` like any other image, while
+    the writer never gave it a picture number at all -- so it has to take a
+    number no picture in the prompt is using, and the only such numbers are
+    the ones past the last of them.
+    """
+    bundle = {"pictures": [], "videos": [], "audios": []}
+    sources = {group: [] for group in bundle}
+    subjects, subject_sources = [], []
+    for slot, role, value in entries:
+        if value is None:
+            continue
+        if role == "Subject":
+            subjects.append(value)
+            subject_sources.append(f"{slot} (subject)")
+            continue
+        group = _GROUP_OF_ROLE.get(role)
+        if group is None:
+            continue
+        bundle[group].append(value)
+        sources[group].append(str(slot))
+    bundle["pictures"].extend(subjects)
+    sources["pictures"].extend(subject_sources)
+    bundle["sources"] = sources
+    return bundle
+
+
+def _values(bundle, key) -> list:
+    try:
+        values = bundle.get(key) or []
+    except Exception:
+        return []
+    return list(values) if isinstance(values, (list, tuple)) else [values]
+
+
+def _frame_count(value) -> int:
+    try:
+        return int(value.shape[0])
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return 0
+
+
+def fan_out(bundle, soundtracks: bool, clip) -> tuple[dict, str, str]:
+    """``(slots, summary, warning)``: a writer's references, one to a socket.
+
+    ``slots`` holds the four groups MiniMaxH3ReferenceToVideo takes, padded
+    with None to their socket counts -- an empty socket is skipped there and
+    closes up the numbering, which is what a switched-off square did in the
+    writer.
+
+    ``clip`` turns a VIDEO into ``(frames, sound, detail)`` and is only called
+    for one; a batch of frames that a writer was told to read as a clip is
+    already frames and goes through as it is. A clip's sound reaches its
+    socket only with ``soundtracks`` on, because it takes an ``<Audio N>`` of
+    its own on the far side and moves every standalone sound up by one.
+    """
+    slots = {
+        "pictures": [None] * MAX_PICTURES,
+        "videos": [None] * MAX_VIDEOS,
+        "video_audios": [None] * MAX_VIDEOS,
+        "audios": [None] * MAX_AUDIOS,
+    }
+    sources = bundle.get("sources") if hasattr(bundle, "get") else None
+    if not hasattr(sources, "get"):
+        sources = {}
+
+    def named(group: str, index: int) -> str:
+        found = _values(sources, group)
+        return str(found[index]) if index < len(found) else f"reference {index + 1}"
+
+    lines: list[str] = []
+    over = {"pictures": 0, "videos": 0, "audios": 0}
+    short: list[str] = []
+    paired = 0
+
+    def place(group: str, word: str, room: int, handle) -> int:
+        placed = 0
+        for index, value in enumerate(_values(bundle, group) if hasattr(bundle, "get") else []):
+            if value is None:
+                continue
+            if placed == room:
+                over[group] += 1
+                continue
+            lines.append(handle(placed, value, f"{word}_{placed + 1} <- {named(group, index)}"))
+            placed += 1
+        return placed
+
+    def picture_or_sound(group):
+        def handle(position, value, line):
+            slots[group][position] = value
+            return line
+        return handle
+
+    def video(position, value, line):
+        nonlocal paired
+        if kind_of(value) == "video":
+            frames, sound, detail = clip(value, soundtracks)
+        else:
+            frames, sound, detail = value, None, f"{_frame_count(value)} frame(s) as they came"
+        slots["videos"][position] = frames
+        line = f"{line} ({detail})"
+        if 0 < _frame_count(frames) < 5:
+            short.append(f"video_{position + 1}")
+        if soundtracks and sound is not None:
+            slots["video_audios"][position] = sound
+            paired += 1
+            line += f", its sound on video_audio_{position + 1}"
+        return line
+
+    pictures = place("pictures", "picture", MAX_PICTURES, picture_or_sound("pictures"))
+    clips = place("videos", "video", MAX_VIDEOS, video)
+    sounds = place("audios", "audio", MAX_AUDIOS, picture_or_sound("audios"))
+
+    head = f"{pictures} picture(s), {clips} clip(s), {sounds} sound(s)"
+    if paired:
+        head += f", {paired} clip sound(s)"
+
+    troubles = []
+    spilled = [
+        f"{over[group]} {word}"
+        for group, word in (("pictures", "picture(s)"), ("videos", "clip(s)"), ("audios", "sound(s)"))
+        if over[group]
+    ]
+    if spilled:
+        troubles.append(
+            f"{', '.join(spilled)} arrived past what MiniMaxH3ReferenceToVideo takes "
+            f"({MAX_PICTURES} pictures, {MAX_VIDEOS} clips, {MAX_AUDIOS} sounds) and are not "
+            f"on any output."
+        )
+    if short:
+        troubles.append(
+            f"{', '.join(short)} {'has' if len(short) == 1 else 'have'} fewer than 5 frames, "
+            f"which MiniMaxH3ReferenceToVideo refuses."
+        )
+    if paired:
+        troubles.append(
+            f"{paired} clip sound(s) are on video_audio: MiniMaxH3ReferenceToVideo gives each an "
+            f"<Audio N> of its own, numbered before the sounds on audio_1 onwards. The writers "
+            f"do not count clip sounds, so the <Audio N> labels in their prompt are now "
+            f"{paired} behind."
+        )
+
+    summary = "\n".join([head, *troubles, *lines])
+    return slots, summary, " ".join(troubles)

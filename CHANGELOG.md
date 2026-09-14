@@ -6,6 +6,62 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.25.0 - 2026-09-14
+
+### Added
+
+- **`MiniMax-H3 Reference Slots`: a writer's references, handed on in the order
+  its prompt numbers them.** Reorder the sound squares on a Universal Writer and
+  the generated video speaks with the wrong voice. `MiniMaxH3ReferenceToVideo`
+  numbers its references by the socket they arrive on, the writers number theirs
+  by the strip, and with the same assets wired to both by hand the two orders
+  agree only until a square is dragged. Switching a reference off went wrong the
+  same way: gone from the prompt, still in the video.
+
+  The writers now hand on what they numbered, and this node puts each reference
+  on the socket carrying its number -- `picture_2` is `<Picture 2>`. Wire it
+  straight across to `MiniMaxH3ReferenceToVideo` once and do the arranging in the
+  strip from then on. A switched-off reference is not handed on at all, and the
+  generator closes up its numbering around an empty socket the same way the
+  writer closed up its labels.
+
+  Clips are decoded here and not in the writer: at 24 fps, on the canvas the
+  generator would scale them to anyway, and up to 15 seconds. A trimmed VIDEO is
+  read over its trim. A clip's own sound goes to `video_audio_N` only with
+  `soundtracks` on, and that is off by default -- the generator gives the sound
+  an `<Audio N>` of its own ahead of every standalone sound, the writers do not
+  count it, and so switching it on moves every `<Audio N>` in the prompt. The
+  summary says by how much.
+
+  It is a node of its own rather than a mode of the Reference Adapter. The
+  adapter feeds the writers and hands a clip on as a VIDEO; this one feeds the
+  generator, which takes a clip as frames and its sound on a socket of its own.
+
+- **A `references` output on Universal Writer, Prompt Rewriter Omni and
+  Universal Rewriter.** Appended after every existing output, so no link in a
+  saved workflow moves. It carries what the prompt names and nothing else: every
+  switched-on square in strip order, nothing on a text-only task, and on the
+  Universal Rewriter only what the current tab reads.
+
+  It is built from the live inputs on every path -- `bypass`, a library pick and
+  `repeat_last` included -- and is never stored. The library and the node
+  memory keep text only, so records saved before this version load exactly as
+  they did.
+
+  On the Universal Writer a picture badged as a subject goes after the pictures.
+  The prompt calls it `Subject N`, never `<Picture N>`, and the generator has no
+  subject socket, so the only number it can take without landing on a picture
+  the prompt names is one past the last of them.
+
+### Changed
+
+- **Example 6, References to video, goes through Reference Slots.** The two
+  pictures used to be wired to the writer and to the generator separately,
+  which is exactly the arrangement that falls apart when a square is dragged.
+  They now reach the generator from the writer's `references` output, so the
+  order is set in the strip and nowhere else. The note on the canvas says how to
+  wire clips and sounds the same way.
+
 ## 0.24.0 - 2026-09-13
 
 ### Added

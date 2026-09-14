@@ -77,12 +77,14 @@ from .nodes import (
 )
 from .progress import NodeProgress, refuse
 from .prompt_template_omni import (
+    LABEL_PREFIX,
     REF_TASK,
     TASKS,
     build_messages,
     expected_pictures,
     normalize_task,
 )
+from .references import SLOTS_OUTPUT_TOOLTIP, SLOTS_TYPE, slot_bundle
 from .universal import ALL_FIELDS, kind_of, layout_of
 
 log = logging.getLogger(__name__)
@@ -102,6 +104,8 @@ VIDEO_MAX_PIXELS = 100352
 CONTEXT_SLACK = 1024
 
 KIND_NAMES = {"image": "picture", "video": "clip", "audio": "sound"}
+
+TEXT_TASK = "t2av"
 
 FIELDS_FOR_TASK = {name: OUTPUT_FIELDS for name in TASKS}
 FIELDS_FOR_TASK[REF_TASK] = REF_OUTPUT_FIELDS
@@ -780,6 +784,9 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
             outputs=[
                 io.String.Output(display_name="rewritten_prompt"),
                 *(io.String.Output(display_name=name) for name in ALL_FIELDS),
+                io.Custom(SLOTS_TYPE).Output(
+                    display_name="references", tooltip=SLOTS_OUTPUT_TOOLTIP
+                ),
             ],
             hidden=[io.Hidden.unique_id],
         )
@@ -822,24 +829,29 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         progress = NodeProgress(cls.hidden.unique_id)
         empty = ("",) * len(ALL_FIELDS)
 
+        connected, switched_off = arrange(references, reference_layout)
+        handed_on = slot_bundle(
+            ()
+            if normalize_task(task) == TEXT_TASK
+            else ((item.slot, LABEL_PREFIX[item.kind], item.value) for item in connected)
+        )
+
         if bypass:
             progress.finish("bypassed")
-            return io.NodeOutput((prompt or "").strip(), *empty)
-
-        connected, switched_off = arrange(references, reference_layout)
+            return io.NodeOutput((prompt or "").strip(), *empty, handed_on)
 
         chosen, saved = library.picked(
             library_pick, repeat_last, "MiniMaxH3PromptWriterOmni", 1 + len(ALL_FIELDS),
             cls.hidden.unique_id, having=[item.kind for item in connected],
         )
         if chosen is not None:
-            return io.NodeOutput(*chosen)
+            return io.NodeOutput(*chosen, handed_on)
 
         kept = memory.repeat(
             cls.hidden.unique_id, "MiniMaxH3PromptWriterOmni", repeat_last and not saved, given
         )
         if kept is not None:
-            return io.NodeOutput(*kept)
+            return io.NodeOutput(*kept, handed_on)
 
         resolution = aspect.resolve(aspect_ratio, resolution)
 
@@ -895,7 +907,7 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         fields = tuple(sections.get(name, "") for name in ALL_FIELDS)
         outputs = (text,) + fields
         if saved:
-            return io.NodeOutput(*outputs)
+            return io.NodeOutput(*outputs, handed_on)
         memory.keep(
             cls.hidden.unique_id, "MiniMaxH3PromptWriterOmni", outputs, given,
             references=snapshot.take(
@@ -904,7 +916,7 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
             task=wanted,
             fields=ALL_FIELDS,
         )
-        return io.NodeOutput(*outputs)
+        return io.NodeOutput(*outputs, handed_on)
 
 
 NODE_CLASS_MAPPINGS = {

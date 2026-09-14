@@ -100,6 +100,7 @@ ComfyUI 节点。输入一句简短的提示词，输出一段结构化、可直
   - [MiniMax-H3 Effect Embeddings 特效嵌入](#minimax-h3-effect-embeddings-特效嵌入)
   - [MiniMax-H3 LoRA Triggers LoRA 触发词](#minimax-h3-lora-triggers-lora-触发词)
   - [MiniMax-H3 Reference Adapter 参考素材适配器](#minimax-h3-reference-adapter-参考素材适配器)
+  - [MiniMax-H3 Reference Slots 参考素材插槽](#minimax-h3-reference-slots-参考素材插槽)
   - [MiniMax-H3 Prompt Presets 提示词预设](#minimax-h3-prompt-presets-提示词预设)
   - [时长小部件](#时长小部件)
   - [重复上一次的答案](#重复上一次的答案)
@@ -174,7 +175,7 @@ python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\MiniMax-H3-Prom
 | 3 | **Write a prompt from references** —— 写作节点先描述你的图片，再照着看到的内容写 | 两个 GGUF，合计 6 GB |
 | 4 | **Ready-made prompts** —— 一千条现成的提示词，在浏览器里连着画面一起挑 | 什么都不需要 |
 | 5 | **Prompt to video** —— ComfyUI 自带的文生视频模板，前面接上写作节点 | MiniMax-H3 的权重 |
-| 6 | **References to video** —— 同样的东西，换成 Ref2VA，图片同时送到写作节点和生成器 | MiniMax-H3 的 ref2va 权重 |
+| 6 | **References to video** —— 同样的东西，换成 Ref2VA，图片经由写作节点、按素材条的编号顺序送到生成器 | MiniMax-H3 的 ref2va 权重 |
 | 7 | **LoRA triggers and effects** —— 适配器要听的那些词，和 MiniMax 的十个特效，放进一段写好的提示词里 | 什么都不需要 |
 
 会加载 MiniMax-H3 检查点的只有 5 和 6。其余的到文本为止就结束了，而这正是本节点包
@@ -321,7 +322,10 @@ LightX2V 的第三个适配器，也是第一个会听的。它训练在
 重写器一样的那三个字段，所以下游可以互换。`Ref2AV` 返回六个：`subject_definitions`、
 `summary`、`retention_analysis`、`detailed_description`、`overall_soundscape` 和
 `non_diegetic_music` —— 和 [Ref2VA 写作节点](#minimax-h3-prompt-writer-ref2va-提示词写作节点)
-产出的是同一组，含义也相同。`rewritten_prompt` 永远装着完整的答案。
+产出的是同一组，含义也相同。`rewritten_prompt` 永远装着完整的答案。它们后面是
+`references`，它不是文本：是按素材条顺序排好的、打开着的参考素材，交给
+[Reference Slots](#minimax-h3-reference-slots-参考素材插槽)，按提示词里的编号递给
+`MiniMaxH3ReferenceToVideo`。
 
 **输入**
 
@@ -474,6 +478,9 @@ token 的实测结果：
 参考素材，按插槽顺序排：`first_frame` 是 `<Picture 1>`，`last_frame` 是 `<Picture 2>`，
 然后是 `<Video 1>`，再然后是 `<Audio 1>`。答案回来的是六个字段而不是三个；多出来的
 四个输出排在每个任务都会填的那三个**后面**，所以已经接在这个节点上的线一根都不用挪。
+排在最后的是 `references`：当前标签页真正读过的参考素材，交给
+[Reference Slots](#minimax-h3-reference-slots-参考素材插槽) 递给
+`MiniMaxH3ReferenceToVideo`。
 
 > **四份参考素材，不是十二份。** 标签规则全在顺序上，而只有四个插槽时，顺序就是插槽
 > 的顺序。再往上，你真正想要的其实是手工摆放它们 —— 那正是
@@ -848,7 +855,9 @@ Audio 1: voice-timbre reference for the woman — low, unhurried, slight rasp
 
 **输出是两个写作节点输出的并集** —— T2VA 那三个字段、Ref2VA 那六个字段，以及参考
 素材块本身。某个任务不写的字段就留空，因为一个节点的输出不能随着它某个小部件的
-取值而改变。
+取值而改变。最后一个输出 `references` 不是文本：它是素材条编好号的东西，交给
+[Reference Slots](#minimax-h3-reference-slots-参考素材插槽)，按同样的顺序接进
+`MiniMaxH3ReferenceToVideo`。
 
 > **和 Multi Reference Caption 有一处不同。** 那个节点是按指南自己的顺序写这个块的
 > —— 主体、图片、片段、声音 —— 不管线是怎么接的。这一个按素材条的顺序写，因为
@@ -1583,6 +1592,82 @@ bundle。一个值里装着许多份，没有哪个插槽的形状接得住它�
 就得声明 `is_input_list`，而这个标志不是按输入来的：它会改写这个节点收到的*每一个*
 参数的形状。放在写作节点上，它会改变提示词、时长和选项抵达的方式。所以它住在这里，
 住在一个不会因此再损失什么的节点上。
+
+### MiniMax-H3 Reference Slots 参考素材插槽
+
+`MiniMaxH3ReferenceToVideo` —— ComfyUI 自带的、给 H3 参考模式用的条件节点 —— 是按
+参考素材抵达的插槽来编号的：第一个图片插槽是 `<Picture 1>`，第一个声音插槽是
+`<Audio 1>`。这里的写作节点则按素材条来编号，而素材条是可以拖动的。把同一批素材
+手工分别接到两边，两套顺序只在第一次拖动方块之前是一致的；从那以后，提示词描述的是
+一个声音，视频拿到的却是另一个，而屏幕上什么提示都没有。关掉一份参考素材也会以同样的
+方式出错，只是方向反过来 —— 提示词里没了，视频里还在。
+
+所以，每个接收参考素材的写作节点都会把它编好号的东西，放在最后一个名为 `references`
+的输出上递出去，而这个节点把每份参考素材放到带着它编号的那个插槽上。
+
+![MiniMax-H3 参考素材插槽节点，位于 Universal Writer 和 MiniMax H3 Reference to Video 之间。写作节点设为 Ref2VA，接着四份参考素材，素材条上依次是 ref_0 上的 pic 1、ref_2 上的 aud 1、ref_1 上的 pic 2 和 ref_3 上的 aud 2；它的最后一个输出 references 接进 Reference Slots 节点。这个节点右边有十九个输出 —— picture_1 到 picture_9、video_1 到 video_3、video_audio_1 到 video_audio_3、audio_1 到 audio_3，还有 summary —— 每个媒体输出都按同样的顺序直接接到生成节点的输入上：ref_image_0 到 ref_image_8、ref_video_0 到 ref_video_2、ref_video_audio_0 到 ref_video_audio_2，以及 ref_audio_0 到 ref_audio_2。soundtracks 开关写着 false；它下面是 “2 picture(s), 0 clip(s), 2 sound(s)” 和 “picture_1 ← ref_0”。写作节点运行了 0.011 秒，插槽节点 0.019 秒](docs/node_reference_slots.png)
+
+*接一次，全部接通，之后再也不用碰：摆放全在写作节点的素材条上完成。方块依次是 ref_0、ref_2、ref_1、ref_3 —— 所以 `picture_2` 装的是 ref_1，`audio_1` 装的是 ref_2，不管它们当初插在哪个插槽上，生成节点给它们的编号都和提示词里的一模一样。空着的输出不花任何代价：生成节点会跳过空插槽。十九毫秒，因为图片和声音都是原样通过的，也没有需要解码的片段。*
+
+```
+Universal Writer ─ references ─▶ Reference Slots ─ picture_1 ─▶ ref_image_0 ┐
+                                                 ─ picture_2 ─▶ ref_image_1 ├ MiniMaxH3ReferenceToVideo
+                                                 ─ audio_1   ─▶ ref_audio_0 ┘
+```
+
+按顺序直接接一次 —— `picture_N` 接第 N 个 `ref_image`，`video_N` 接第 N 个
+`ref_video`，`video_audio_N` 接第 N 个 `ref_video_audio`，`audio_N` 接第 N 个
+`ref_audio` —— 之后的摆放全在素材条上做。
+
+| 输出 | 是什么 |
+|---|---|
+| `picture_1` … `picture_9` | 图片，按写作节点的顺序。 |
+| `video_1` … `video_3` | 片段，以 24 fps 的帧给出。 |
+| `video_audio_1` … `video_audio_3` | 片段自带的声音，按编号配对 —— 只在打开 `soundtracks` 时才有。 |
+| `audio_1` … `audio_3` | 声音，原样给出。 |
+| `summary` | 哪个输出上放着什么、来自写作节点的哪个插槽，以及没放下的东西。 |
+
+**关掉的参考素材在两边同时消失。** 它根本不在 `references` 里，所以它的插槽什么都
+不递；`MiniMaxH3ReferenceToVideo` 会跳过空插槽，把编号在空位处合拢 —— 和写作节点对
+自己的标签做的事情一模一样。
+
+**主体排在图片后面。** 在 Universal Writer 上，被标成主体的图片写出来是 `Subject N`，
+从来不是 `<Picture N>`。生成节点没有主体插槽，会像对待其他图片一样给它一个图片编号，
+所以它排在最后一张图片之后：那里的编号是提示词没在用的。
+
+**片段在这里解码，而不是在写作节点里。** 不管 `references` 有没有接东西，写作节点
+都会运行，而十五秒 1080p 的浮点帧有好几个 GB，所以片段以它进来时的 VIDEO 形态传递，
+在这个节点运行之前不花任何代价。在这里它以 24 fps 读取 —— 30 fps 的片段每五帧丢一帧，
+12 fps 的片段每帧显示两次 —— 缩放到 `MiniMaxH3ReferenceToVideo` 本来就会给它的那块
+画布上，并在十五秒处截断，那是它设计时所针对的最长参考素材。被裁剪过的 VIDEO 按它的
+裁剪范围读取。写作节点被告知当作片段来读的一批图片本来就是帧，原样通过。
+
+**`soundtracks` 默认关闭，这是有意的。** 生成节点会给片段的声音单独一个 `<Audio N>`，
+编号排在所有独立声音之前，而写作节点并不计算片段的声音。打开之后，提示词里的
+`<Audio 1>` 就不再是 `audio_1` 上的那个声音了；`summary` 会说标签移动了几位。只有当
+提示词本来就是照这个算法写的时候，才打开它。
+
+每个写作节点递出去的，是它的提示词里点到名的东西，它没读过的一样都不递：
+
+| 节点 | `references` 装着什么 |
+|---|---|
+| Universal Writer | 每一个打开的方块，按素材条顺序。T2VA 上什么都没有。 |
+| Prompt Rewriter Omni | 每一个打开的方块，按素材条顺序。T2AV 上什么都没有。 |
+| Universal Rewriter | 27B 标签页和 T2VA 上什么都没有。8B 标签页上是任务读取的那几帧。Omni 标签页上是同样的帧 —— 或者在 Ref2VA 上，按行的顺序给出每一个打开的行。 |
+
+这个输出每次都从当前的输入构建，`bypass`、从提示词库里选取和 `repeat_last` 也不例外，
+而且从不被保存：提示词库和节点的记忆只保存文本，一段保存过的提示词回来时，带的是此刻
+接着的那些参考素材。
+
+> **这不是 Reference Adapter。** 那个节点喂的是写作节点：它把进来的东西按种类分好，
+> 把片段作为 VIDEO 递出去，因为写作节点描述的就是 VIDEO。这个节点喂的是生成节点，
+> 生成节点要的是片段的帧，以及单独一个插槽上的片段声音。`references` 自成一个类型也是
+> 这个原因 —— 如果插进一个期待别的节点包 bundle 的节点，片段会以 VIDEO 的形态抵达，
+> 然后在生成节点内部出错。
+
+> **有一种串联它不覆盖。** `previous` 上接着一个块的 Universal Writer，会先数这个块里
+> 的标签，而它的 `references` 只装着它自己的参考素材，从一开始编号。当输出要去生成
+> 节点时，每个镜头只用一个写作节点。
 
 ### MiniMax-H3 Prompt Presets 提示词预设
 

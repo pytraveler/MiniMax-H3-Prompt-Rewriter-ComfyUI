@@ -96,6 +96,7 @@ If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2va
   - [MiniMax-H3 Effect Embeddings](#minimax-h3-effect-embeddings)
   - [MiniMax-H3 LoRA Triggers](#minimax-h3-lora-triggers)
   - [MiniMax-H3 Reference Adapter](#minimax-h3-reference-adapter)
+  - [MiniMax-H3 Reference Slots](#minimax-h3-reference-slots)
   - [MiniMax-H3 Prompt Presets](#minimax-h3-prompt-presets)
   - [The duration widget](#the-duration-widget)
   - [Repeating the last answer](#repeating-the-last-answer)
@@ -173,7 +174,7 @@ bypassed on open, and there is no second branch to mute before pressing Run.
 | 3 | **Write a prompt from references** — the writer describes your pictures and writes from what it saw | two GGUFs, 6 GB together |
 | 4 | **Ready-made prompts** — a thousand finished ones, picked in a browser with their frames | nothing at all |
 | 5 | **Prompt to video** — ComfyUI's text-to-video template with the writer in front of it | the MiniMax-H3 weights |
-| 6 | **References to video** — the same for Ref2VA, the pictures reaching writer and generator both | the MiniMax-H3 ref2va weights |
+| 6 | **References to video** — the same for Ref2VA, the pictures reaching the generator through the writer, in the order its strip numbers them | the MiniMax-H3 ref2va weights |
 | 7 | **LoRA triggers and effects** — the words an adapter answers to, and MiniMax's ten effects, put into a finished prompt | nothing at all |
 
 Only 5 and 6 load a MiniMax-H3 checkpoint. The rest end at the text, which is
@@ -350,7 +351,10 @@ interchangeable downstream. `Ref2AV` returns six: `subject_definitions`,
 `summary`, `retention_analysis`, `detailed_description`, `overall_soundscape`
 and `non_diegetic_music` — the same set the
 [Ref2VA writer](#minimax-h3-prompt-writer-ref2va) produces, and the same meanings.
-`rewritten_prompt` always carries the whole answer.
+`rewritten_prompt` always carries the whole answer. After them comes
+`references`, which is not text: the switched-on references in strip order, for
+[Reference Slots](#minimax-h3-reference-slots) to hand on to
+`MiniMaxH3ReferenceToVideo` numbered the way the prompt numbers them.
 
 **Inputs**
 
@@ -527,7 +531,10 @@ dropped. On `Ref2VA` everything connected becomes a reference the target video
 reuses, in socket order: `first_frame` is `<Picture 1>`, `last_frame` is
 `<Picture 2>`, then `<Video 1>`, then `<Audio 1>`. The answer comes back in six
 fields instead of three; the four extra outputs sit **after** the three every
-task fills, so nothing already wired to this node moves.
+task fills, so nothing already wired to this node moves. Last of all is
+`references`: the references the current tab actually read, for
+[Reference Slots](#minimax-h3-reference-slots) to hand on to
+`MiniMaxH3ReferenceToVideo`.
 
 > **Four references, not twelve.** Order is the whole labelling rule, and with
 > four sockets the order is the order of the sockets. Past that, arranging them
@@ -955,7 +962,9 @@ unplugged.
 **The outputs are the union of both writers'** — the three T2VA fields, the six
 Ref2VA fields, and the reference block itself. A task that does not write a field
 leaves it empty, because a node's outputs cannot change with the value of one of
-its widgets.
+its widgets. The last output, `references`, is not text: it is what the strip
+numbered, for [Reference Slots](#minimax-h3-reference-slots) to wire into
+`MiniMaxH3ReferenceToVideo` in the same order.
 
 > **One difference from Multi Reference Caption.** That node writes the block in
 > the guide's own order — subjects, pictures, videos, audio — whatever the wiring
@@ -1798,6 +1807,95 @@ Receiving a real ComfyUI list means declaring `is_input_list`, and that flag is
 not per input: it rewrites the shape of *every* argument the node receives. On a
 writer it would change how the prompt, the duration and the options arrive. So it
 lives here, on a node that has nothing else to lose by it.
+
+### MiniMax-H3 Reference Slots
+
+`MiniMaxH3ReferenceToVideo` — ComfyUI's own conditioning node for H3's reference
+mode — numbers its references by the socket they arrive on: the first picture
+socket is `<Picture 1>`, the first sound socket `<Audio 1>`. The writers here
+number theirs by the strip, which you can drag. Wire the same assets to both by
+hand and the two orders agree until the first time a square is dragged; from
+then on the prompt describes one voice, the video is given another, and nothing
+on screen says so. Switching a reference off goes wrong the same way — gone from
+the prompt, still in the video.
+
+So every writer that takes references hands on what it numbered, on a last
+output called `references`, and this node puts each reference on the socket
+carrying its number.
+
+![The MiniMax-H3 Reference Slots node between a Universal Writer and MiniMax H3 Reference to Video. The writer, set to Ref2VA, has four references connected and a strip reading pic 1 over ref_0, aud 1 over ref_2, pic 2 over ref_1 and aud 2 over ref_3; its last output, references, runs into the Reference Slots node. Down the right of that node are nineteen outputs — picture_1 to picture_9, video_1 to video_3, video_audio_1 to video_audio_3, audio_1 to audio_3 and summary — and every media output is wired straight across to the generator's inputs in the same order, ref_image_0 to ref_image_8, ref_video_0 to ref_video_2, ref_video_audio_0 to ref_video_audio_2 and ref_audio_0 to ref_audio_2. The soundtracks switch reads false; under it, "2 picture(s), 0 clip(s), 2 sound(s)" and "picture_1 ← ref_0". The writer ran in 0.011s and the slots node in 0.019s](docs/node_reference_slots.png)
+
+*Wired once, all the way across, and never touched again: the arranging happens in the writer's strip. The squares read ref_0, ref_2, ref_1, ref_3 — so `picture_2` carries ref_1 and `audio_1` carries ref_2, whichever socket they were plugged into, and the generator numbers them exactly as the prompt does. The empty outputs cost nothing: the generator skips an empty socket. Nineteen milliseconds, because pictures and sounds are passed through as they are and there was no clip to decode.*
+
+```
+Universal Writer ─ references ─▶ Reference Slots ─ picture_1 ─▶ ref_image_0 ┐
+                                                 ─ picture_2 ─▶ ref_image_1 ├ MiniMaxH3ReferenceToVideo
+                                                 ─ audio_1   ─▶ ref_audio_0 ┘
+```
+
+Wire it straight across once, in order — `picture_N` to the N-th `ref_image`,
+`video_N` to the N-th `ref_video`, `video_audio_N` to the N-th
+`ref_video_audio`, `audio_N` to the N-th `ref_audio` — and do the arranging in
+the strip from then on.
+
+| Output | What it is |
+| --- | --- |
+| `picture_1` … `picture_9` | The pictures, in the writer's order. |
+| `video_1` … `video_3` | The clips, as frames at 24 fps. |
+| `video_audio_1` … `video_audio_3` | A clip's own sound, paired by number — only with `soundtracks` on. |
+| `audio_1` … `audio_3` | The sounds, as they came. |
+| `summary` | Which output holds what and which writer slot it came from, plus anything that did not fit. |
+
+**A switched-off reference drops out on both sides.** It is not in `references`
+at all, so its socket hands on nothing, and `MiniMaxH3ReferenceToVideo` skips an
+empty socket and closes up its numbering around the gap — the same thing the
+writer did with its labels.
+
+**A subject goes after the pictures.** On the Universal Writer a picture badged
+as a subject is written as `Subject N`, never as `<Picture N>`. The generator
+has no subject socket and numbers it as a picture like any other, so it goes
+after the last picture: the only numbers the prompt is not already using.
+
+**Clips are decoded here, not in the writer.** A writer runs whether or not
+anything is wired to `references`, and fifteen seconds of 1080p as float frames
+is several gigabytes, so the clip travels as the VIDEO it arrived as and costs
+nothing until this node runs. Here it is read at 24 fps — a 30 fps clip loses one
+frame in five, a 12 fps one shows every frame twice — scaled to the canvas
+`MiniMaxH3ReferenceToVideo` would give it anyway, and cut at fifteen seconds, the
+longest reference it is meant for. A trimmed VIDEO is read over its trim. An
+image batch the writer was told to read as a clip is frames already and goes
+through as it is.
+
+**`soundtracks` is off by default, and that is deliberate.** The generator gives
+a clip's sound an `<Audio N>` of its own, numbered ahead of every standalone
+sound, and the writers do not count clip sounds. Switched on, the prompt's
+`<Audio 1>` is no longer the sound on `audio_1`; the summary says by how many
+the labels moved. Turn it on for a prompt written with that in mind.
+
+What each writer hands on is what its prompt names, and nothing it did not read:
+
+| Node | `references` carries |
+| --- | --- |
+| Universal Writer | Every switched-on square, in strip order. Nothing on T2VA. |
+| Prompt Rewriter Omni | Every switched-on square, in strip order. Nothing on T2AV. |
+| Universal Rewriter | Nothing on the 27B tab or on T2VA. The frames the task reads on the 8B tab. On the Omni tab the same frames — or, on Ref2VA, every switched-on row in row order. |
+
+The output is built from the live inputs every time, `bypass`, a library pick
+and `repeat_last` included, and is never stored: the library and the node's
+memory keep text, and a saved prompt comes back with the references connected
+now.
+
+> **Not the Reference Adapter.** That node feeds the writers: it sorts whatever
+> arrives by kind and hands a clip on as a VIDEO, because a VIDEO is what a writer
+> describes. This one feeds the generator, which takes a clip as frames and a
+> clip's sound on a socket of its own. `references` is a type of its own for the
+> same reason — plugged into a node that expects another pack's bundle, a clip
+> would arrive as a VIDEO and fail inside the generator.
+
+> **One chain this does not cover.** A Universal Writer with a block on
+> `previous` counts that block's labels first, while its `references` holds its
+> own references only and starts from one. Use one writer per shot when the
+> output is going to the generator.
 
 ### MiniMax-H3 Prompt Presets
 

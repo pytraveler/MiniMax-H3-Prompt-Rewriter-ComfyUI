@@ -263,3 +263,150 @@ def test_every_trouble_reaches_the_summary():
     )
     for expected in ("1 picture(s)", "2 item(s)", "3 entry/entries"):
         assert expected in summary and expected in warning
+
+
+def decoder(frames=48, with_sound=True):
+    """A stand-in for decoding a clip, recording what it was asked."""
+    asked = []
+
+    def clip(value, soundtracks):
+        asked.append((value, soundtracks))
+        return Batch(frames, tag="decoded"), (sound() if with_sound else None), f"{frames} frames"
+
+    return clip, asked
+
+
+def test_a_writers_order_is_kept_within_each_kind():
+    """The order is the numbering: the second picture here is <Picture 2> on both sides."""
+    first, second, voice = Batch(tag="a"), Batch(tag="b"), sound()
+    bundle = references.slot_bundle(
+        [("ref_3", "Picture", second), ("ref_0", "Audio", voice), ("ref_1", "Picture", first)]
+    )
+    assert [picture.tag for picture in bundle["pictures"]] == ["b", "a"]
+    assert bundle["audios"] == [voice]
+    assert bundle["sources"]["pictures"] == ["ref_3", "ref_1"]
+
+
+def test_a_subject_goes_after_every_picture():
+    """The writer gave it no picture number, so it may not take one a picture is using."""
+    face, frame = Batch(tag="face"), Batch(tag="frame")
+    bundle = references.slot_bundle([("ref_0", "Subject", face), ("ref_1", "Picture", frame)])
+    assert [picture.tag for picture in bundle["pictures"]] == ["frame", "face"]
+    assert bundle["sources"]["pictures"] == ["ref_1", "ref_0 (subject)"]
+
+
+def test_a_batch_read_as_a_clip_is_a_video():
+    batch = Batch(24)
+    bundle = references.slot_bundle([("ref_0", "Video", batch)])
+    assert bundle["videos"] == [batch] and bundle["pictures"] == []
+
+
+def test_a_role_with_no_socket_and_an_empty_value_are_left_out():
+    bundle = references.slot_bundle([("ref_0", "Storyboard", Batch()), ("ref_1", "Picture", None)])
+    assert (bundle["pictures"], bundle["videos"], bundle["audios"]) == ([], [], [])
+
+
+def test_every_socket_is_there_when_nothing_is():
+    clip, asked = decoder()
+    slots, summary, warning = references.fan_out(references.slot_bundle(()), False, clip)
+    assert {group: len(values) for group, values in slots.items()} == {
+        "pictures": 9, "videos": 3, "video_audios": 3, "audios": 3,
+    }
+    assert all(value is None for values in slots.values() for value in values)
+    assert summary.startswith("0 picture(s), 0 clip(s), 0 sound(s)")
+    assert warning == "" and asked == []
+
+
+def test_pictures_and_sounds_pass_through_as_they_came():
+    picture, voice = Batch(), sound()
+    clip, _asked = decoder()
+    slots, _summary, _warning = references.fan_out(
+        references.slot_bundle([("ref_0", "Picture", picture), ("ref_1", "Audio", voice)]),
+        False, clip,
+    )
+    assert slots["pictures"][0] is picture and slots["audios"][0] is voice
+
+
+def test_a_switched_off_reference_leaves_no_gap():
+    """The far node closes up its numbering around an empty socket; there should be none."""
+    clip, _asked = decoder()
+    slots, _summary, _warning = references.fan_out(
+        references.slot_bundle([("ref_0", "Audio", None), ("ref_1", "Audio", sound())]),
+        False, clip,
+    )
+    assert slots["audios"][0] is not None and slots["audios"][1] is None
+
+
+def test_a_clip_is_decoded_and_a_batch_of_frames_is_not():
+    batch = Batch(30, tag="frames")
+    clip, asked = decoder()
+    slots, _summary, _warning = references.fan_out(
+        references.slot_bundle([("ref_0", "Video", Clip()), ("ref_1", "Video", batch)]),
+        False, clip,
+    )
+    assert slots["videos"][0].tag == "decoded"
+    assert slots["videos"][1] is batch
+    assert len(asked) == 1
+
+
+def test_a_clips_sound_stays_off_by_default():
+    clip, asked = decoder()
+    slots, _summary, warning = references.fan_out(
+        references.slot_bundle([("ref_0", "Video", Clip())]), False, clip
+    )
+    assert slots["video_audios"] == [None, None, None]
+    assert asked[0][1] is False
+    assert warning == ""
+
+
+def test_a_clips_sound_is_paired_by_number_and_the_shift_is_said():
+    """On the far side it takes an <Audio N> of its own, and the writers never counted it."""
+    clip, _asked = decoder()
+    slots, summary, warning = references.fan_out(
+        references.slot_bundle(
+            [("ref_0", "Audio", sound()), ("ref_1", "Video", Batch(30)), ("ref_2", "Video", Clip())]
+        ),
+        True, clip,
+    )
+    assert slots["video_audios"][0] is None
+    assert slots["video_audios"][1] is not None
+    assert "1 clip sound(s)" in summary
+    assert "1 behind" in warning and warning in summary
+
+
+def test_the_summary_says_where_each_output_came_from():
+    clip, _asked = decoder()
+    _slots, summary, _warning = references.fan_out(
+        references.slot_bundle(
+            [("ref_4", "Picture", Batch()), ("ref_2", "Subject", Batch()), ("ref_1", "Video", Clip())]
+        ),
+        False, clip,
+    )
+    assert "picture_1 <- ref_4" in summary
+    assert "picture_2 <- ref_2 (subject)" in summary
+    assert "video_1 <- ref_1 (48 frames)" in summary
+
+
+def test_past_the_sockets_is_counted_and_subjects_are_the_first_left_out():
+    entries = [(f"ref_{n}", "Picture", Batch(tag=str(n))) for n in range(9)]
+    entries.insert(0, ("ref_face", "Subject", Batch(tag="face")))
+    clip, _asked = decoder()
+    slots, _summary, warning = references.fan_out(references.slot_bundle(entries), False, clip)
+    assert [picture.tag for picture in slots["pictures"]] == [str(n) for n in range(9)]
+    assert "1 picture(s)" in warning
+
+
+def test_a_clip_too_short_for_the_generator_is_warned_about():
+    clip, _asked = decoder(frames=3)
+    _slots, _summary, warning = references.fan_out(
+        references.slot_bundle([("ref_0", "Video", Clip())]), False, clip
+    )
+    assert "video_1" in warning and "5 frames" in warning
+
+
+@pytest.mark.parametrize("value", [None, "a prompt", ["a", "list"]])
+def test_something_that_is_not_a_bundle_hands_on_nothing(value):
+    clip, asked = decoder()
+    slots, _summary, warning = references.fan_out(value, True, clip)
+    assert all(item is None for values in slots.values() for item in values)
+    assert warning == "" and asked == []

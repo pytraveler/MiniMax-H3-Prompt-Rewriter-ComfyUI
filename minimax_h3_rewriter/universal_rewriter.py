@@ -56,6 +56,7 @@ import logging
 from comfy_api.latest import io
 
 from . import aspect, library, memory, snapshot, writer_8b, writer_omni
+from .checks import KIND_TAG
 from .constants import (
     OUTPUT_FIELDS,
     QUANTIZATIONS,
@@ -78,6 +79,7 @@ from .nodes import (
     rewrite_t2va,
 )
 from .progress import NodeProgress, announce
+from .references import SLOTS_OUTPUT_TOOLTIP, SLOTS_TYPE, slot_bundle
 
 log = logging.getLogger(__name__)
 
@@ -98,6 +100,18 @@ KIND_OF_SLOT = {
     "reference_video": "video",
     "reference_audio": "audio",
 }
+
+FRAMES_FOR_MODE = {
+    "I2VA": ("first_frame",),
+    "FL2VA": ("first_frame", "last_frame"),
+    "L2VA": ("last_frame",),
+}
+
+REFERENCES_OUTPUT_TOOLTIP = SLOTS_OUTPUT_TOOLTIP + (
+    "\n\nIt carries what the tab reads: nothing on the 27B tab, the frames the task uses on "
+    "the 8B tab, and on the Omni tab the frames -- or, on Ref2VA, every row that is switched "
+    "on, in row order."
+)
 
 REF_ONLY_FIELDS = tuple(name for name in REF_OUTPUT_FIELDS if name not in OUTPUT_FIELDS)
 
@@ -294,6 +308,26 @@ def omni_references(task: str, connected: dict[str, object]) -> list:
     ]
 
 
+def handed_on_references(lora: str, task: str, connected: dict[str, object]) -> dict:
+    """The references this tab and task number, as the 'references' output carries them.
+
+    Only what the adapter is actually shown: a row the 27B never reads, or a
+    clip on a frame task, has no label in the prompt, and handing it on would
+    give the generator an asset the text never mentions.
+    """
+    if task == TEXT_TASK or lora == LORA_27B:
+        names: tuple = ()
+    elif task == REF_MODE:
+        names = tuple(connected) if lora == LORA_OMNI else ()
+    else:
+        names = FRAMES_FOR_MODE.get(task, ())
+    return slot_bundle(
+        (name, KIND_TAG[KIND_OF_SLOT[name]], connected[name])
+        for name in names
+        if connected.get(name) is not None
+    )
+
+
 def _unread(progress: NodeProgress, slots: list[str], why: str) -> None:
     """Say on the node that something connected is going nowhere."""
     note = (
@@ -460,6 +494,9 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
             outputs=[
                 io.String.Output(display_name="rewritten_prompt"),
                 *(io.String.Output(display_name=name) for name in UNIVERSAL_FIELDS),
+                io.Custom(SLOTS_TYPE).Output(
+                    display_name="references", tooltip=REFERENCES_OUTPUT_TOOLTIP
+                ),
             ],
             hidden=[io.Hidden.unique_id],
         )
@@ -509,10 +546,6 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
         progress = NodeProgress(cls.hidden.unique_id)
         empty = ("",) * len(UNIVERSAL_FIELDS)
 
-        if bypass:
-            progress.finish("bypassed")
-            return io.NodeOutput((prompt or "").strip(), *empty)
-
         connected = connected_references(
             {
                 "first_frame": first_frame,
@@ -522,6 +555,11 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
             },
             frame_switches,
         )
+        handed_on = handed_on_references(lora, task, connected)
+
+        if bypass:
+            progress.finish("bypassed")
+            return io.NodeOutput((prompt or "").strip(), *empty, handed_on)
 
         chosen, saved = library.picked(
             library_pick, repeat_last, "MiniMaxH3UniversalRewriter", 1 + len(UNIVERSAL_FIELDS),
@@ -529,18 +567,18 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
             having=[KIND_OF_SLOT.get(name) for name in connected],
         )
         if chosen is not None:
-            return io.NodeOutput(*chosen)
+            return io.NodeOutput(*chosen, handed_on)
 
         kept = memory.repeat(
             cls.hidden.unique_id, "MiniMaxH3UniversalRewriter", repeat_last and not saved, given
         )
         if kept is not None:
-            return io.NodeOutput(*kept)
+            return io.NodeOutput(*kept, handed_on)
 
         if saved:
             fields = split_fields(saved, FIELDS_FOR_TASK[task], BODY_FIELD[task])
             return io.NodeOutput(
-                saved, *(fields.get(name, "") for name in UNIVERSAL_FIELDS)
+                saved, *(fields.get(name, "") for name in UNIVERSAL_FIELDS), handed_on
             )
 
         if not (prompt or "").strip():
@@ -636,7 +674,7 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
             ),
             fields=UNIVERSAL_FIELDS,
         )
-        return io.NodeOutput(*outputs)
+        return io.NodeOutput(*outputs, handed_on)
 
 
 NODE_CLASS_MAPPINGS = {

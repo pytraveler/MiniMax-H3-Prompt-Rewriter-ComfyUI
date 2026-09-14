@@ -71,6 +71,7 @@ from .nodes import (
 )
 from .multi_caption import _check_encoders
 from .progress import NodeProgress, announce, refuse
+from .references import SLOTS_OUTPUT_TOOLTIP, SLOTS_TYPE, slot_bundle
 
 log = logging.getLogger(__name__)
 
@@ -118,6 +119,13 @@ TASK_TOOLTIP = (
     "picture, the final frame. FL2VA: two pictures, first and last. Ref2VA: any number of "
     "references the target video reuses, written with the six-section full-reference guide. "
     "Everything but T2VA opens with the alignment line, duration already filled in."
+)
+
+REFERENCES_OUTPUT_TOOLTIP = SLOTS_OUTPUT_TOOLTIP + (
+    "\n\nA picture whose badge calls it a subject goes after the pictures: the prompt never "
+    "calls it <Picture N>, so it must not take a number a picture is using. With a block on "
+    "'previous', the labels in that block are counted first and its references are not in "
+    "here."
 )
 
 
@@ -492,6 +500,9 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                 *(io.String.Output(display_name=name) for name in ALL_FIELDS),
                 io.String.Output(display_name="reference_assets"),
                 io.String.Output(display_name="captions"),
+                io.Custom(SLOTS_TYPE).Output(
+                    display_name="references", tooltip=REFERENCES_OUTPUT_TOOLTIP
+                ),
             ],
             hidden=[io.Hidden.unique_id],
         )
@@ -541,18 +552,21 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         block = (previous or "").strip()
         empty = ("",) * len(ALL_FIELDS)
 
+        assets, skipped = arrange(references, reference_layout)
+        handed_on = slot_bundle(
+            () if task == TEXT_TASK else ((item.slot, item.role, item.value) for item in assets)
+        )
+
         if bypass:
             progress.finish("bypassed")
-            return io.NodeOutput((prompt or "").strip(), *empty, block, "")
-
-        assets, skipped = arrange(references, reference_layout)
+            return io.NodeOutput((prompt or "").strip(), *empty, block, "", handed_on)
 
         chosen, saved = library.picked(
             library_pick, repeat_last, "MiniMaxH3UniversalWriter", 1 + len(ALL_FIELDS) + 2,
             cls.hidden.unique_id, having=[item.kind for item in assets],
         )
         if chosen is not None:
-            return io.NodeOutput(*chosen)
+            return io.NodeOutput(*chosen, handed_on)
         if saved:
             _head, sections = split_sections(
                 saved, guide_prompt.FIELDS_FOR_MODE[task],
@@ -563,13 +577,14 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                 *(sections.get(name, "") for name in ALL_FIELDS),
                 block,
                 "",
+                handed_on,
             )
 
         kept = memory.repeat(
             cls.hidden.unique_id, "MiniMaxH3UniversalWriter", repeat_last, given
         )
         if kept is not None:
-            return io.NodeOutput(*kept)
+            return io.NodeOutput(*kept, handed_on)
 
         resolution = aspect.resolve(aspect_ratio, resolution)
 
@@ -733,7 +748,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
             references=snapshot.take((item.slot, item.kind, item.value) for item in assets),
             fields=ALL_FIELDS,
         )
-        return io.NodeOutput(*outputs)
+        return io.NodeOutput(*outputs, handed_on)
 
 
 NODE_CLASS_MAPPINGS = {
