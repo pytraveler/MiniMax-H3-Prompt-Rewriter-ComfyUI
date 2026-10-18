@@ -5,6 +5,7 @@ import {
     CHIP_H_PLAIN,
     chipElement,
     installStripStyle,
+    numberEntries,
     placeDragged,
     slotNumber,
     slots,
@@ -43,7 +44,7 @@ const ROLE_FOR_KIND = { image: "Picture", video: "Video", audio: "Audio" };
 const HINT_H = 12;
 const HINT_GAP = 3;
 const HINT =
-    "drag to reorder - that order numbers the labels - click a square to switch it off";
+    "drag to reorder - that order numbers the labels - click a square to switch it off - a clip's label: its sound";
 
 const TASKS_H = 26;
 
@@ -73,13 +74,18 @@ function readLayout(node) {
         const found = parsed[key];
         return Array.isArray(found) ? found.filter((n) => typeof n === "string") : [];
     };
-    return { order: names("order"), off: names("off") };
+    return { order: names("order"), off: names("off"), sound: names("sound") };
 }
 
 function writeLayout(node, layout) {
     const kept = {};
     if (layout.order.length) kept.order = layout.order;
     if (layout.off.length) kept.off = layout.off;
+    const notClips = new Set(
+        slots(node, PREFIX).filter((s) => s.connected && s.kind !== "video").map((s) => s.name)
+    );
+    const sound = (layout.sound || []).filter((name) => !notClips.has(name));
+    if (sound.length) kept.sound = sound;
 
     const widget = widgetNamed(node, LAYOUT);
     if (widget) widget.value = JSON.stringify(kept);
@@ -102,14 +108,14 @@ function arranged(node) {
             .sort((a, b) => slotNumber(a) - slotNumber(b))
     );
 
-    const counts = {};
-    return names.map((name) => {
+    const entries = names.map((name) => {
         const slot = connected.get(name);
         const role = ROLE_FOR_KIND[slot.kind] || ROLE_FOR_KIND.image;
         const on = !layout.off.includes(name);
-        if (on) counts[role] = (counts[role] || 0) + 1;
-        return { name, kind: slot.kind, role, on, number: on ? counts[role] : null };
+        const sound = on && slot.kind === "video" && layout.sound.includes(name);
+        return { name, kind: slot.kind, role, on, sound };
     });
+    return numberEntries(entries, widgetNamed(node, TASK)?.value === REF_TASK);
 }
 
 function counted(node) {
@@ -174,11 +180,19 @@ function toggleSlot(node, name) {
     writeLayout(node, layout);
 }
 
+function toggleSound(node, name) {
+    const layout = readLayout(node);
+    const at = layout.sound.indexOf(name);
+    if (at >= 0) layout.sound.splice(at, 1);
+    else layout.sound.push(name);
+    writeLayout(node, layout);
+}
+
 function isSlotEnabled(node, name) {
     return !readLayout(node).off.includes(name);
 }
 
-function beginGesture(node, chip, entry, event) {
+function beginGesture(node, chip, role, entry, event) {
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
@@ -186,6 +200,7 @@ function beginGesture(node, chip, entry, event) {
     const strip = chip.parentElement;
     const startX = event.clientX;
     const startY = event.clientY;
+    const onLabel = event.clientY <= role.getBoundingClientRect().bottom;
     let dragging = false;
 
     const move = (moved) => {
@@ -206,6 +221,7 @@ function beginGesture(node, chip, entry, event) {
         if (node[STATE]) node[STATE].dragging = false;
 
         if (dragging) commitOrder(node, strip);
+        else if (onLabel && entry.kind === "video" && entry.on) toggleSound(node, entry.name);
         else toggleSlot(node, entry.name);
     };
 
@@ -215,14 +231,29 @@ function beginGesture(node, chip, entry, event) {
 }
 
 function buildChip(node, entry) {
-    const { chip, about } = chipElement(entry, true, previewFor(node, entry.name, entry.kind));
+    const { chip, role, about } = chipElement(
+        entry, true, previewFor(node, entry.name, entry.kind)
+    );
+    let heard = "";
+    if (entry.sound) {
+        heard = entry.soundNumber
+            ? `, its sound <Audio ${entry.soundNumber}>`
+            : ", its sound switched on (counted on Ref2AV only)";
+    }
+    const clip =
+        entry.kind === "video"
+            ? entry.sound
+                ? " Click the label band to stop counting its own sound."
+                : " Click the label band to count its own sound as a reference too."
+            : "";
     chip.title =
         `${entry.name}: <${entry.role} ${entry.on ? entry.number : "-"}>` +
-        (entry.on ? "" : ", switched off") +
+        (entry.on ? heard : ", switched off") +
         (about ? `\n${about}` : "") +
-        "\nDrag to reorder -- the order is what numbers the labels. Click to switch off.";
+        "\nDrag to reorder -- the order is what numbers the labels. Click to switch off." +
+        clip;
 
-    chip.addEventListener("pointerdown", (event) => beginGesture(node, chip, entry, event));
+    chip.addEventListener("pointerdown", (event) => beginGesture(node, chip, role, entry, event));
     return chip;
 }
 
@@ -272,8 +303,8 @@ const FRAME_STEP = 17;
 const FRAME_BASE = 5;
 
 function snapped(seconds) {
-    const steps = Math.ceil((FRAME_RATE * Number(seconds) - FRAME_BASE) / FRAME_STEP);
-    const frames = steps * FRAME_STEP + FRAME_BASE;
+    let frames = Math.max(1, Math.round(FRAME_RATE * Number(seconds)));
+    frames += (((FRAME_BASE - frames) % FRAME_STEP) + FRAME_STEP) % FRAME_STEP;
     return { frames, seconds: frames / FRAME_RATE };
 }
 

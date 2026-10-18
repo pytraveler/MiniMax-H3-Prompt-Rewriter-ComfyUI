@@ -137,3 +137,74 @@ def test_a_trim_that_cannot_be_read_is_no_trim():
             raise RuntimeError("probe failed")
 
     assert media.trim_window(Broken()) == (0.0, 0.0)
+
+
+class Sized:
+    """A VIDEO that answers ``get_dimensions`` as ComfyUI's does: width, then height."""
+
+    def __init__(self, width, height):
+        self.size = (width, height)
+
+    def get_dimensions(self):
+        return self.size
+
+
+class Unreadable:
+    def get_dimensions(self):
+        raise OSError("no such file")
+
+
+class Shaped:
+    def __init__(self, *shape):
+        self.shape = shape
+
+
+def test_an_image_batch_is_measured_off_its_shape():
+    assert media.frame_size(Shaped(3, 1080, 1920, 3)) == (1920, 1080)
+
+
+def test_a_video_is_asked_for_its_dimensions():
+    assert media.frame_size(Sized(1280, 720)) == (1280, 720)
+
+
+def test_something_that_cannot_say_its_size_is_none():
+    assert media.frame_size(Unreadable()) is None
+    assert media.frame_size(Shaped(16)) is None
+    assert media.frame_size({"waveform": None}) is None
+    assert media.frame_size(None) is None
+
+
+def test_an_untouched_clip_is_read_whole():
+    assert media.clip_window(480, 24) == (0, 480)
+
+
+def test_a_clip_stops_at_the_length_of_the_video():
+    """Ten seconds asked for is 243 frames made; frames past that are never shown to H3."""
+    assert media.clip_window(480, 24, max_seconds=243 / 24) == (0, 243)
+
+
+def test_a_trimmed_clip_is_read_from_its_trim():
+    assert media.clip_window(480, 24, start=5.0) == (120, 360)
+    assert media.clip_window(480, 24, start=5.0, trimmed=4.0) == (120, 96)
+
+
+def test_the_tighter_of_the_trim_and_the_video_wins():
+    assert media.clip_window(480, 24, start=5.0, trimmed=12.0, max_seconds=243 / 24) == (120, 243)
+    assert media.clip_window(480, 24, start=5.0, trimmed=4.0, max_seconds=243 / 24) == (120, 96)
+
+
+def test_a_clip_shorter_than_the_video_is_read_to_its_end():
+    assert media.clip_window(100, 24, max_seconds=15.0) == (0, 100)
+
+
+def test_the_window_is_counted_at_the_clips_own_rate():
+    assert media.clip_window(900, 30, max_seconds=243 / 24) == (0, 304)
+
+
+def test_a_trim_past_the_end_still_leaves_a_frame():
+    assert media.clip_window(100, 24, start=99.0) == (99, 1)
+
+
+def test_a_clip_that_does_not_say_its_length_is_read_as_before():
+    assert media.clip_window(0, 24, max_seconds=5.0) == (0, 0)
+    assert media.clip_window(100, 0, max_seconds=5.0) == (0, 100)

@@ -412,6 +412,16 @@ guide-driven turn names its references by hand. Here the socket settles it — a
 a *subject* is something this adapter **produces** in `subject_definitions`, not
 something the request supplies.
 
+**A clip's label band switches its own sound on.** On `Ref2AV` the band turns
+purple and reads `vid+a1`: the clip's sound is now `<Audio 1>`, a reference of
+its own, and the adapter hears it — handed over as a separate sound right before
+the clip, which is the only way its upstream inference ever passes a clip's
+sound. Clip sounds take the first `<Audio N>` numbers and standalone sounds
+follow, because that is how `MiniMaxH3ReferenceToVideo` numbers them, so a sound
+square ahead of a sounding clip in the strip is presented after it. On the other
+tasks the band stays a paler purple with no number: set, and idle until
+`Ref2AV`. A clip with no sound track is said on the node and left unnumbered.
+
 **What it costs**
 
 | | Download | VRAM |
@@ -553,6 +563,12 @@ unplugged — which is how a reference gets parked without dragging the wire off
 Run the 27B tab with any of them connected and the node says on itself that it is
 not reading them, and where to put them instead, rather than leaving you to
 wonder.
+
+**`reference_video` has a second box, a speaker.** Tick it and the clip's own
+sound becomes a reference of its own on the Omni tab's `Ref2VA`: `<Audio 1>`,
+with `reference_audio` moving to `<Audio 2>` — the order
+`MiniMaxH3ReferenceToVideo` gives them — and `references` carries it on to
+[Reference Slots](#minimax-h3-reference-slots).
 
 **`duration` is a slider**, reaching 30 seconds until you move it — right-click
 the node, `duration`. See [The duration widget](#the-duration-widget). The three
@@ -920,7 +936,15 @@ moves.
 
 - **Drag a square** to move it. The numbering follows immediately.
 - **Click its label** to change what an image is for: `pic` → `subj` → `vid` and
-  round again. A clip and a sound are what they are, so those do not cycle.
+  round again. A sound is what it is and does not cycle.
+- **Click a clip's label** to count the clip's own sound as a reference too. On
+  `Ref2VA` the band turns purple and reads `vid+a1`: the captioner describes that
+  sound as `Audio 1` in the block, just before the clip, and `references` tells
+  [Reference Slots](#minimax-h3-reference-slots) to hand it to the generator.
+  Clip sounds take the first `<Audio N>` numbers and standalone sounds follow,
+  which is how `MiniMaxH3ReferenceToVideo` numbers them. The captioner has to
+  hear for this — one that cannot is refused by name before anything loads — and
+  a clip with no sound track is said on the node and left unnumbered.
 - **Click its number** to switch that reference off without unplugging it — the
   checkbox on the slot's own row does the same thing from the other side.
 - **Click the band under it** to ask that one reference something other than its
@@ -1877,7 +1901,7 @@ the strip from then on.
 | --- | --- |
 | `picture_1` … `picture_9` | The pictures, in the writer's order. |
 | `video_1` … `video_3` | The clips, as frames at 24 fps. |
-| `video_audio_1` … `video_audio_3` | A clip's own sound, paired by number — only with `soundtracks` on. |
+| `video_audio_1` … `video_audio_3` | A clip's own sound, paired by number — when the writer counted it, or for every clip with `soundtracks` on. |
 | `audio_1` … `audio_3` | The sounds, as they came. |
 | `summary` | Which output holds what and which writer slot it came from, plus anything that did not fit. |
 
@@ -1901,11 +1925,19 @@ longest reference it is meant for. A trimmed VIDEO is read over its trim. An
 image batch the writer was told to read as a clip is frames already and goes
 through as it is.
 
-**`soundtracks` is off by default, and that is deliberate.** The generator gives
-a clip's sound an `<Audio N>` of its own, numbered ahead of every standalone
-sound, and the writers do not count clip sounds. Switched on, the prompt's
-`<Audio 1>` is no longer the sound on `audio_1`; the summary says by how many
-the labels moved. Turn it on for a prompt written with that in mind.
+**A clip's sound goes across when the writer counted it.** The generator gives a
+clip's sound an `<Audio N>` of its own, numbered ahead of every standalone sound.
+Click a clip's label band in the writer's strip — or tick the speaker box on the
+Universal Rewriter's `reference_video` row — and the writer numbers that sound
+the same way, has it described or heard, and says so in `references`. This node
+then puts it on the clip's `video_audio_N`, and the prompt and the video agree.
+A clip with no sound track has nothing to put there, and the writer has already
+said so and left it unnumbered.
+
+**`soundtracks` gives every clip its sound, whatever the writer did.** It is off
+by default. A clip the writer left silent then takes an `<Audio N>` the prompt
+never gave it, so the prompt's `<Audio 1>` is no longer the sound on `audio_1`;
+the summary says by how many the labels moved.
 
 What each writer hands on is what its prompt names, and nothing it did not read:
 

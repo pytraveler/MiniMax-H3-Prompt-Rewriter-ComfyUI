@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import logging
 
+from . import checks, media
+
 log = logging.getLogger(__name__)
 
 MAX_PICTURES = 9
@@ -232,7 +234,8 @@ SLOTS_OUTPUT_TOOLTIP = (
     "the socket they arrive on, so wiring the same assets to it by hand agrees with this "
     "node's labels only until a reference is reordered or switched off.\n\n"
     "Switched-off references are not in it, and it is empty when the task writes from text "
-    "alone. Nothing is decoded here: a clip travels as it arrived."
+    "alone. Nothing is decoded here: a clip travels as it arrived, and says whether its own "
+    "sound was counted, so that sound reaches the generator exactly when the prompt names it."
 )
 
 _GROUP_OF_ROLE = {"Picture": "pictures", "Video": "videos", "Audio": "audios"}
@@ -250,11 +253,18 @@ def slot_bundle(entries) -> dict:
     the writer never gave it a picture number at all -- so it has to take a
     number no picture in the prompt is using, and the only such numbers are
     the ones past the last of them.
+
+    An entry may carry a fourth element: True when the writer counted a clip's
+    own sound as an ``<Audio N>`` of its own. ``video_sounds`` holds that, one
+    flag per clip, so 'Reference Slots' puts exactly those sounds on the clip
+    sockets -- and the generator numbers them the way the prompt already did.
     """
     bundle = {"pictures": [], "videos": [], "audios": []}
     sources = {group: [] for group in bundle}
+    sounds: list[bool] = []
     subjects, subject_sources = [], []
-    for slot, role, value in entries:
+    for entry in entries:
+        slot, role, value = entry[:3]
         if value is None:
             continue
         if role == "Subject":
@@ -266,10 +276,132 @@ def slot_bundle(entries) -> dict:
             continue
         bundle[group].append(value)
         sources[group].append(str(slot))
+        if group == "videos":
+            sounds.append(bool(entry[3]) if len(entry) > 3 else False)
     bundle["pictures"].extend(subjects)
     sources["pictures"].extend(subject_sources)
     bundle["sources"] = sources
+    bundle["video_sounds"] = sounds
     return bundle
+
+
+def clip_sounds(items) -> tuple[dict[str, object], str]:
+    """``(sounds, note)``: the sound of every clip whose sound is switched on.
+
+    ``items`` carry ``slot``, ``value`` and ``sound`` -- a writer's assets or
+    references, whichever it holds. ``sounds`` is keyed by slot. They are read
+    before anything is numbered, because a clip with no sound track gets no
+    ``<Audio N>`` from the generator -- 'Reference Slots' finds nothing to put
+    on its socket -- and so must take none in the prompt either. ``note`` says
+    so when it happens, and is empty otherwise: an idle switch is said, not
+    refused.
+    """
+    wanted = [item for item in items if getattr(item, "sound", False)]
+    if not wanted:
+        return {}, ""
+    sounds: dict[str, object] = {}
+    silent: list[str] = []
+    with media.Workspace(prefix="minimax_h3_clip_sound_") as workspace:
+        for item in wanted:
+            sound = media.clip_soundtrack(item.value, workspace)
+            if sound is None:
+                silent.append(f"'{item.slot}'")
+            else:
+                sounds[item.slot] = sound
+    if not silent:
+        return sounds, ""
+    one = len(silent) == 1
+    note = (
+        f"{', '.join(silent)} {'has' if one else 'have'} no sound track, so the sound "
+        f"switched on for {'it' if one else 'them'} does nothing -- the generator gets "
+        f"none from {'it' if one else 'them'} either."
+    )
+    return sounds, note
+
+
+def turn_order(entries) -> list[tuple[int, bool]]:
+    """Where each reference goes in a writer's turn, a clip's sound in front of it.
+
+    ``entries`` is ``(word, sound)`` per reference in strip order, ``word``
+    being its tag -- Picture, Subject, Video or Audio -- and ``sound`` True for
+    a clip whose own sound is a reference too. What comes back is
+    ``(index, is_sound)`` pairs: such a clip appears twice, its sound first,
+    which is the order the generator writes them in -- ``<Audio k>:`` and then
+    ``<Video m>:``.
+
+    The generator also numbers every clip's sound before the first standalone
+    one, and a writer numbers labels in the order it meets them. So a
+    standalone sound ahead of the last sounding clip moves to just after it:
+    left where it was, it would take the number the generator gives that
+    clip's sound. Everything else keeps the strip's order.
+    """
+    entries = list(entries)
+    last = max(
+        (index for index, (word, sound) in enumerate(entries) if word == "Video" and sound),
+        default=-1,
+    )
+    order: list[tuple[int, bool]] = []
+    held: list[tuple[int, bool]] = []
+    for index, (word, sound) in enumerate(entries):
+        if word == "Audio" and index < last:
+            held.append((index, False))
+            continue
+        if word == "Video" and sound:
+            order.append((index, True))
+        order.append((index, False))
+        if index == last:
+            order.extend(held)
+    return order
+
+
+def pipeline_notes(task, entries) -> list[str]:
+    """What in these references LightX2V's H3 runner refuses, as sentences to say.
+
+    ``entries`` is ``(slot, word, value)`` per switched-on reference, ``word``
+    being the tag the writer gives it -- Picture, Subject, Video or Audio.
+
+    Notices, never refusals. ComfyUI's MiniMaxH3ReferenceToVideo takes both of
+    these without checking, so a workflow that stays in ComfyUI runs; the
+    reference pipeline H3 ships with refuses them, and a video that came out
+    wrong is slower to trace back to one reference than a line said before the
+    writer starts.
+
+    The sentences name no task: one writer calls it Ref2VA and another Ref2AV,
+    and the slot is what the person has to find.
+    """
+    if checks.normalize(task) != "ref2va":
+        return []
+    entries = list(entries)
+
+    counts: dict[str, int] = {}
+    for _slot, word, _value in entries:
+        counts[word] = counts.get(word, 0) + 1
+
+    notes = []
+    if checks.audio_only(task, counts):
+        notes.append(
+            "These references are sounds alone. LightX2V's MiniMax-H3 runner refuses a "
+            "reference set with nothing in it to see, and ComfyUI's MiniMaxH3ReferenceToVideo "
+            "runs one without checking. Add a picture, a subject or a clip to stay inside what "
+            "H3's own pipeline accepts."
+        )
+
+    odd = []
+    for slot, word, value in entries:
+        if word == "Audio":
+            continue
+        size = media.frame_size(value)
+        if size and checks.out_of_shape(*size):
+            odd.append(f"'{slot}' ({size[0]}x{size[1]})")
+    if odd:
+        one = len(odd) == 1
+        notes.append(
+            f"{', '.join(odd)} {'is' if one else 'are'} outside 1:4 to 4:1. LightX2V's "
+            f"MiniMax-H3 runner refuses a reference that narrow or that wide, and ComfyUI's "
+            f"MiniMaxH3ReferenceToVideo scales it without checking. Crop "
+            f"{'it' if one else 'them'} to stay inside what H3's own pipeline accepts."
+        )
+    return notes
 
 
 def _values(bundle, key) -> list:
@@ -297,9 +429,14 @@ def fan_out(bundle, soundtracks: bool, clip) -> tuple[dict, str, str]:
 
     ``clip`` turns a VIDEO into ``(frames, sound, detail)`` and is only called
     for one; a batch of frames that a writer was told to read as a clip is
-    already frames and goes through as it is. A clip's sound reaches its
-    socket only with ``soundtracks`` on, because it takes an ``<Audio N>`` of
-    its own on the far side and moves every standalone sound up by one.
+    already frames and goes through as it is.
+
+    A clip's sound takes an ``<Audio N>`` of its own on the far side, numbered
+    ahead of every standalone sound, so it reaches its socket when the writer
+    counted it -- ``video_sounds`` in the bundle says which -- and then the
+    prompt and the generator agree. ``soundtracks`` puts every clip's sound
+    there as well; one the writer did not count moves the prompt's labels, and
+    the warning says by how much.
     """
     slots = {
         "pictures": [None] * MAX_PICTURES,
@@ -318,7 +455,8 @@ def fan_out(bundle, soundtracks: bool, clip) -> tuple[dict, str, str]:
     lines: list[str] = []
     over = {"pictures": 0, "videos": 0, "audios": 0}
     short: list[str] = []
-    paired = 0
+    paired = forced = 0
+    counted = _values(bundle, "video_sounds") if hasattr(bundle, "get") else []
 
     def place(group: str, word: str, room: int, handle) -> int:
         placed = 0
@@ -328,29 +466,34 @@ def fan_out(bundle, soundtracks: bool, clip) -> tuple[dict, str, str]:
             if placed == room:
                 over[group] += 1
                 continue
-            lines.append(handle(placed, value, f"{word}_{placed + 1} <- {named(group, index)}"))
+            line = f"{word}_{placed + 1} <- {named(group, index)}"
+            lines.append(handle(placed, index, value, line))
             placed += 1
         return placed
 
     def picture_or_sound(group):
-        def handle(position, value, line):
+        def handle(position, _index, value, line):
             slots[group][position] = value
             return line
         return handle
 
-    def video(position, value, line):
-        nonlocal paired
+    def video(position, index, value, line):
+        nonlocal paired, forced
+        writer_counted = index < len(counted) and counted[index] is True
+        wanted = writer_counted or soundtracks
         if kind_of(value) == "video":
-            frames, sound, detail = clip(value, soundtracks)
+            frames, sound, detail = clip(value, wanted)
         else:
             frames, sound, detail = value, None, f"{_frame_count(value)} frame(s) as they came"
         slots["videos"][position] = frames
         line = f"{line} ({detail})"
         if 0 < _frame_count(frames) < 5:
             short.append(f"video_{position + 1}")
-        if soundtracks and sound is not None:
+        if wanted and sound is not None:
             slots["video_audios"][position] = sound
             paired += 1
+            if not writer_counted:
+                forced += 1
             line += f", its sound on video_audio_{position + 1}"
         return line
 
@@ -379,12 +522,13 @@ def fan_out(bundle, soundtracks: bool, clip) -> tuple[dict, str, str]:
             f"{', '.join(short)} {'has' if len(short) == 1 else 'have'} fewer than 5 frames, "
             f"which MiniMaxH3ReferenceToVideo refuses."
         )
-    if paired:
+    if forced:
         troubles.append(
-            f"{paired} clip sound(s) are on video_audio: MiniMaxH3ReferenceToVideo gives each an "
-            f"<Audio N> of its own, numbered before the sounds on audio_1 onwards. The writers "
-            f"do not count clip sounds, so the <Audio N> labels in their prompt are now "
-            f"{paired} behind."
+            f"{forced} clip sound(s) are on video_audio because 'soundtracks' is on, and the "
+            f"writer did not count them: MiniMaxH3ReferenceToVideo gives each an <Audio N> of "
+            f"its own, numbered before the sounds on audio_1 onwards, so the <Audio N> labels "
+            f"in the prompt are now {forced} behind. Switch the clip's sound on in the "
+            f"writer's strip instead, which numbers it."
         )
 
     summary = "\n".join([head, *troubles, *lines])

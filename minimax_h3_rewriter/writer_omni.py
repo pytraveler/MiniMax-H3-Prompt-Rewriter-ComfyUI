@@ -82,17 +82,26 @@ from .nodes import (
     _verify_base_model,
     _warn_off_base,
 )
-from .progress import NodeProgress, refuse
+from .progress import NodeProgress, announce, refuse
 from .prompt_template_omni import (
+    FRAME_RATE,
     LABEL_PREFIX,
     REF_TASK,
     TASKS,
     build_messages,
+    effective_duration,
     expected_pictures,
     normalize_task,
 )
-from .references import SLOTS_OUTPUT_TOOLTIP, SLOTS_TYPE, slot_bundle
-from .universal import ALL_FIELDS, kind_of, layout_of
+from .references import (
+    SLOTS_OUTPUT_TOOLTIP,
+    SLOTS_TYPE,
+    clip_sounds,
+    pipeline_notes,
+    slot_bundle,
+    turn_order,
+)
+from .universal import ALL_FIELDS, kind_of, layout_of, sounding
 
 log = logging.getLogger(__name__)
 
@@ -137,11 +146,19 @@ class BaseChoice:
 
 @dataclass(frozen=True)
 class Reference:
-    """One connected, switched-on reference, in the order it will be labelled."""
+    """One connected, switched-on reference, in the order it will be labelled.
+
+    ``sound`` marks a clip whose own sound is switched on as a reference too.
+    ``clip`` is set on the reference ``with_sounds`` makes of that sound -- the
+    slot of the clip it came out of -- so the checks that count what was
+    connected can tell it from a sound that was.
+    """
 
     slot: str
     kind: str
     value: object
+    sound: bool = False
+    clip: str = ""
 
 
 def render(messages: list[dict], counts: list[int] | None = None) -> tuple[str, str]:
@@ -188,6 +205,7 @@ def arrange(supplied: dict | None, raw_layout: str) -> tuple[list[Reference], in
     """
     connected = {name: value for name, value in (supplied or {}).items() if value is not None}
     order, off, _roles = layout_of(raw_layout)
+    heard = sounding(raw_layout)
 
     def slot_number(name: str) -> int:
         tail = name.rsplit("_", 1)[-1]
@@ -197,12 +215,47 @@ def arrange(supplied: dict | None, raw_layout: str) -> tuple[list[Reference], in
     known = set(named)
     named += sorted((n for n in connected if n not in known), key=slot_number)
 
-    found = [
-        Reference(name, kind_of(connected[name]), connected[name])
-        for name in named
-        if name not in off
-    ]
+    found = []
+    for name in named:
+        if name in off:
+            continue
+        kind = kind_of(connected[name])
+        found.append(Reference(name, kind, connected[name], kind == "video" and name in heard))
     return found, len(connected) - len(found)
+
+
+def with_sounds(references: list[Reference], task: str, node_id=None) -> list[Reference]:
+    """The references as the turn presents them, a clip's sound in front of its clip.
+
+    The adapter hears a clip's sound only as an audio reference of its own --
+    its upstream inference never reads the sound inside a video -- so a clip
+    whose sound is switched on becomes two references, ``<Audio k>`` and then
+    ``<Video m>``, the order the generator writes them in.
+    ``references.turn_order`` decides where they go, and with it which number
+    each sound takes.
+
+    A clip with no sound track stays a clip, and that is said: the generator
+    gets no sound from it either, so it must take no number here.
+    """
+    if normalize_task(task) != REF_TASK or not any(r.sound for r in references):
+        return list(references)
+    sounds, idle = clip_sounds(references)
+    if idle:
+        log.warning("[minimax_h3_rewriter.writer_omni] %s", idle)
+        announce(node_id, [("warn", idle)])
+
+    turn = []
+    entries = [(LABEL_PREFIX[r.kind], r.slot in sounds) for r in references]
+    for index, is_sound in turn_order(entries):
+        reference = references[index]
+        if is_sound:
+            turn.append(Reference(
+                f"{reference.slot} (sound)", "audio", sounds[reference.slot],
+                clip=reference.slot,
+            ))
+        else:
+            turn.append(reference)
+    return turn
 
 
 def check_task(task: str, references: list[Reference], node_id=None) -> None:
@@ -214,7 +267,7 @@ def check_task(task: str, references: list[Reference], node_id=None) -> None:
     said as a toast as well, since the console is not where anyone looks first.
     """
     task = normalize_task(task)
-    kinds = [reference.kind for reference in references]
+    kinds = [reference.kind for reference in references if not reference.clip]
 
     if task == REF_TASK:
         if not references:
@@ -411,29 +464,43 @@ def _with_transformers(
 
 
 def _attachments_for(
-    references: list[Reference], workspace, max_frames: int
+    references: list[Reference], workspace, max_frames: int, max_seconds: float = 0.0
 ) -> tuple[list[tuple[str, str]], list[int], int]:
     """Write every reference to disk, and say how many markers each is worth.
 
     A clip is the reason this returns two things. It is sampled into frames and
     each frame goes in as its own ``--image``, so one ``<Video 1>`` label stands
     in front of several media markers and the turn has to say so.
+
+    ``max_seconds`` is the length of the video being written for. A clip's
+    frames stop there, because the generator keeps no more of a reference clip
+    than that; a sound is passed whole, because ComfyUI's generator encodes
+    the whole of one.
+
+    Every file is named by its place in the turn. They share one workspace,
+    and under one name each -- ``audio.wav``, ``frame_000.png`` -- the second
+    sound or clip was written over the first, so a turn naming two of them
+    showed the model the last one twice.
     """
     attachments: list[tuple[str, str]] = []
     counts: list[int] = []
-    for reference in references:
+    for position, reference in enumerate(references):
+        name = f"ref{position:02d}"
         if reference.kind == "audio":
-            attachments.append(("audio", media.audio_file(reference.value, workspace)))
+            attachments.append(
+                ("audio", media.audio_file(reference.value, workspace, f"{name}.wav"))
+            )
             counts.append(1)
         elif reference.kind == "video":
             paths, _total, _seconds = media.video_frames(
-                reference.value, workspace, max_frames, VIDEO_MAX_PIXELS
+                reference.value, workspace, max_frames, VIDEO_MAX_PIXELS,
+                max_seconds=max_seconds, prefix=name,
             )
             attachments.extend(("image", path) for path in paths)
             counts.append(len(paths))
         else:
             paths = media.image_files(
-                reference.value, workspace, max_frames=1, prefix=reference.slot,
+                reference.value, workspace, max_frames=1, prefix=name,
                 max_pixels=IMAGE_MAX_PIXELS,
             )
             attachments.append(("image", paths[0]))
@@ -494,7 +561,7 @@ def _room_for(n_ctx: int, budget: int, model_path: str, progress: NodeProgress) 
 
 def _with_media(
     references, model_path, mmproj_path, adapter_path, messages,
-    settings, seed, greedy, keep_loaded, max_frames, progress,
+    settings, seed, greedy, keep_loaded, max_frames, progress, max_seconds=0.0,
 ) -> str:
     """Run the multimodal path: one asset per marker, in order."""
     if keep_loaded:
@@ -504,7 +571,9 @@ def _with_media(
             "subprocess"
         )
     with media.Workspace() as workspace:
-        attachments, counts, media_tokens = _attachments_for(references, workspace, max_frames)
+        attachments, counts, media_tokens = _attachments_for(
+            references, workspace, max_frames, max_seconds
+        )
         system, user = render(messages, counts)
         budget = (
             media_tokens
@@ -548,16 +617,27 @@ def rewrite_omni(
     progress: NodeProgress,
     references: list[Reference] | None = None,
     max_frames: int = media.DEFAULT_MAX_FRAMES,
+    notices: bool = True,
 ) -> str:
     """Run the Omni adapter and return the rewrite, on whichever engine fits.
 
     A function rather than a method for the same reason as the other two: the
     universal rewriter's third tab runs exactly this, and the choice between the
     engines is not worth having two copies of.
+
+    ``notices`` off is for the second run 'fix_once' asks for: the references
+    are the same ones, and what was said about them has been said.
     """
     wanted = normalize_task(task)
     references = list(references or [])
     check_task(wanted, references, progress.node_id)
+    notes = notices and pipeline_notes(
+        wanted, ((r.slot, LABEL_PREFIX[r.kind], r.value) for r in references if not r.clip)
+    )
+    if notes:
+        log.warning("[minimax_h3_rewriter.writer_omni] %s", " ".join(notes))
+        progress.text("\n".join(notes), force=True)
+        announce(progress.node_id, [("warn", note) for note in notes])
     choice = _resolve_model_choice(model)
 
     if choice.fmt == FORMAT_TRANSFORMERS:
@@ -595,9 +675,11 @@ def rewrite_omni(
     )
 
     if references:
+        frames, _snapped = effective_duration(duration)
         return _with_media(
             references, model_path, mmproj_path, adapter_path, messages,
             settings, seed, greedy, keep_loaded, max_frames, progress,
+            max_seconds=frames / FRAME_RATE if wanted == REF_TASK else 0.0,
         )
 
     system, user = render(messages)
@@ -634,9 +716,10 @@ DESCRIPTION = (
 )
 
 LAYOUT_TOOLTIP = (
-    "The strip's state as JSON -- which squares are switched off and what order they are in. "
-    "It is a widget so the arrangement travels with the workflow and through the API; the "
-    "interface draws it as squares instead. A slot missing from it is on, in slot order."
+    "The strip's state as JSON -- which squares are switched off, what order they are in, and "
+    "which clips have their own sound switched on as well. It is a widget so the arrangement "
+    "travels with the workflow and through the API; the interface draws it as squares "
+    "instead. A slot missing from it is on, in slot order, and a clip is silent."
 )
 
 REFERENCE_TOOLTIP = (
@@ -861,7 +944,13 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         handed_on = slot_bundle(
             ()
             if normalize_task(task) == TEXT_TASK
-            else ((item.slot, LABEL_PREFIX[item.kind], item.value) for item in connected)
+            else (
+                (
+                    item.slot, LABEL_PREFIX[item.kind], item.value,
+                    item.sound and normalize_task(task) == REF_TASK,
+                )
+                for item in connected
+            )
         )
 
         if bypass:
@@ -895,6 +984,7 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
                 switched_off,
             )
 
+        turn = connected if saved else with_sounds(connected, wanted, cls.hidden.unique_id)
         text = saved or rewrite_omni(
             model=model,
             prompt=prompt,
@@ -907,7 +997,7 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
             keep_loaded=keep_model_loaded,
             settings=settings,
             progress=progress,
-            references=connected,
+            references=turn,
             max_frames=int(max_frames),
         )
 
@@ -919,10 +1009,11 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
                     model=model, prompt=prompt + extra, task=wanted, resolution=resolution,
                     duration=float(duration), quantization=quantization, greedy=greedy,
                     seed=int(seed), keep_loaded=keep_model_loaded, settings=settings,
-                    progress=progress, references=connected, max_frames=int(max_frames),
+                    progress=progress, references=turn, max_frames=int(max_frames),
+                    notices=False,
                 ),
                 names, task=wanted, duration=duration,
-                having=[item.kind for item in connected],
+                having=[item.kind for item in turn],
                 fallback=BODY_FIELD[wanted], settings=settings,
             )
         _head, sections = split_sections(text, names, fallback=BODY_FIELD[wanted])
@@ -930,7 +1021,7 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
             _report(
                 progress, text, sections, names,
                 task=wanted, duration=duration,
-                having=[item.kind for item in connected],
+                having=[item.kind for item in turn],
                 settings=settings,
             )
         fields = tuple(sections.get(name, "") for name in ALL_FIELDS)

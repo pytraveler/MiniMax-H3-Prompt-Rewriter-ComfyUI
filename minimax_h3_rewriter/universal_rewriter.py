@@ -51,6 +51,7 @@ shows a dropdown for every one of them and the node still runs.
 
 from __future__ import annotations
 
+import json
 import logging
 
 from comfy_api.latest import io
@@ -95,6 +96,8 @@ TEXT_TASK = "T2VA"
 FRAME_SLOTS = ("first_frame", "last_frame")
 
 REFERENCE_SLOTS = FRAME_SLOTS + ("reference_video", "reference_audio")
+
+SOUND_ROW = "reference_video"
 
 KIND_OF_SLOT = {
     "first_frame": "image",
@@ -169,7 +172,9 @@ SWITCH_TOOLTIP = (
     "Which frame rows are switched off, as JSON, written by the checkboxes on the input rows. "
     "It is kept as a widget so the state travels with the workflow and through the API; the "
     "interface hides it. A row missing from the map is on. A switched-off frame counts as "
-    "unplugged, which is how you park a picture without dragging the wire off."
+    "unplugged, which is how you park a picture without dragging the wire off. Its 'sound' "
+    "key lists the rows whose own sound is a reference as well -- reference_video's second "
+    "box."
 )
 
 MODEL_27B_TOOLTIP = (
@@ -201,7 +206,11 @@ QUANT_8B_TOOLTIP = (
 REFERENCE_VIDEO_TOOLTIP = (
     "A clip the target video reuses, for Ref2VA on the Omni tab. Sampled into frames and shown "
     "to the model as <Video 1>. Read by nothing else: the 27B and 8B adapters were never "
-    "trained on a clip, and the four frame tasks take pictures alone."
+    "trained on a clip, and the four frame tasks take pictures alone.\n\n"
+    "The second box on this row, the one with the speaker, makes the clip's own sound a "
+    "reference too. It becomes <Audio 1> and reference_audio <Audio 2>, which is how "
+    "MiniMaxH3ReferenceToVideo numbers a clip's sound against a standalone one, and the "
+    "'references' output carries it to 'Reference Slots' for that node."
 )
 
 REFERENCE_AUDIO_TOOLTIP = (
@@ -271,7 +280,22 @@ def first_base(chosen: str, offered: list[str]) -> str:
     return offered[0]
 
 
-def omni_references(task: str, connected: dict[str, object]) -> list:
+def clip_sound_on(switches: str) -> bool:
+    """Whether the reference_video row's sound box is ticked.
+
+    It shares the rows' checkbox map, under a key of its own -- ``sound``, a
+    list of rows -- because there a missing row means on, and a clip's sound
+    has to mean off until someone ticks it.
+    """
+    try:
+        parsed = json.loads(switches or "{}")
+    except (TypeError, ValueError):
+        return False
+    heard = parsed.get("sound") if isinstance(parsed, dict) else None
+    return isinstance(heard, list) and SOUND_ROW in heard
+
+
+def omni_references(task: str, connected: dict[str, object], sound: bool = False) -> list:
     """The connected sockets as the reference list the Omni adapter takes.
 
     Two rules, because the tasks mean two different things by a reference.
@@ -291,7 +315,9 @@ def omni_references(task: str, connected: dict[str, object]) -> list:
 
     if wanted == writer_omni.REF_TASK:
         return [
-            writer_omni.Reference(name, KIND_OF_SLOT[name], value)
+            writer_omni.Reference(
+                name, KIND_OF_SLOT[name], value, sound and name == SOUND_ROW
+            )
             for name, value in connected.items()
         ]
 
@@ -310,12 +336,15 @@ def omni_references(task: str, connected: dict[str, object]) -> list:
     ]
 
 
-def handed_on_references(lora: str, task: str, connected: dict[str, object]) -> dict:
+def handed_on_references(
+    lora: str, task: str, connected: dict[str, object], sound: bool = False
+) -> dict:
     """The references this tab and task number, as the 'references' output carries them.
 
     Only what the adapter is actually shown: a row the 27B never reads, or a
     clip on a frame task, has no label in the prompt, and handing it on would
-    give the generator an asset the text never mentions.
+    give the generator an asset the text never mentions. The clip's sound goes
+    with it when its box is ticked, which is the one place it is counted.
     """
     if task == TEXT_TASK or lora == LORA_27B:
         names: tuple = ()
@@ -324,7 +353,10 @@ def handed_on_references(lora: str, task: str, connected: dict[str, object]) -> 
     else:
         names = FRAMES_FOR_MODE.get(task, ())
     return slot_bundle(
-        (name, KIND_TAG[KIND_OF_SLOT[name]], connected[name])
+        (
+            name, KIND_TAG[KIND_OF_SLOT[name]], connected[name],
+            sound and task == REF_MODE and name == SOUND_ROW,
+        )
         for name in names
         if connected.get(name) is not None
     )
@@ -577,7 +609,8 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
             },
             frame_switches,
         )
-        handed_on = handed_on_references(lora, task, connected)
+        sound = clip_sound_on(frame_switches)
+        handed_on = handed_on_references(lora, task, connected, sound)
 
         if bypass:
             progress.finish("bypassed")
@@ -626,6 +659,17 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
                 f"it. Switch to the Omni tab, or pick one of {', '.join(BASE_MODES)}."
             )
 
+        turn = []
+        if lora == LORA_OMNI:
+            turn = writer_omni.with_sounds(
+                omni_references(task, connected, sound), task, progress.node_id
+            )
+        having = (
+            [reference.kind for reference in turn]
+            if lora == LORA_OMNI and task == REF_MODE
+            else [KIND_OF_SLOT.get(name) for name in connected]
+        )
+
         def write(extra: str = "") -> str:
             if lora == LORA_OMNI:
                 return writer_omni.rewrite_omni(
@@ -640,7 +684,8 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
                     keep_loaded=keep_model_loaded,
                     settings=settings,
                     progress=progress,
-                    references=omni_references(task, connected),
+                    references=turn,
+                    notices=not extra,
                 )
             if lora == LORA_8B:
                 return writer_8b.rewrite_8b(
@@ -678,7 +723,7 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
         text = _fix_once(
             text, progress, write, FIELDS_FOR_TASK[task],
             task=task, duration=duration,
-            having=[KIND_OF_SLOT.get(name) for name in connected],
+            having=having,
             fallback=BODY_FIELD[task], settings=settings,
         )
 
@@ -686,7 +731,7 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
         _report(
             progress, text, fields, FIELDS_FOR_TASK[task],
             task=task, duration=duration,
-            having=[KIND_OF_SLOT.get(name) for name in connected],
+            having=having,
             settings=settings,
         )
         outputs = (text,) + tuple(fields.get(name, "") for name in UNIVERSAL_FIELDS)

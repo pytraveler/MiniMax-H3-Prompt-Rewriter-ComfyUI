@@ -30,7 +30,8 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, replace
 
 from comfy_api.latest import io
 
@@ -38,6 +39,7 @@ from . import (
     aspect,
     checks,
     clip_caption,
+    discovery,
     guide_prompt,
     library,
     media,
@@ -75,7 +77,15 @@ from .nodes import (
 )
 from .multi_caption import _check_encoders
 from .progress import NodeProgress, announce, refuse
-from .references import SLOTS_OUTPUT_TOOLTIP, SLOTS_TYPE, slot_bundle
+from .prompt_template_omni import FRAME_RATE, effective_duration
+from .references import (
+    SLOTS_OUTPUT_TOOLTIP,
+    SLOTS_TYPE,
+    clip_sounds,
+    pipeline_notes,
+    slot_bundle,
+    turn_order,
+)
 
 log = logging.getLogger(__name__)
 
@@ -108,10 +118,11 @@ DESCRIPTION = (
 )
 
 LAYOUT_TOOLTIP = (
-    "The strip's state as JSON -- which squares are switched off, what order they are in, and "
-    "what each image is being used as. It is a widget so the arrangement travels with the "
-    "workflow and through the API; the interface draws it as squares instead. A slot missing "
-    "from it is on, in slot order, and used as a picture."
+    "The strip's state as JSON -- which squares are switched off, what order they are in, "
+    "what each image is being used as, and which clips have their own sound switched on as "
+    "well. It is a widget so the arrangement travels with the workflow and through the API; "
+    "the interface draws it as squares instead. A slot missing from it is on, in slot order, "
+    "and used as a picture, and a clip is silent."
 )
 
 REFERENCE_TOOLTIP = (
@@ -137,12 +148,17 @@ REFERENCES_OUTPUT_TOOLTIP = SLOTS_OUTPUT_TOOLTIP + (
 
 @dataclass(frozen=True)
 class Asset:
-    """One connected, switched-on reference, ready to be described."""
+    """One connected, switched-on reference, ready to be described.
+
+    ``sound`` is for a clip whose own sound is a reference as well, which the
+    strip's label band switches; it is never set on anything but a VIDEO.
+    """
 
     slot: str
     role: str
     kind: str
     value: object
+    sound: bool = False
 
 
 def kind_of(value) -> str:
@@ -164,6 +180,31 @@ def kind_of(value) -> str:
     return "video"
 
 
+def _layout_json(raw: str) -> dict:
+    """The strip's widget as a mapping, or an empty one for anything unreadable."""
+    try:
+        parsed = json.loads(raw or "{}")
+    except (TypeError, ValueError):
+        parsed = {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _layout_names(parsed: dict, key: str) -> list[str]:
+    found = parsed.get(key)
+    if not isinstance(found, list):
+        return []
+    return [name for name in found if isinstance(name, str)]
+
+
+def sounding(raw: str) -> set[str]:
+    """The clips whose own sound the strip has switched on as a reference.
+
+    Its own key in the widget, so a workflow saved before it existed reads as
+    every clip silent -- which is what those workflows were.
+    """
+    return set(_layout_names(_layout_json(raw), "sound"))
+
+
 def layout_of(raw: str) -> tuple[list[str], set[str], dict[str, str]]:
     """The strip's state: display order, switched-off slots, chosen image roles.
 
@@ -171,18 +212,10 @@ def layout_of(raw: str) -> tuple[list[str], set[str], dict[str, str]]:
     node treats a corrupted checkbox map: a broken widget should cost the layout,
     never the run.
     """
-    try:
-        parsed = json.loads(raw or "{}")
-    except (TypeError, ValueError):
-        parsed = {}
-    if not isinstance(parsed, dict):
-        parsed = {}
+    parsed = _layout_json(raw)
 
     def names(key: str) -> list[str]:
-        found = parsed.get(key)
-        if not isinstance(found, list):
-            return []
-        return [name for name in found if isinstance(name, str)]
+        return _layout_names(parsed, key)
 
     roles = parsed.get("roles")
     if not isinstance(roles, dict):
@@ -213,6 +246,7 @@ def arrange(supplied: dict | None, raw_layout: str) -> tuple[list[Asset], int]:
     """
     connected = {name: value for name, value in (supplied or {}).items() if value is not None}
     order, off, roles = layout_of(raw_layout)
+    heard = sounding(raw_layout)
 
     named = [name for name in order if name in connected]
     known = set(named)
@@ -226,7 +260,8 @@ def arrange(supplied: dict | None, raw_layout: str) -> tuple[list[Asset], int]:
             continue
         kind = kind_of(connected[name])
         role = FIXED_ROLE.get(kind) or roles.get(name, ROLE_PICTURE)
-        assets.append(Asset(name, role, kind, connected[name]))
+        sound = kind == "video" and name in heard
+        assets.append(Asset(name, role, kind, connected[name], sound))
     return assets, skipped
 
 
@@ -282,6 +317,71 @@ def refuse_mismatch(task: str, assets: list[Asset], node_id=None) -> None:
         f"Connect the missing image, switch its square back on, or click a badge to turn a "
         f"subject back into a picture.",
     )
+
+
+def refuse_deaf(sounds: dict, mmproj_path=None, clip=None, node_id=None) -> None:
+    """Stop before any weights move if a clip's sound is on and the captioner cannot hear.
+
+    The sound would otherwise reach the block as a label with nothing after it,
+    and the writer would be told a sound exists and not what it is. The fix is
+    named both ways, because either is right: a captioner that hears, or the
+    clip's sound switched back off.
+    """
+    if not sounds:
+        return
+    if clip is not None:
+        if clip_caption.capabilities(clip)["audio"]:
+            return
+        deaf = "the model on 'clip' has no audio path"
+    else:
+        if discovery.gguf_header(mmproj_path).get("audio"):
+            return
+        deaf = f"'{os.path.basename(mmproj_path)}' was built without an audio encoder"
+    listed = ", ".join(f"'{slot}'" for slot in sounds)
+    refuse(
+        node_id,
+        f"The sound of {listed} is switched on, and {deaf}, so nothing could describe it. "
+        f"Pick a captioner whose label lists 'audio', or click the clip's label band in "
+        f"the strip to switch its sound off.",
+    )
+
+
+def in_turn(assets: list[Asset], sounds: dict) -> list[tuple[Asset, Asset | None]]:
+    """The assets in the order they are described, a clip's sound in front of it.
+
+    Each step is ``(what is described, the clip it is the sound of)``, the
+    second None for everything but a clip's sound. The order is
+    ``references.turn_order``'s: it is what makes a clip's sound take the
+    ``<Audio N>`` the generator gives it.
+    """
+    steps: list[tuple[Asset, Asset | None]] = []
+    for index, is_sound in turn_order((asset.role, asset.slot in sounds) for asset in assets):
+        asset = assets[index]
+        if is_sound:
+            sound = Asset(f"{asset.slot} (sound)", ROLE_AUDIO, "audio", sounds[asset.slot])
+            steps.append((sound, asset))
+        else:
+            steps.append((asset, None))
+    return steps
+
+
+def within(asset: Asset, frames: int) -> Asset:
+    """A frame batch read as a clip, cut to the frames the generator keeps of it.
+
+    MiniMaxH3ReferenceToVideo takes a reference clip's frames as they come and
+    drops every one past the length of the video it makes, and LightX2V's runner
+    does the same. A description of the rest describes nothing H3 is shown. A
+    VIDEO is cut where it is decoded, by ``max_seconds``; this is the same cut
+    for a batch, which has no clock and is counted in frames.
+
+    ``frames`` of 0 leaves everything as it came.
+    """
+    if frames <= 0 or asset.role != ROLE_VIDEO or asset.kind != "image":
+        return asset
+    shape = getattr(asset.value, "shape", None)
+    if shape is None or len(shape) != 4 or int(shape[0]) <= frames:
+        return asset
+    return replace(asset, value=asset.value[:frames])
 
 
 def _clip_note(asset: Asset, max_frames: int) -> str:
@@ -568,7 +668,12 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         assets, skipped = arrange(references, reference_layout)
         previews.announce(cls.hidden.unique_id, (references or {}).items())
         handed_on = slot_bundle(
-            () if task == TEXT_TASK else ((item.slot, item.role, item.value) for item in assets)
+            ()
+            if task == TEXT_TASK
+            else (
+                (item.slot, item.role, item.value, item.sound and task == REF_TASK)
+                for item in assets
+            )
         )
 
         if bypass:
@@ -619,11 +724,26 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
             assets = []
         else:
             refuse_mismatch(task, assets, cls.hidden.unique_id)
+            notes = pipeline_notes(
+                task, ((asset.slot, asset.role, asset.value) for asset in assets)
+            )
+            if notes:
+                log.warning("[minimax_h3_rewriter.universal] %s", " ".join(notes))
+                progress.text("\n".join(notes), force=True)
+                announce(cls.hidden.unique_id, [("warn", note) for note in notes])
+
+        sounds = {}
+        if task == REF_TASK:
+            sounds, idle = clip_sounds(assets)
+            if idle:
+                log.warning("[minimax_h3_rewriter.universal] %s", idle)
+                announce(cls.hidden.unique_id, [("warn", idle)])
 
         captions: list[str] = []
         empty: list[str] = []
         if assets:
-            kinds = {asset.kind for asset in assets}
+            steps = in_turn(assets, sounds)
+            kinds = {step.kind for step, _clip in steps}
             model_path = mmproj_path = None
             if clip is None:
                 choice = _resolve_captioner_choice(caption_model)
@@ -634,17 +754,20 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                         choice.reference, choice.file, choice.mmproj, "Captioner",
                         settings, progress,
                     )
+                refuse_deaf(sounds, mmproj_path=mmproj_path, node_id=cls.hidden.unique_id)
                 _check_encoders(mmproj_path, kinds)
             else:
+                refuse_deaf(sounds, clip=clip, node_id=cls.hidden.unique_id)
                 clip_caption.check(clip, kinds)
 
             asked_for = slot_instructions(reference_instructions)
+            target_frames = effective_duration(duration)[0] if task == REF_TASK else 0
 
             with mtmd_engine.session(
                 model_path or "", mmproj_path or "",
-                assets=len(assets),
+                assets=len(steps),
                 attachments=mtmd_engine.busiest(
-                    (asset.kind for asset in assets), int(max_frames)
+                    (step.kind for step, _clip in steps), int(max_frames)
                 ),
                 gpu_layers=int(settings["gpu_layers"]),
                 n_ctx=int(context_size),
@@ -653,16 +776,18 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                 auto_download=settings["auto_download"],
                 progress=progress,
             ) as batch:
-                progress.set_total(len(assets))
-                for done, asset in enumerate(assets):
+                progress.set_total(len(steps))
+                for done, (asset, of_clip) in enumerate(steps):
+                    asset = within(asset, target_frames)
                     index = next_index(block, asset.role)
                     progress.update(
                         done,
-                        f"{asset.role} {index}: reading {asset.slot} ({done + 1} of {len(assets)})",
+                        f"{asset.role} {index}: reading {asset.slot} ({done + 1} of {len(steps)})",
                     )
 
                     asked = caption_question(
-                        asset.role, caption_length, asked_for.get(asset.slot)
+                        asset.role, caption_length,
+                        None if of_clip is not None else asked_for.get(asset.slot),
                     )
                     note = _clip_note(asset, max_frames)
                     if note:
@@ -683,6 +808,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                             seed=int(seed),
                             settings=settings,
                             progress=progress,
+                            max_seconds=target_frames / FRAME_RATE,
                         )
                     else:
                         caption = mtmd_engine.describe(
@@ -706,6 +832,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                             auto_download=settings["auto_download"],
                             progress=progress,
                             server=batch,
+                            max_seconds=target_frames / FRAME_RATE,
                         )
 
                     caption = " ".join(caption.split())
@@ -716,9 +843,12 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                             asset.slot,
                         )
                     captions.append(caption)
-                    block = f"{block}\n{asset.role} {index}: {caption}".strip()
+                    line = caption
+                    if of_clip is not None:
+                        line = f"(the sound of Video {next_index(block, ROLE_VIDEO)}) {caption}"
+                    block = f"{block}\n{asset.role} {index}: {line}".strip()
 
-            described = f"{len(assets)} described"
+            described = f"{len(steps)} described"
             if skipped:
                 described += f", {skipped} switched off"
             if empty:

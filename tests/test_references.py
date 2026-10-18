@@ -478,3 +478,158 @@ def test_something_that_is_not_a_bundle_hands_on_nothing(value):
     slots, _summary, warning = references.fan_out(value, True, clip)
     assert all(item is None for values in slots.values() for item in values)
     assert warning == "" and asked == []
+
+
+class Wide:
+    """A VIDEO whose frame is as wide as a three-screen strip, past 4:1."""
+
+    def get_dimensions(self):
+        return 5760, 1080
+
+
+class Framed:
+    """An IMAGE of a given size, read off its shape."""
+
+    def __init__(self, width, height):
+        self.shape = (1, height, width, 3)
+
+
+def test_sounds_alone_are_said_once():
+    notes = references.pipeline_notes("Ref2VA", [("ref_0", "Audio", sound())])
+    assert len(notes) == 1
+    assert "sounds alone" in notes[0]
+
+
+def test_a_subject_beside_a_sound_says_nothing():
+    entries = [("ref_0", "Subject", Framed(64, 64)), ("ref_1", "Audio", sound())]
+    assert references.pipeline_notes("Ref2AV", entries) == []
+
+
+def test_a_reference_past_four_to_one_is_named_with_its_size():
+    entries = [("ref_0", "Picture", Framed(64, 64)), ("ref_1", "Video", Wide())]
+    notes = references.pipeline_notes("Ref2VA", entries)
+    assert notes == [notes[0]]
+    assert "'ref_1' (5760x1080) is outside 1:4 to 4:1" in notes[0]
+    assert "Crop it" in notes[0]
+
+
+def test_two_out_of_shape_are_named_together():
+    entries = [("a", "Picture", Framed(100, 500)), ("b", "Subject", Framed(900, 200))]
+    notes = references.pipeline_notes("Ref2VA", entries)
+    assert "'a' (100x500), 'b' (900x200) are outside" in notes[0]
+    assert "Crop them" in notes[0]
+
+
+def test_the_frame_tasks_are_not_this_rules_business():
+    entries = [("first_frame", "Picture", Framed(5000, 1000))]
+    assert references.pipeline_notes("I2VA", entries) == []
+
+
+def test_a_reference_set_inside_the_rules_says_nothing():
+    entries = [("ref_0", "Picture", Framed(1920, 1080)), ("ref_1", "Audio", sound())]
+    assert references.pipeline_notes("Ref2VA", entries) == []
+
+
+def test_nothing_moves_when_no_clip_has_its_sound_on():
+    entries = [("Audio", False), ("Video", False), ("Picture", False)]
+    assert references.turn_order(entries) == [(0, False), (1, False), (2, False)]
+
+
+def test_a_clips_sound_goes_in_front_of_it():
+    """<Audio k>: and then <Video m>:, the order the generator writes them in."""
+    entries = [("Picture", False), ("Video", True)]
+    assert references.turn_order(entries) == [(0, False), (1, True), (1, False)]
+
+
+def test_a_standalone_sound_ahead_of_a_sounding_clip_moves_after_it():
+    entries = [("Audio", False), ("Video", True), ("Picture", False)]
+    assert references.turn_order(entries) == [(1, True), (1, False), (0, False), (2, False)]
+
+
+def test_sounds_wait_for_the_last_sounding_clip_and_keep_their_order():
+    entries = [("Audio", False), ("Video", True), ("Audio", False), ("Video", True), ("Audio", False)]
+    assert references.turn_order(entries) == [
+        (1, True), (1, False), (3, True), (3, False), (0, False), (2, False), (4, False),
+    ]
+
+
+def test_counted_in_turn_the_clip_sounds_take_the_first_numbers():
+    """What the writer numbers, read in turn order, is what the generator numbers."""
+    entries = [("Audio", False), ("Video", False), ("Video", True), ("Audio", False), ("Video", True)]
+    sounds = []
+    for index, is_sound in references.turn_order(entries):
+        if is_sound:
+            sounds.append(f"clip {index}")
+        elif entries[index][0] == "Audio":
+            sounds.append(f"sound {index}")
+    assert sounds == ["clip 2", "clip 4", "sound 0", "sound 3"]
+
+
+def test_the_bundle_says_which_clips_sound_was_counted():
+    batch = Batch(24)
+    bundle = references.slot_bundle(
+        [("ref_0", "Video", Clip(), True), ("ref_1", "Video", batch), ("ref_2", "Audio", sound(), True)]
+    )
+    assert bundle["video_sounds"] == [True, False]
+
+
+def test_a_counted_clip_sound_goes_on_its_socket_without_a_word():
+    clip, asked = decoder()
+    slots, summary, warning = references.fan_out(
+        references.slot_bundle(
+            [("ref_0", "Audio", sound()), ("ref_1", "Video", Clip(), True)]
+        ),
+        False, clip,
+    )
+    assert asked[0][1] is True
+    assert slots["video_audios"][0] is not None
+    assert "1 clip sound(s)" in summary
+    assert warning == ""
+
+
+def test_soundtracks_on_says_only_the_clips_the_writer_left_silent():
+    clip, _asked = decoder()
+    slots, _summary, warning = references.fan_out(
+        references.slot_bundle(
+            [("ref_0", "Video", Clip(), True), ("ref_1", "Video", Clip())]
+        ),
+        True, clip,
+    )
+    assert slots["video_audios"][0] is not None and slots["video_audios"][1] is not None
+    assert "1 clip sound(s) are on video_audio because 'soundtracks' is on" in warning
+    assert "1 behind" in warning
+
+
+def test_a_counted_clip_with_no_sound_track_hands_on_none():
+    clip, _asked = decoder(with_sound=False)
+    slots, _summary, warning = references.fan_out(
+        references.slot_bundle([("ref_0", "Video", Clip(), True)]), False, clip
+    )
+    assert slots["video_audios"] == [None, None, None]
+    assert warning == ""
+
+
+class Item:
+    def __init__(self, slot, sound, value=None):
+        self.slot, self.sound, self.value = slot, sound, value
+
+
+def test_only_the_clips_with_their_sound_on_are_listened_to(monkeypatch):
+    asked = []
+
+    def soundtrack(video, workspace, max_seconds=15.0):
+        asked.append(video)
+        return None if video == "silent" else {"waveform": video, "sample_rate": 32000}
+
+    monkeypatch.setattr(references.media, "clip_soundtrack", soundtrack)
+    sounds, note = references.clip_sounds(
+        [Item("ref_0", True, "loud"), Item("ref_1", False, "other"), Item("ref_2", True, "silent")]
+    )
+    assert asked == ["loud", "silent"]
+    assert list(sounds) == ["ref_0"]
+    assert "'ref_2' has no sound track" in note
+
+
+def test_no_sound_switched_on_reads_nothing(monkeypatch):
+    monkeypatch.setattr(references.media, "clip_soundtrack", lambda *a, **k: 1 / 0)
+    assert references.clip_sounds([Item("ref_0", False)]) == ({}, "")

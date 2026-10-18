@@ -24,7 +24,6 @@ is required to emit verbatim.
 
 from __future__ import annotations
 
-import math
 from decimal import ROUND_HALF_UP, Decimal
 
 TASK_ALIASES = {
@@ -292,9 +291,16 @@ def effective_duration(seconds: float) -> tuple[int, float]:
     the 17n+5 grid at or past 240. The model is told the second number and
     repeats it to two decimal places in the alignment line, so rounding it back
     to a whole second here would make that line disagree with the video.
+
+    The length becomes a whole number of frames before it moves to the grid,
+    which is the order LightX2V's runner works in. The order matters where a
+    length lands a fraction of a frame past a grid point: 6.6 seconds is 158.4
+    frames, and 158 is on the grid. Aligning the fraction instead went a whole
+    step further, to 175 frames and 7.29 seconds -- and 15.1 seconds to 379
+    frames, past the 362 that H3 generates at most.
     """
-    frames = math.ceil((FRAME_RATE * float(seconds) - FRAME_BASE) / FRAME_STEP)
-    frames = frames * FRAME_STEP + FRAME_BASE
+    frames = max(1, round(FRAME_RATE * float(seconds)))
+    frames += (FRAME_BASE - frames) % FRAME_STEP
     return frames, frames / FRAME_RATE
 
 

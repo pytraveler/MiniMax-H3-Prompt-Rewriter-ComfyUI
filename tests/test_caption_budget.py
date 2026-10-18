@@ -99,13 +99,25 @@ def test_eight_full_hd_frames_now_fit_an_8k_context():
 def test_the_clip_is_written_at_its_share(monkeypatch):
     seen = {}
 
-    def frames(video, workspace, max_frames, max_pixels=0):
+    def frames(video, workspace, max_frames, max_pixels=0, max_seconds=0.0):
         seen["max_pixels"] = max_pixels
         return ["frame.png"] * max_frames, 200, 8.0
 
     monkeypatch.setattr(media, "video_frames", frames)
     mtmd_engine.attachments_from(None, video=object(), max_frames=8, room=4000)
     assert seen["max_pixels"] == 500 * GRID
+
+
+def test_the_clip_stops_at_the_length_it_was_given(monkeypatch):
+    seen = {}
+
+    def frames(video, workspace, max_frames, max_pixels=0, max_seconds=0.0):
+        seen["max_seconds"] = max_seconds
+        return ["frame.png"] * max_frames, 200, 8.0
+
+    monkeypatch.setattr(media, "video_frames", frames)
+    mtmd_engine.attachments_from(None, video=object(), max_frames=8, max_seconds=10.125)
+    assert seen["max_seconds"] == 10.125
 
 
 def test_a_sound_is_paid_for_before_the_pictures_share_the_rest(monkeypatch):

@@ -11,6 +11,8 @@ import pathlib
 import sys
 import types
 
+import pytest
+
 _PKG = "minimax_h3_rewriter"
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -486,3 +488,66 @@ def test_labels_carried_in_on_previous_count_once_each():
 def test_no_block_means_nothing_was_shown():
     assert checks.block_kinds("") == []
     assert checks.block_kinds(None) == []
+
+
+def test_sounds_alone_are_an_audio_only_set():
+    assert checks.audio_only("Ref2VA", {"Audio": 2})
+    assert checks.audio_only("ref2av", {"Audio": 1, "Picture": 0})
+
+
+def test_anything_to_see_makes_it_not_audio_only():
+    assert not checks.audio_only("Ref2VA", {"Audio": 1, "Picture": 1})
+    assert not checks.audio_only("Ref2VA", {"Audio": 1, "Video": 1})
+
+
+def test_a_subject_is_something_to_see():
+    """The generator receives a subject as one more picture."""
+    assert not checks.audio_only("Ref2VA", {"Audio": 1, "Subject": 1})
+
+
+def test_no_sound_at_all_is_not_audio_only():
+    assert not checks.audio_only("Ref2VA", {})
+    assert not checks.audio_only("Ref2VA", {"Picture": 2})
+
+
+def test_audio_only_is_a_reference_rule():
+    assert not checks.audio_only("T2VA", {"Audio": 1})
+    assert not checks.audio_only("nonsense", {"Audio": 1})
+
+
+@pytest.mark.parametrize("width, height", [(4000, 1000), (1000, 4000), (1920, 1080), (64, 64)])
+def test_a_frame_inside_one_to_four_is_in_shape(width, height):
+    assert not checks.out_of_shape(width, height)
+
+
+@pytest.mark.parametrize("width, height", [(4001, 1000), (1000, 4001), (5760, 1080)])
+def test_a_frame_past_one_to_four_is_out_of_shape(width, height):
+    assert checks.out_of_shape(width, height)
+
+
+def test_a_size_that_is_not_one_is_not_out_of_shape():
+    assert not checks.out_of_shape(0, 100)
+    assert not checks.out_of_shape(100, 0)
+
+
+def ref_answer_citing(*labels):
+    sections = {name: "" for name in REF_FIELDS}
+    sections["subject_definitions"] = " ".join(f"{label}: a sound." for label in labels)
+    return "\n\n".join(f"{name}: {sections[name]}" for name in REF_FIELDS), sections
+
+
+def test_a_clips_sound_may_be_cited_past_the_three_sockets():
+    """Three standalone sounds and two clip sounds are five <Audio N>, every one real."""
+    text, sections = ref_answer_citing(*(f"<Audio {n}>" for n in range(1, 6)))
+    issues = checks.review(text, sections, REF_FIELDS, task="Ref2VA", having=["audio"] * 5)
+    assert [issue for issue in issues if issue.code == "tags"] == []
+
+
+def test_more_sounds_than_three_sockets_and_three_clips_is_still_too_many():
+    text, sections = ref_answer_citing("<Audio 7>")
+    issues = checks.review(text, sections, REF_FIELDS, task="Ref2VA", having=None)
+    assert any("only takes audio 1-6" in issue.message for issue in issues)
+
+
+def test_the_sockets_themselves_still_take_three_sounds():
+    assert checks.over_capacity("Ref2VA", {"Audio": 4}) == [("Audio", 4, 3)]

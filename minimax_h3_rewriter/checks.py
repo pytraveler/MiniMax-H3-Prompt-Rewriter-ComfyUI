@@ -72,8 +72,12 @@ CAPACITY = {
     "ref2va": {"Picture": 9, "Video": 3, "Audio": 3},
 }
 
+CITABLE = dict(CAPACITY, ref2va={"Picture": 9, "Video": 3, "Audio": 6})
+
 KIND_TAG = {"image": "Picture", "video": "Video", "audio": "Audio"}
 TAG_KIND = {word: kind for kind, word in KIND_TAG.items()}
+
+REFERENCE_ASPECT_LIMIT = 4
 
 ALIGNMENT_PHRASE = {
     "i2va": "fully referenced",
@@ -175,6 +179,37 @@ def over_capacity(task, counts: dict) -> list[tuple]:
         for word, count in sorted(counts.items())
         if word in capacity and count > capacity[word]
     ]
+
+
+def audio_only(task, counts: dict) -> bool:
+    """Is this a Ref2VA whose references are sounds and nothing else?
+
+    LightX2V's MiniMax-H3 runner refuses such a set outright -- "ref2av does
+    not allow audio-only references" -- while ComfyUI's MiniMaxH3ReferenceToVideo
+    does not check and runs it. So this is a question for a notice, not for a
+    refusal: the writer is not the one that decides what the generator takes.
+
+    ``counts`` is keyed by tag word, as for ``over_capacity``. Every word that
+    is not Audio is something to see -- a Subject among them, because the
+    generator receives a subject as one more picture.
+    """
+    if normalize(task) != "ref2va" or not counts.get("Audio"):
+        return False
+    return not any(count for word, count in counts.items() if word != "Audio")
+
+
+def out_of_shape(width, height) -> bool:
+    """Is a reference frame narrower or wider than the 1:4 to 4:1 H3 takes?
+
+    LightX2V refuses a reference picture or clip past either end; ComfyUI's
+    node scales it without checking. Integer comparison, the same as the
+    runner's own, so a frame exactly at 4:1 is still inside.
+    """
+    width, height = int(width), int(height)
+    if width <= 0 or height <= 0:
+        return False
+    limit = REFERENCE_ASPECT_LIMIT
+    return width > limit * height or height > limit * width
 
 
 def normalize(task) -> str:
@@ -466,7 +501,7 @@ def _dialogue(body) -> list:
 
 def _tags(text, wanted, having) -> list:
     """Reference tags against what the task takes and what the node was shown."""
-    capacity = CAPACITY.get(wanted)
+    capacity = CITABLE.get(wanted)
     cited = {}
     for match in TAG.finditer(text):
         word, number = match.group(1), int(match.group(2))

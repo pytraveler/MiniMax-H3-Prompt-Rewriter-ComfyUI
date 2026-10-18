@@ -37,6 +37,8 @@ const STYLE = `
 .mmx-chip-role { flex: 0 0 ${CHIP_ROLE_H}px; font-size: 11px;
     line-height: ${CHIP_ROLE_H}px; text-align: center; letter-spacing: 0.03em;
     color: #fff; background: rgba(0, 0, 0, 0.3); }
+.mmx-chip-role.mmx-heard { background: #8A54C8; font-weight: 600; }
+.mmx-chip-role.mmx-heard.mmx-idle { background: rgba(138, 84, 200, 0.45); font-weight: 400; }
 .mmx-chip-media { flex: 1 1 auto; position: relative; overflow: hidden; }
 .mmx-chip-media > img, .mmx-chip-media > video { position: absolute; inset: 0;
     display: block; width: 100%; height: 100%; object-fit: cover;
@@ -294,6 +296,14 @@ export function chipElement(entry, plain = false, preview = null) {
     const role = document.createElement("span");
     role.className = "mmx-chip-role";
     role.textContent = SHORT[entry.role];
+    if (entry.sound) {
+        role.classList.add("mmx-heard");
+        if (entry.soundNumber) role.textContent = `${SHORT[entry.role]}+a${entry.soundNumber}`;
+        else {
+            role.classList.add("mmx-idle");
+            role.textContent = `${SHORT[entry.role]}+a`;
+        }
+    }
     chip.appendChild(role);
 
     const media = document.createElement("div");
@@ -311,6 +321,23 @@ export function chipElement(entry, plain = false, preview = null) {
     chip.appendChild(slot);
 
     return { chip, role, about };
+}
+
+export function numberEntries(entries, sounding) {
+    let heard = 0;
+    for (const entry of entries) {
+        entry.soundNumber = sounding && entry.on && entry.sound ? ++heard : null;
+    }
+    const counts = {};
+    for (const entry of entries) {
+        if (!entry.on) {
+            entry.number = null;
+            continue;
+        }
+        counts[entry.role] = (counts[entry.role] || 0) + 1;
+        entry.number = counts[entry.role] + (entry.role === "Audio" ? heard : 0);
+    }
+    return entries;
 }
 
 export function stripHeight(node, count, hintHeight, hintGap, margin, chipHeight = CHIP_H) {

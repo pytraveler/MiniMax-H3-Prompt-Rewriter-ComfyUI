@@ -85,7 +85,7 @@ def check(clip, kinds: set[str]) -> None:
         )
 
 
-def _frames(image=None, video=None, max_frames=media.DEFAULT_MAX_FRAMES):
+def _frames(image=None, video=None, max_frames=media.DEFAULT_MAX_FRAMES, max_seconds=0.0):
     """The frames to show the model, as one IMAGE batch, or ``None``.
 
     A VIDEO is decoded here; an IMAGE batch is thinned to ``max_frames`` the same
@@ -93,10 +93,15 @@ def _frames(image=None, video=None, max_frames=media.DEFAULT_MAX_FRAMES):
     ``video=``: Qwen3-VL's tokenizer has no video argument and would silently
     ignore the frames, and Gemma-4's video path re-subsamples to 1 fps, which
     would quietly overrule the very knob the node offers.
+
+    ``max_seconds`` stops a VIDEO at the length of the video it is a reference
+    for, the same as on the GGUF route; 0 reads it to its end.
     """
     if video is not None:
         with media.Workspace() as workspace:
-            batch, _total, _seconds = media.video_tensor(video, workspace, max_frames)
+            batch, _total, _seconds = media.video_tensor(
+                video, workspace, max_frames, max_seconds
+            )
         return batch
     if image is None:
         return None
@@ -117,6 +122,7 @@ def describe(
     settings: dict | None = None,
     greedy: bool = True,
     progress=None,
+    max_seconds: float = 0.0,
 ) -> str:
     """One asset, one caption, through the encoder already loaded on ``clip``.
 
@@ -133,7 +139,7 @@ def describe(
         kinds.add("audio")
     check(clip, kinds)
 
-    frames = _frames(image, video, max_frames)
+    frames = _frames(image, video, max_frames, max_seconds)
     tokens = clip.tokenize(
         instruction,
         image=frames,

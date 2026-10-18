@@ -10,6 +10,10 @@ const BORDER = "#6A6A6A";
 const TICK = "#FFFFFF";
 const DIMMED = 0.35;
 
+const SOUND_FILL = "#8A54C8";
+const SOUND_GAP = 6;
+const SOUND_OFF = "#9A9A9A";
+
 /** The bare slot name, or null if this input takes no checkbox. */
 function slotName(input, prefixes) {
     const name = input?.name;
@@ -75,6 +79,49 @@ function drawBox(ctx, cx, cy, checked, connected) {
     ctx.restore();
 }
 
+function drawSoundBox(ctx, cx, cy, checked, connected) {
+    const x = cx - BOX / 2;
+    const y = cy - BOX / 2;
+    const r = 3;
+
+    ctx.save();
+    ctx.globalAlpha = connected ? 1.0 : DIMMED;
+
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + BOX, y, x + BOX, y + BOX, r);
+    ctx.arcTo(x + BOX, y + BOX, x, y + BOX, r);
+    ctx.arcTo(x, y + BOX, x, y, r);
+    ctx.arcTo(x, y, x + BOX, y, r);
+    ctx.closePath();
+    ctx.fillStyle = checked ? SOUND_FILL : OFF_FILL;
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = BORDER;
+    ctx.stroke();
+
+    const ink = checked ? TICK : SOUND_OFF;
+    ctx.fillStyle = ink;
+    ctx.beginPath();
+    ctx.moveTo(x + BOX * 0.18, y + BOX * 0.38);
+    ctx.lineTo(x + BOX * 0.34, y + BOX * 0.38);
+    ctx.lineTo(x + BOX * 0.54, y + BOX * 0.2);
+    ctx.lineTo(x + BOX * 0.54, y + BOX * 0.8);
+    ctx.lineTo(x + BOX * 0.34, y + BOX * 0.62);
+    ctx.lineTo(x + BOX * 0.18, y + BOX * 0.62);
+    ctx.closePath();
+    ctx.fill();
+    if (checked) {
+        ctx.strokeStyle = ink;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(x + BOX * 0.56, y + BOX * 0.5, BOX * 0.22, -Math.PI / 3.2, Math.PI / 3.2);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
 function rowCentre(node, index, scratch) {
     node.getConnectionPos(true, index, scratch);
     return scratch[1] - node.pos[1];
@@ -94,7 +141,9 @@ function columnX(node, ctx, prefixes) {
 }
 
 export function addSlotSwitches(nodeType, spec) {
-    const { prefixes, enabled, toggle } = spec;
+    const { prefixes, enabled, toggle, sound } = spec;
+    const soundX = (cx) => cx + BOX + SOUND_GAP;
+    const hasSound = (name) => !!sound && sound.names.includes(name);
 
     const onDrawForeground = nodeType.prototype.onDrawForeground;
     nodeType.prototype.onDrawForeground = function (ctx) {
@@ -105,7 +154,11 @@ export function addSlotSwitches(nodeType, spec) {
         const scratch = new Float32Array(2);
         for (const index of slotIndices(this, prefixes)) {
             const name = slotName(this.inputs[index], prefixes);
-            drawBox(ctx, cx, rowCentre(this, index, scratch), enabled(this, name), isConnected(this, index));
+            const cy = rowCentre(this, index, scratch);
+            drawBox(ctx, cx, cy, enabled(this, name), isConnected(this, index));
+            if (hasSound(name)) {
+                drawSoundBox(ctx, soundX(cx), cy, sound.enabled(this, name), isConnected(this, index));
+            }
         }
     };
 
@@ -116,9 +169,16 @@ export function addSlotSwitches(nodeType, spec) {
             const reach = BOX / 2 + 3;
             const scratch = new Float32Array(2);
             for (const index of slotIndices(this, prefixes)) {
+                const name = slotName(this.inputs[index], prefixes);
                 const cy = rowCentre(this, index, scratch);
-                if (Math.abs(pos[0] - cx) <= reach && Math.abs(pos[1] - cy) <= reach) {
-                    toggle(this, slotName(this.inputs[index], prefixes));
+                if (Math.abs(pos[1] - cy) > reach) continue;
+                if (Math.abs(pos[0] - cx) <= reach) {
+                    toggle(this, name);
+                    this.setDirtyCanvas(true, true);
+                    return true;
+                }
+                if (hasSound(name) && Math.abs(pos[0] - soundX(cx)) <= reach) {
+                    sound.toggle(this, name);
                     this.setDirtyCanvas(true, true);
                     return true;
                 }

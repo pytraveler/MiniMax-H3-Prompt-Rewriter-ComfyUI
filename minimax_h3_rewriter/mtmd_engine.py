@@ -316,6 +316,7 @@ def attachments_from(
     video=None,
     max_frames: int = media.DEFAULT_MAX_FRAMES,
     room: int | None = None,
+    max_seconds: float = 0.0,
 ) -> tuple[list[tuple[str, str]], list[str], str]:
     """Write the connected inputs to disk. Returns ``(attachments, notes, note)``.
 
@@ -323,6 +324,9 @@ def attachments_from(
     pictures are shrunk to share it. A sound is not shrunk, so it is paid for
     first. None leaves a picture as it came and holds a clip's frames to
     ``FRAME_MAX_TOKENS`` only.
+
+    ``max_seconds`` stops a clip's frames at the length of the video it is a
+    reference for -- see ``media.clip_window``; 0 reads it to its end.
     """
     attachments: list[tuple[str, str]] = []
     notes: list[str] = []
@@ -335,7 +339,8 @@ def attachments_from(
 
     if video is not None:
         paths, total, seconds = media.video_frames(
-            video, workspace, max_frames, pixels_each(room, pictures, FRAME_MAX_TOKENS)
+            video, workspace, max_frames, pixels_each(room, pictures, FRAME_MAX_TOKENS),
+            max_seconds=max_seconds,
         )
         attachments.extend(("image", path) for path in paths)
         notes.append(f"{len(paths)} of {total} video frames" if total > len(paths)
@@ -466,6 +471,7 @@ def describe(
     system_prompt: str | None = None,
     progress: NodeProgress | None = None,
     server=None,
+    max_seconds: float = 0.0,
 ) -> str:
     """Fetch the runtime if needed, describe the attachments once, and return the text.
 
@@ -487,6 +493,9 @@ def describe(
     same seed, the same instruction and the same system turn -- see
     ``DEFAULT_SYSTEM``, which is the one of those four that had to be stated
     rather than assumed -- so which one ran is not visible in the answer.
+
+    ``max_seconds`` is for a clip that is a reference for a video of that
+    length: its frames stop there, as the generator's do.
     """
     device = devices.validate(device)
     if system_prompt is None:
@@ -512,7 +521,7 @@ def describe(
             )
             room = media_room(n_ctx, model_path, instruction, system_prompt, max_new_tokens)
             attachments, notes, note = attachments_from(
-                workspace, image, audio, video, max_frames, room
+                workspace, image, audio, video, max_frames, room, max_seconds
             )
         else:
             if server is None:

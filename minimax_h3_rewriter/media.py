@@ -294,11 +294,16 @@ def _by_seeking(container, stream, wanted: list[int], total: int):
             break
 
 
-def _save(frames, workspace: Workspace, max_pixels: int = 0) -> list[str]:
-    """Write frames out as PNGs one at a time, so no batch is ever held in memory."""
+def _save(frames, workspace: Workspace, max_pixels: int = 0, prefix: str = "frame") -> list[str]:
+    """Write frames out as PNGs one at a time, so no batch is ever held in memory.
+
+    ``prefix`` keeps two clips sampled into one workspace apart. Without it the
+    second clip's frames are written over the first's, and a turn that names
+    both shows the model the second one twice.
+    """
     paths = []
     for position, frame in enumerate(frames):
-        path = workspace.file(f"frame_{position:03d}.png")
+        path = workspace.file(f"{prefix}_{position:03d}.png")
         fit_pixels(frame.to_image(), max_pixels).save(path, format="PNG")
         paths.append(path)
     return paths
@@ -327,7 +332,44 @@ def _empty(result) -> bool:
     return result is None or len(result) == 0
 
 
-def _collect(video, workspace: Workspace, max_frames: int, sink, max_pixels: int = 0):
+def clip_window(
+    total: int,
+    rate: float,
+    start: float = 0.0,
+    trimmed: float = 0.0,
+    max_seconds: float = 0.0,
+) -> tuple[int, int]:
+    """Which frames of a clip are read, as ``(first, count)``.
+
+    Two things narrow a clip before it is sampled. A trimmed VIDEO is read over
+    its trim, which is how ``reference_clip`` hands it to the generator. And the
+    generator keeps no more of a reference clip than the video it is making --
+    MiniMaxH3ReferenceToVideo cuts the frames at the target's length, and
+    LightX2V's runner does the same -- so ``max_seconds``, the target's length,
+    is where a description should stop as well. Past it are frames H3 never
+    sees, and a description of them is a promise the video will not keep.
+
+    A clip whose frame count or rate is unknown is read as it always was: from
+    the start, over whatever there is.
+    """
+    if total <= 0 or rate <= 0:
+        return 0, max(int(total), 0)
+    first = min(total - 1, max(0, int(round(start * rate))))
+    count = total - first
+    for limit in (trimmed, max_seconds):
+        if limit > 0:
+            count = min(count, max(1, int(round(limit * rate))))
+    return first, count
+
+
+def _collect(
+    video,
+    workspace: Workspace,
+    max_frames: int,
+    sink,
+    max_pixels: int = 0,
+    max_seconds: float = 0.0,
+):
     """Decode the sampled frames of a VIDEO and hand them to ``sink``.
 
     Both routes share this, so a clip is described from exactly the same frames
@@ -335,19 +377,30 @@ def _collect(video, workspace: Workspace, max_frames: int, sink, max_pixels: int
     The sink is given an iterator rather than a list, which is what lets the PNG
     path avoid holding a whole batch at once.
 
-    Returns ``(whatever the sink returned, total frames, seconds)``.
+    The frames are spread over :func:`clip_window`'s stretch rather than the
+    whole file: a trim is honoured always, and ``max_seconds`` when it is given.
+
+    Returns ``(whatever the sink returned, frames in that stretch, its seconds)``.
     """
     import av
 
     source = _video_source(video, workspace)
     result = None
+    start, trimmed = trim_window(video)
 
     with av.open(source) as container:
         stream = container.streams.video[0]
         stream.thread_type = "AUTO"
         total = _frame_count(stream)
         seconds = float(container.duration / av.time_base) if container.duration else 0.0
-        wanted = frame_indices(total, max_frames) if total else list(range(max(max_frames, 1)))
+        rate = float(stream.average_rate or 0)
+        first, count = clip_window(total, rate, start, trimmed, max_seconds)
+        if total and (first or count < total):
+            seconds = count / rate
+        wanted = (
+            [first + index for index in frame_indices(count, max_frames)]
+            if total else list(range(max(max_frames, 1)))
+        )
 
         if total > SEEK_ABOVE_FRAMES and stream.duration:
             try:
@@ -364,7 +417,7 @@ def _collect(video, workspace: Workspace, max_frames: int, sink, max_pixels: int
         if _empty(result):
             result = sink(_in_order(container, stream, wanted), workspace, max_pixels)
 
-    return result, total, seconds
+    return result, count, seconds
 
 
 def video_frames(
@@ -372,6 +425,8 @@ def video_frames(
     workspace: Workspace,
     max_frames: int = DEFAULT_MAX_FRAMES,
     max_pixels: int = 0,
+    max_seconds: float = 0.0,
+    prefix: str = "frame",
 ) -> tuple[list[str], int, float]:
     """Sample a VIDEO input into PNGs. Returns ``(paths, total frames, seconds)``.
 
@@ -388,14 +443,29 @@ def video_frames(
     - ``--video`` takes every frame. Two seconds at 25 fps is 56 images through
       the vision tower; a thirty-second clip is 750. ``max_frames`` exists so
       the cost of describing a clip does not depend on how long it is.
+
+    ``max_seconds`` is the length of the video the clip is a reference for; see
+    :func:`clip_window`. 0 reads the clip to its end. ``prefix`` names the
+    files, for a caller sampling several clips into one workspace.
     """
-    paths, total, seconds = _collect(video, workspace, max_frames, _save, max_pixels)
+
+    def save(frames, workspace, max_pixels=0):
+        return _save(frames, workspace, max_pixels, prefix)
+
+    paths, total, seconds = _collect(
+        video, workspace, max_frames, save, max_pixels, max_seconds
+    )
     if _empty(paths):
         raise RuntimeError("no frames could be decoded from the VIDEO input")
     return paths, max(total, len(paths)), seconds
 
 
-def video_tensor(video, workspace: Workspace, max_frames: int = DEFAULT_MAX_FRAMES):
+def video_tensor(
+    video,
+    workspace: Workspace,
+    max_frames: int = DEFAULT_MAX_FRAMES,
+    max_seconds: float = 0.0,
+):
     """Sample a VIDEO input straight into an IMAGE batch. Returns ``(batch, total, seconds)``.
 
     The same frames :func:`video_frames` would have written out, kept in memory
@@ -404,7 +474,7 @@ def video_tensor(video, workspace: Workspace, max_frames: int = DEFAULT_MAX_FRAM
     are taken is shared, which is what makes a clip described through either
     route describable from the same evidence.
     """
-    batch, total, seconds = _collect(video, workspace, max_frames, _stack)
+    batch, total, seconds = _collect(video, workspace, max_frames, _stack, 0, max_seconds)
     if _empty(batch):
         raise RuntimeError("no frames could be decoded from the VIDEO input")
     return batch, max(total, len(batch)), seconds
@@ -503,6 +573,33 @@ def trim_window(video) -> tuple[float, float]:
     except Exception:
         log.debug("[minimax_h3_rewriter.media.trim_window] unreadable trim", exc_info=True)
         return 0.0, 0.0
+
+
+def frame_size(value) -> tuple[int, int] | None:
+    """``(width, height)`` of a picture, a frame batch or a VIDEO, or None if unknown.
+
+    An IMAGE says it in its shape. A VIDEO is asked through
+    ``get_dimensions``, which on a file reads the header and decodes nothing.
+    Anything that cannot answer is None rather than an error: the callers only
+    want the size to say something about it.
+    """
+    shape = getattr(value, "shape", None)
+    if shape is not None:
+        try:
+            if len(shape) >= 3:
+                return int(shape[-2]), int(shape[-3])
+        except TypeError:
+            return None
+        return None
+    dimensions = getattr(value, "get_dimensions", None)
+    if not callable(dimensions):
+        return None
+    try:
+        width, height = dimensions()
+        return int(width), int(height)
+    except Exception:
+        log.debug("[minimax_h3_rewriter.media.frame_size] unreadable size", exc_info=True)
+        return None
 
 
 def _soundtrack(source, start: float, seconds: float):
@@ -606,3 +703,24 @@ def reference_clip(
     seconds = len(batch) / float(fps)
     sound = _soundtrack(source, start, seconds) if soundtrack else None
     return torch.stack(batch), sound, seconds
+
+
+def clip_soundtrack(video, workspace: Workspace, max_seconds: float = REFERENCE_MAX_SECONDS):
+    """A clip's own sound as a ComfyUI AUDIO, or None when the clip has none.
+
+    The stretch :func:`reference_clip` hands the generator with it: from the
+    trim's start, for the trim or for ``max_seconds``, whichever ends first.
+    No frame is decoded for it, so a writer can describe the sound a clip will
+    carry, and know whether it carries one at all, before deciding what to
+    number.
+    """
+    start, duration = trim_window(video)
+    seconds = min(max_seconds, duration) if duration else max_seconds
+    try:
+        return _soundtrack(_video_source(video, workspace), start, seconds)
+    except Exception:
+        log.warning(
+            "[minimax_h3_rewriter.media.clip_soundtrack] the sound could not be read",
+            exc_info=True,
+        )
+        return None

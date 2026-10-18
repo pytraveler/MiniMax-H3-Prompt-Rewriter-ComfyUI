@@ -6,6 +6,69 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.30.0 - 2026-10-18
+
+### Added
+
+- **A clip's own sound can be a reference of its own.** Click a clip's label
+  band in the strip of the Universal Writer or the Prompt Rewriter Omni, or tick
+  the new speaker box on the Universal Rewriter's `reference_video` row. On
+  Ref2VA the clip's sound then takes an `<Audio N>` of its own, numbered ahead of
+  every standalone sound - the order MiniMaxH3ReferenceToVideo and LightX2V's
+  runner number them in - and the square reads `vid+a1`. The Universal Writer
+  has the sound described as an `Audio N` line just before the clip. The Omni
+  adapter hears it, handed over as a separate sound right before the clip, which
+  is the only way its upstream inference ever passes a clip's sound. A
+  standalone sound ahead of a sounding clip in the strip is presented after it,
+  so the numbers agree. `references` says which clips were counted, and
+  Reference Slots puts exactly those sounds on `video_audio_N`. A captioner that
+  cannot hear is refused before anything loads, and a clip with no sound track
+  is said on the node and left unnumbered.
+- **Notices for references LightX2V's runner refuses.** A Ref2VA set of sounds
+  alone, and a reference picture or clip narrower or wider than 1:4 to 4:1, are
+  both errors there. ComfyUI's MiniMaxH3ReferenceToVideo takes them without
+  checking, so the writers say so in a toast before they start rather than
+  refusing.
+
+### Changed
+
+- **Reference Slots follows the writer.** With `soundtracks` off, a clip's sound
+  goes across exactly when the writer counted it. On, every clip gets its sound
+  as before, and the warning about moved labels counts only the clips the
+  writer left silent.
+- **A reference clip is described over what the generator keeps of it.**
+  MiniMaxH3ReferenceToVideo keeps no more of a reference clip than the length of
+  the video it makes, and LightX2V's runner cuts it there too. On Ref2VA the
+  Omni rewriter and the Universal Writer's captioners now sample a clip's frames
+  from that stretch alone, not across the whole file, and a batch of frames used
+  as a clip is cut to the same count. Standalone sounds are still passed whole,
+  because ComfyUI's generator encodes the whole of one.
+- **The self-check lets a Ref2VA prompt cite up to `<Audio 6>`**, three standalone
+  sounds and three clip sounds. The sockets still take three standalone sounds.
+
+### Fixed
+
+- **The Omni rewriter's snapped duration agrees with LightX2V.** The length is
+  now rounded to a whole frame before it moves up to the 17n+5 grid, which is
+  the order LightX2V's runner works in. Aligning the fraction instead pushed
+  6.6 s to 7.29 s (175 frames where H3 makes 158), 7.3 s to 8.00 s, and 15.1 s
+  to 15.79 s, past the 362 frames H3 makes at most - and the alignment line
+  quoted those lengths. The duration widget's tooltip did the same arithmetic
+  and has the same fix.
+- **Two sounds or two clips on the Omni rewriter no longer show the model the
+  last one twice.** Every reference was written into one folder under one name
+  per kind - each sound as `audio.wav`, each clip's frames as `frame_000.png`
+  onwards - so the second overwrote the first before llama.cpp read them. Each
+  file is now named by its place in the turn.
+- **A trimmed VIDEO is described over its trim.** The captioners and the Omni
+  rewriter read a clip from the start of its file while Reference Slots handed
+  the generator the trimmed stretch, so the description and the clip could be
+  two different parts of one file. Previews and the library's thumbnails start
+  at the trim as well.
+- **The Universal Rewriter's Omni tab tooltip** said clips, sound and Ref2AV
+  were only on the Prompt Rewriter Omni node. The tab has had Ref2VA with its
+  clip and sound rows for a while.
+
 ## 0.29.0 - 2026-10-13
 
 ### Added

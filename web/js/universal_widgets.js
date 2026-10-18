@@ -6,6 +6,7 @@ import {
     chipElement,
     installStripStyle,
     instructionBand,
+    numberEntries,
     placeDragged,
     readInstructions,
     slotNumber,
@@ -48,7 +49,7 @@ const IMAGE_ROLES = ["Picture", "Subject", "Video"];
 const HINT_H = 12;
 const HINT_GAP = 3;
 const HINT_IMAGES =
-    "drag to reorder - click the label to change it - click below to switch off - 'instr' asks, right-click clears";
+    "drag to reorder - click the label to change it (a clip's: its sound) - click below to switch off - 'instr' asks, right-click clears";
 const HINT_PLAIN =
     "drag to reorder - click a square below its label to switch it off - 'instr' asks, right-click clears";
 
@@ -84,6 +85,7 @@ function readLayout(node) {
         order: names("order"),
         off: names("off"),
         roles: parsed.roles && typeof parsed.roles === "object" ? { ...parsed.roles } : {},
+        sound: names("sound"),
     };
 }
 
@@ -100,6 +102,11 @@ function writeLayout(node, layout) {
         if (IMAGE_ROLES.includes(role) && role !== IMAGE_ROLES[0]) roles[name] = role;
     }
     if (Object.keys(roles).length) kept.roles = roles;
+    const notClips = new Set(
+        slots(node).filter((s) => s.connected && s.kind !== "video").map((s) => s.name)
+    );
+    const sound = (layout.sound || []).filter((name) => !notClips.has(name));
+    if (sound.length) kept.sound = sound;
 
     const widget = widgetNamed(node, LAYOUT);
     if (widget) widget.value = JSON.stringify(kept);
@@ -124,8 +131,7 @@ function arranged(node) {
             .sort((a, b) => slotNumber(a) - slotNumber(b))
     );
 
-    const counts = {};
-    return names.map((name) => {
+    const entries = names.map((name) => {
         const slot = connected.get(name);
         let role = "Audio";
         if (slot.kind === "video") role = "Video";
@@ -133,9 +139,10 @@ function arranged(node) {
             role = IMAGE_ROLES.includes(layout.roles[name]) ? layout.roles[name] : IMAGE_ROLES[0];
         }
         const on = !layout.off.includes(name);
-        if (on) counts[role] = (counts[role] || 0) + 1;
-        return { name, kind: slot.kind, role, on, number: on ? counts[role] : null };
+        const sound = on && slot.kind === "video" && layout.sound.includes(name);
+        return { name, kind: slot.kind, role, on, sound };
     });
+    return numberEntries(entries, widgetNamed(node, TASK)?.value === REF_TASK);
 }
 
 function anyEnabled(node) {
@@ -198,6 +205,14 @@ function toggleSlot(node, name) {
     writeLayout(node, layout);
 }
 
+function toggleSound(node, name) {
+    const layout = readLayout(node);
+    const at = layout.sound.indexOf(name);
+    if (at >= 0) layout.sound.splice(at, 1);
+    else layout.sound.push(name);
+    writeLayout(node, layout);
+}
+
 function isSlotEnabled(node, name) {
     return !readLayout(node).off.includes(name);
 }
@@ -232,6 +247,7 @@ function beginGesture(node, chip, role, entry, event) {
 
         if (dragging) commitOrder(node, strip);
         else if (onLabel && entry.kind === "image") cycleRole(node, entry.name);
+        else if (onLabel && entry.kind === "video" && entry.on) toggleSound(node, entry.name);
         else toggleSlot(node, entry.name);
     };
 
@@ -246,13 +262,23 @@ function buildChip(node, entry) {
     );
     chip.appendChild(instructionBand(entry.name, entry.role, instructions(node)));
 
-    const relabel =
-        entry.kind === "image"
-            ? "click the dark label band to call it a subject or a clip instead, "
-            : "";
+    let relabel = "";
+    if (entry.kind === "image") {
+        relabel = "click the dark label band to call it a subject or a clip instead, ";
+    } else if (entry.kind === "video") {
+        relabel = entry.sound
+            ? "click the label band to stop counting its own sound, "
+            : "click the label band to count its own sound as a reference too, ";
+    }
+    let heard = "";
+    if (entry.sound) {
+        heard = entry.soundNumber
+            ? `, its sound audio ${entry.soundNumber}`
+            : ", its sound switched on (counted on Ref2VA only)";
+    }
     chip.title =
         `${entry.name}: ${entry.role.toLowerCase()}` +
-        (entry.on ? ` ${entry.number}` : ", switched off") +
+        (entry.on ? ` ${entry.number}${heard}` : ", switched off") +
         (about ? `\n${about}` : "") +
         `\nDrag to reorder, ${relabel}click below the label to switch it off.`;
 
@@ -280,7 +306,7 @@ function renderStrip(node) {
     for (const entry of entries) strip.appendChild(buildChip(node, entry));
 
     if (hint) {
-        hint.textContent = entries.some((entry) => entry.kind === "image")
+        hint.textContent = entries.some((entry) => entry.kind === "image" || entry.kind === "video")
             ? HINT_IMAGES
             : HINT_PLAIN;
     }

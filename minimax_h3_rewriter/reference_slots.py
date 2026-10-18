@@ -47,7 +47,9 @@ DESCRIPTION = (
     "A reference switched off in the writer's strip is not handed on, and that node skips an "
     "empty socket, so its numbering closes up the same way the writer's did.\n\n"
     f"Clips are decoded here, at {media.REFERENCE_FPS} fps on that node's own canvas and up to "
-    f"{media.REFERENCE_MAX_SECONDS:g} seconds. Pictures and sounds pass through as they came."
+    f"{media.REFERENCE_MAX_SECONDS:g} seconds. Pictures and sounds pass through as they came. "
+    "A clip whose sound the writer counted has that sound on video_audio_N, wired across to "
+    "the matching ref_video_audio."
 )
 
 REFERENCES_TOOLTIP = (
@@ -56,12 +58,15 @@ REFERENCES_TOOLTIP = (
 )
 
 SOUNDTRACKS_TOOLTIP = (
-    "Put each clip's own sound on video_audio_N, paired with video_N.\n\n"
-    "Off by default, because it renumbers the sounds. MiniMaxH3ReferenceToVideo gives a clip's "
-    "sound an <Audio N> of its own, numbered before every standalone sound, and the writers "
-    "do not count clip sounds -- so with this on, the prompt's <Audio 1> is no longer the "
-    "sound on audio_1. Turn it on when the prompt was written with that in mind; the summary "
-    "says how far the labels move."
+    "Put every clip's own sound on video_audio_N, paired with video_N, whatever the writer "
+    "did with it.\n\n"
+    "Off, a clip's sound goes there exactly when the writer counted it -- its sound switched "
+    "on in the strip, or on the Universal Rewriter's reference_video row. "
+    "MiniMaxH3ReferenceToVideo gives a clip's sound an <Audio N> of its own, numbered before "
+    "every standalone sound, and the writer numbered it the same way, so the prompt and the "
+    "video agree. On, a clip the writer left silent is given its sound anyway, and then the "
+    "prompt's <Audio 1> is no longer the sound on audio_1; the summary says how far the "
+    "labels move."
 )
 
 SUMMARY_TOOLTIP = (
