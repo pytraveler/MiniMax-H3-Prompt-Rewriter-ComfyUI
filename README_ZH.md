@@ -533,7 +533,7 @@ MiniMax-H3 的长度是从它自己的设置里拿的，不是从这一行拿的
 所有你很少去动的东西，都从主节点上挪到了这里。不接它，重写器就用适配器发布时
 自带的那套解码参数。
 
-![重写器选项节点，一个名为 options 的输出插槽，二十个小部件：max_new_tokens 2048、temperature 0.70、top_p 0.80、top_k 20、repetition_penalty 1.05、attn_implementation sdpa、要套用的适配器、use_lora 打开、merge_lora auto、auto_download 打开、gpu_layers -1、n_ctx 8192、gguf_runtime auto、device auto、llama_backend auto、trust_remote_code 关闭、prompt_file global、self_check warnings and notes、fix_once 关闭，最下面是设为 built-in 的 downloader，它们底下还有一个 New prompt file 按钮](docs/node_options.png)
+![重写器选项节点，一个名为 options 的输出插槽，十九个小部件：max_new_tokens 4096、temperature 0.60、top_p 0.85、top_k 20、repetition_penalty 1.10、attn_implementation flash_attention_2、要套用的适配器、use_lora 打开、merge_lora auto、auto_download 打开、gpu_layers -1、n_ctx 8192、gguf_runtime auto、device auto、llama_backend auto、prompt_file global、self_check warnings and notes、fix_once 关闭，最下面是设为 built-in 的 downloader，它们底下还有一个 New prompt file 按钮](docs/node_options.png)
 
 | 输入 | 默认值 | 作用 |
 |---|---|---|
@@ -547,7 +547,6 @@ MiniMax-H3 的长度是从它自己的设置里拿的，不是从这一行拿的
 | `auto_download` | 开 | 关掉它，缺东西就直接报错，而不是去拉 52 GB |
 | `downloader` | `built-in` | 由哪段代码去取 Hugging Face 仓库 —— 见下文 |
 | `device` | `auto` | 哪一块 GPU 跑这个语言模型 —— 见下文 |
-| `trust_remote_code` | **关** | 允许一个检查点运行它自带的 Python —— 见下文 |
 | `prompt_file` | `global` | 接在这个节点上的那些节点，在哪一套已保存的提示词里工作 —— 见[提示词库](#提示词库) |
 | `self_check` | `warnings and notes` | [自检](#答案会被检查一遍)的结果说出多少：全说、只说警告，或者什么都不说 |
 | `fix_once` | `false` | 让节点照着检查发现的问题动手 —— [只重跑一次，绝不成环](#照着发现的问题动手) |
@@ -608,18 +607,19 @@ token 速度；`off` 是以前的行为。这里没有任何一档碰得到 GGUF
   适配器，控制台会以警告级别把这件事说出来。否则被掉包的 LoRA 是看不见的：节点照跑，
   每个字段照填，只是写出来的是别的东西。
 
-#### `trust_remote_code` —— 关着的，以及为什么
+#### 模型自带的代码一律不运行
 
 一个 Transformers 检查点可以自带建模代码，由它 `config.json` 里的 `auto_map` 点名，
-而加载这样的模型，会以你这个用户的权限导入并运行那段 Python。随包附带的列表里没有
-一项是这样的：每个 `transformers` 条目都是 Qwen3.6-27B 的某个变体，那是 Transformers
-原生支持的架构，而 GGUF 条目根本走不到 Transformers 那边去。所以这个开关是关着的，
-对这个节点提供的这些模型来说，它开不开都一样。
+而加载这样的模型，会以你这个用户的权限导入并运行那段 Python。节点会拒绝这样的模型，
+并说明原因。随包附带的列表里没有一项是这样的：每个 `transformers` 条目都是
+Qwen3.6-27B 的某个变体、Qwen3-VL-8B 或 Qwen2.5-Omni-7B，都是 Transformers 原生支持的
+架构，而 GGUF 条目根本走不到 Transformers 那边去。
 
-它是为真正要紧的那种情况准备的 —— 一个你自己加进 `models.json` 的模型，架构是
-Transformers 不认识的。那时节点会停下来把这件事说明白，而不是把那段代码跑起来；
-而把开关打开，就是你在说你信得过哪个模型。这个决定该由你来做，不该由 `config.json`
-替你做 —— 它之所以是一个小部件，全部的意义就在这里。
+直到 0.30.0，这里都有一个 `trust_remote_code` 开关，允许这样的模型运行。它默认是关着的，
+但它是一个小部件，工作流可以把它打开；而模型列表可以通过 ComfyUI 的 API 来扩充，这个
+API 不要求登录。在一个能从网络访问到的 ComfyUI 上，这就足以让它下载一个模型，并运行
+里面的代码。0.31.0 去掉了这个开关。带着它保存的工作流照样能打开：选项节点会把其余的值
+放回原位。
 
 #### `device` —— 以及它为什么改变了 `keep_model_loaded`
 

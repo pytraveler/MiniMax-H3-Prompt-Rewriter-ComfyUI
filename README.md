@@ -599,7 +599,7 @@ tabs in one window — `models` for the 27B tab, `models_8b` for the 8B one,
 Everything you rarely touch, kept off the main node. Leave it unconnected and the
 rewriter uses the decoding parameters the adapter was published with.
 
-![The Rewriter Options node, one output socket named options and twenty widgets: max_new_tokens 2048, temperature 0.70, top_p 0.80, top_k 20, repetition_penalty 1.05, attn_implementation sdpa, the adapter to apply, use_lora true, merge_lora auto, auto_download true, gpu_layers -1, n_ctx 8192, gguf_runtime auto, device auto, llama_backend auto, trust_remote_code false, prompt_file global, self_check warnings and notes, fix_once false, and downloader on built-in at the foot, with a New prompt file button under them](docs/node_options.png)
+![The Rewriter Options node, one output socket named options and nineteen widgets: max_new_tokens 4096, temperature 0.60, top_p 0.85, top_k 20, repetition_penalty 1.10, attn_implementation flash_attention_2, the adapter to apply, use_lora true, merge_lora auto, auto_download true, gpu_layers -1, n_ctx 8192, gguf_runtime auto, device auto, llama_backend auto, prompt_file global, self_check warnings and notes, fix_once false, and downloader on built-in at the foot, with a New prompt file button under them](docs/node_options.png)
 
 | Input | Default | Purpose |
 |---|---|---|
@@ -613,7 +613,6 @@ rewriter uses the decoding parameters the adapter was published with.
 | `auto_download` | on | Turn off to fail loudly instead of fetching 52 GB |
 | `downloader` | `built-in` | Which code fetches a Hugging Face repository — see below |
 | `device` | `auto` | Which GPU runs the language model — see below |
-| `trust_remote_code` | **off** | Allow a checkpoint to run the Python it ships with — see below |
 | `prompt_file` | `global` | Which set of saved prompts the nodes wired to this one work in — see [the prompt library](#the-prompt-library) |
 | `self_check` | `warnings and notes` | How much of [the self-check](#the-answer-is-checked) is said out loud: everything, warnings only, or nothing |
 | `fix_once` | `false` | Let the nodes act on what the check found — [one re-run, never a loop](#acting-on-what-it-found) |
@@ -683,20 +682,21 @@ downloaded workflow gets any say in:
   LoRA is otherwise invisible: the node still runs and still fills every field,
   it just writes something else.
 
-#### `trust_remote_code` — off, and why
+#### Model code is never run
 
 A Transformers checkpoint can carry its own modelling code, named by `auto_map`
 in its `config.json`, and loading such a model imports and runs that Python with
-your user's rights. Nothing in the shipped list does this: every `transformers`
-entry is a Qwen3.6-27B variant, an architecture Transformers supports natively,
-and the GGUF entries never reach Transformers at all. So this switch is off, and
-for the models this node offers it changes nothing.
+your user's rights. The node refuses such a model and says why. Nothing in the
+shipped list is one: every `transformers` entry is a Qwen3.6-27B variant,
+Qwen3-VL-8B or Qwen2.5-Omni-7B, architectures Transformers supports natively,
+and the GGUF entries never reach Transformers at all.
 
-It exists for the case where it does matter — a model you added to `models.json`
-yourself, with an architecture Transformers does not know. Then the node stops
-and says so instead of running the code, and turning the switch on is you saying
-which model you trust. The decision is yours to make and not `config.json`'s to
-make for you, which is the whole point of it being a widget.
+Up to 0.30.0 a `trust_remote_code` switch here let such a model run. It was off
+by default, but it was a widget, so a workflow could turn it on, and the model
+list can be extended through ComfyUI's API, which asks for no login. On a
+ComfyUI reachable from the network that was enough to make it download a model
+and run the code inside. 0.31.0 removed the switch. A workflow saved with it
+still loads: the Options node puts the other values back in place.
 
 #### `device` — and why it changes `keep_model_loaded`
 

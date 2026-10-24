@@ -447,7 +447,6 @@ def _with_transformers(
         keep_loaded=keep_loaded,
         device=settings["device"],
         progress=progress,
-        trust_remote_code=bool(settings.get("trust_remote_code", False)),
         merge_lora=settings.get("merge_lora", MERGE_AUTO),
         images=images or None,
         messages=build_messages(

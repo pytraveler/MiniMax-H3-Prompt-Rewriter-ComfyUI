@@ -56,8 +56,8 @@ def _needs_remote_code(directory: str) -> bool:
     """Whether loading this checkpoint would execute Python that ships with it.
 
     ``auto_map`` in ``config.json`` names modelling code inside the checkpoint,
-    which Transformers imports and runs. Detecting it is not permission to run
-    it: the answer only decides whether the caller has to have said yes.
+    which Transformers imports and runs. Such a checkpoint is refused: nothing in
+    the pack runs code that came with a model, whatever a workflow asks for.
     """
     config = os.path.join(directory, "config.json")
     if not os.path.isfile(config):
@@ -220,7 +220,7 @@ def _model_class(directory: str = ""):
     raise RuntimeError("No suitable Transformers auto model class is available.")
 
 
-def _load_processor(directory: str, remote_code: bool):
+def _load_processor(directory: str):
     """The checkpoint's own processor, if it has one; ``None`` for text-only.
 
     A multimodal checkpoint needs one to turn pictures into the tensors the
@@ -239,7 +239,7 @@ def _load_processor(directory: str, remote_code: bool):
     try:
         from transformers import AutoProcessor
 
-        return AutoProcessor.from_pretrained(directory, trust_remote_code=remote_code)
+        return AutoProcessor.from_pretrained(directory, trust_remote_code=False)
     except Exception:
         log.debug("[minimax_h3_rewriter._load_processor] no processor for %s", directory, exc_info=True)
         return None
@@ -308,19 +308,18 @@ def load(
     attn_implementation: str,
     device: str = devices.AUTO,
     progress: NodeProgress | None = None,
-    trust_remote_code: bool = False,
     merge_lora: str = MERGE_AUTO,
 ):
     """Return ``(tokenizer, model)``, reusing the cached pair when unchanged."""
     device = devices.validate(device)
 
-    remote_code = _needs_remote_code(base_dir)
-    if remote_code and not trust_remote_code:
+    if _needs_remote_code(base_dir):
         raise RuntimeError(
             f"'{base_dir}' carries its own model code (its config.json has 'auto_map'), and "
-            f"loading it runs that code on this machine with your user's rights.\n\n"
-            f"If this is a model you chose and trust, turn 'trust_remote_code' on in the "
-            f"options node. Leave it off for anything a workflow picked for you."
+            f"loading it would run that code on this machine with your user's rights. This "
+            f"pack does not run code that comes with a model.\n\n"
+            f"Pick a model whose architecture Transformers supports itself, as every "
+            f"'transformers' entry the pack ships is, or a GGUF model."
         )
 
     key = (
@@ -329,7 +328,6 @@ def load(
         quantization,
         attn_implementation,
         device,
-        remote_code,
         merge_lora if adapter_dir else "",
     )
 
@@ -346,7 +344,7 @@ def load(
             progress.set_total(1000)
             progress.ratio(0.0, "Loading tokenizer")
 
-        tokenizer = AutoTokenizer.from_pretrained(base_dir, trust_remote_code=remote_code)
+        tokenizer = AutoTokenizer.from_pretrained(base_dir, trust_remote_code=False)
         if tokenizer.pad_token_id is None:
             tokenizer.pad_token = tokenizer.eos_token
 
@@ -367,9 +365,8 @@ def load(
             "dtype": dtype,
             "device_map": devices.device_map(device),
             "attn_implementation": attn_implementation,
+            "trust_remote_code": False,
         }
-        if remote_code:
-            model_kwargs["trust_remote_code"] = True
         if quant_config is not None:
             model_kwargs["quantization_config"] = quant_config
 
@@ -423,7 +420,7 @@ def load(
         model.eval()
         _STATE.update(
             key=key, tokenizer=tokenizer, model=model,
-            processor=_load_processor(base_dir, remote_code),
+            processor=_load_processor(base_dir),
             name=os.path.basename(os.path.normpath(base_dir)),
         )
 
@@ -786,7 +783,6 @@ def rewrite(
     keep_loaded: bool,
     device: str = devices.AUTO,
     progress: NodeProgress | None = None,
-    trust_remote_code: bool = False,
     merge_lora: str = MERGE_AUTO,
     images: list | None = None,
     **generation,
@@ -801,7 +797,7 @@ def rewrite(
     with resident.in_use():
         tokenizer, model = load(
             base_dir, adapter_dir, quantization, attn_implementation, device, progress,
-            trust_remote_code=trust_remote_code, merge_lora=merge_lora,
+            merge_lora=merge_lora,
         )
         try:
             if images:

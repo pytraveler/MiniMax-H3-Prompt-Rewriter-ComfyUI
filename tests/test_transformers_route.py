@@ -10,6 +10,7 @@ loaded.
 import importlib
 import json
 import pathlib
+import re
 import sys
 import types
 
@@ -69,6 +70,24 @@ def test_remote_code_falls_through_to_the_auto_class(tmp_path):
     config = {"model_type": "not_in_transformers", "text_config": {"model_type": "qwen2"}}
     model_class = engine._model_class(checkpoint(tmp_path, config))
     assert model_class is transformers.AutoModelForImageTextToText
+
+
+def test_a_checkpoint_with_its_own_code_is_refused_before_anything_loads(tmp_path, monkeypatch):
+    """No switch lets it through since 0.31.0 (issue #21): ``auto_map`` is a refusal."""
+    path = checkpoint(
+        tmp_path, {"model_type": "custom", "auto_map": {"AutoModel": "modeling_custom.Model"}}
+    )
+    monkeypatch.setattr(engine, "unload", lambda: pytest.fail("got as far as loading"))
+    with pytest.raises(RuntimeError, match="does not run code that comes with a model"):
+        engine.load(path, None, "bfloat16", "sdpa")
+
+
+def test_nothing_in_the_pack_asks_transformers_to_run_model_code():
+    """Every ``trust_remote_code`` the pack hands Transformers is a literal False."""
+    given = re.compile(r"""["']?trust_remote_code["']?\s*[=:]\s*([^\s,)}]+)""")
+    for path in (_ROOT / _PKG).glob("*.py"):
+        for value in given.findall(path.read_text(encoding="utf-8")):
+            assert value == "False", f"{path.name} passes trust_remote_code={value}"
 
 
 def test_a_text_only_repack_is_a_causal_lm(tmp_path):

@@ -6,6 +6,31 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.31.0 - 2026-10-24
+
+### Changed
+
+- **`trust_remote_code` is gone, and a model's own code never runs.** The switch
+  on the Options node let Transformers run the Python a checkpoint ships with.
+  It was off by default, but a workflow could turn it on, and ComfyUI's API,
+  which asks for no login, can add any Hugging Face repository to the model
+  list - on a ComfyUI reachable from the network, enough to download a model and
+  run its code. The Comfy Registry flagged every version that had it (issue
+  #21). A checkpoint whose `config.json` names its own code in `auto_map` is now
+  refused with a message, and the tokenizer, the processor and the model are
+  loaded with `trust_remote_code=False` throughout. None of the models the pack
+  lists needs it.
+- **Workflows saved with the switch still load.** ComfyUI restores widget values
+  by position, so the removal would have moved `prompt_file`, `self_check`,
+  `fix_once` and `downloader` one slot along and failed validation, as in issue
+  #11. The Options node drops the old value before the rest are dealt out, for
+  every layout from 0.17.2 to 0.30.0, and takes off the input slot a recent
+  frontend saves alongside it. API-format workflows were never affected:
+  ComfyUI ignores an input a node does not declare.
+- **The registry package leaves out `tests/`, `tools/` and `.github/`.** Nothing
+  in them runs in ComfyUI, and they held 10 of the 22 findings the registry's
+  scanner reported for 0.28.1.
+
 ## 0.30.0 - 2026-10-18
 
 ### Added

@@ -91,7 +91,6 @@ DEFAULT_OPTIONS = {
     "gguf_runtime": RUNTIME_AUTO,
     "llama_backend": "auto",
     "device": devices.AUTO,
-    "trust_remote_code": False,
     "prompt_file": library.DEFAULT_FILE,
     "self_check": checks.REPORT_ALL,
     "fix_once": False,
@@ -995,18 +994,6 @@ class MiniMaxH3RewriterOptions:
                         ),
                     },
                 ),
-                "trust_remote_code": (
-                    "BOOLEAN",
-                    {
-                        "default": False,
-                        "tooltip": (
-                            "Non-GGUF models only. Some checkpoints ship their own Python and "
-                            "Transformers runs it when the model loads. Off means such a model "
-                            "is refused rather than executed. Turn it on only for a model you "
-                            "picked and trust — not because a downloaded workflow asked for it."
-                        ),
-                    },
-                ),
                 "prompt_file": (
                     library.files(),
                     {
@@ -1241,7 +1228,6 @@ def rewrite_t2va(
         keep_loaded=keep_loaded,
         device=settings["device"],
         progress=progress,
-        trust_remote_code=bool(settings.get("trust_remote_code", False)),
         merge_lora=settings.get("merge_lora", MERGE_AUTO),
         **decoding,
     )

@@ -349,16 +349,6 @@
           "link": null
         },
         {
-          "localized_name": "trust_remote_code",
-          "name": "trust_remote_code",
-          "shape": 7,
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "trust_remote_code"
-          },
-          "link": null
-        },
-        {
           "localized_name": "prompt_file",
           "name": "prompt_file",
           "shape": 7,
@@ -422,7 +412,6 @@
         "auto",
         "auto",
         "auto",
-        false,
         "global",
         "warnings and notes",
         false

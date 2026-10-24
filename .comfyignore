@@ -1,0 +1,6 @@
+# Left out of the package `comfy node publish` sends to the Comfy Registry.
+# None of it runs inside ComfyUI: the test suite, the maintainer's tools and the
+# CI workflows. They stay in the repository; a git clone still has them.
+/tests/
+/tools/
+/.github/

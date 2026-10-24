@@ -55,10 +55,54 @@ function migrate(node, info) {
     );
 }
 
+// 0.31.0 removed trust_remote_code, which sat between llama_backend and
+// prompt_file. A workflow could switch it on, and with it on the pack ran
+// the Python a model ships with. Every layout saved from 0.17.2 to 0.30.0
+// holds that boolean one slot further on than before 0.17.2, merge_lora
+// having been inserted ahead of it - the slot prompt_file, a combo, takes
+// now. A boolean there is the fingerprint, and the value is dropped.
+//
+// This one is fixed before the values are dealt out, not after them as the
+// merge_lora one is. Dealt out first, a workflow from 0.18.0, which ends at
+// prompt_file, would leave its last value in self_check, and by then nothing
+// remembers self_check's default to put back. The list above keeps the name:
+// it describes the layout of its time, and a widget it no longer finds is
+// skipped.
+//
+// A recent frontend also saves every widget as an input slot, and configure
+// restores the saved slots as they are, so the old one would stay on the
+// node as a bare socket. It is taken off with removeInput once the node is
+// configured: that is the call which moves the links of the slots after it.
+const TRUST_SLOT = PRE_MERGE_LORA_ORDER.indexOf("trust_remote_code") + 1;
+
+function withoutTrustRemoteCode(info) {
+    const values = info?.widgets_values;
+    if (!Array.isArray(values) || typeof values[TRUST_SLOT] !== "boolean") return info;
+
+    const kept = values.slice();
+    kept.splice(TRUST_SLOT, 1);
+    console.log(
+        "[minimax_h3_rewriter] Options node saved before 0.31.0: dropped trust_remote_code's value"
+    );
+    return { ...info, widgets_values: kept };
+}
+
+function dropTrustRemoteCodeInput(node) {
+    const index = node.inputs?.findIndex((input) => input.name === "trust_remote_code") ?? -1;
+    if (index >= 0) node.removeInput(index);
+}
+
 app.registerExtension({
     name: "minimax_h3_rewriter.options_migration",
     beforeRegisterNodeDef(nodeType, nodeData) {
         if (nodeData.name !== "MiniMaxH3RewriterOptions") return;
+
+        const configure = nodeType.prototype.configure;
+        nodeType.prototype.configure = function (info, ...rest) {
+            const result = configure.call(this, withoutTrustRemoteCode(info), ...rest);
+            dropTrustRemoteCodeInput(this);
+            return result;
+        };
 
         const onConfigure = nodeType.prototype.onConfigure;
         nodeType.prototype.onConfigure = function (info) {
