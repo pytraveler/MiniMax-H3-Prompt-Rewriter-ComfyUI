@@ -45,6 +45,7 @@ const TEXT_TASK = "T2VA";
 const PICTURES_FOR_TASK = { I2VA: 1, FL2VA: 2, L2VA: 1 };
 
 const IMAGE_ROLES = ["Picture", "Subject", "Video"];
+const REFMOD_ROLES = ["Picture", "Subject"];
 
 const HINT_H = 12;
 const HINT_GAP = 3;
@@ -133,14 +134,15 @@ function arranged(node) {
 
     const entries = names.map((name) => {
         const slot = connected.get(name);
+        const roles = slot.refmod ? REFMOD_ROLES : IMAGE_ROLES;
         let role = "Audio";
         if (slot.kind === "video") role = "Video";
         else if (slot.kind === "image") {
-            role = IMAGE_ROLES.includes(layout.roles[name]) ? layout.roles[name] : IMAGE_ROLES[0];
+            role = roles.includes(layout.roles[name]) ? layout.roles[name] : roles[0];
         }
         const on = !layout.off.includes(name);
-        const sound = on && slot.kind === "video" && layout.sound.includes(name);
-        return { name, kind: slot.kind, role, on, sound };
+        const sound = on && slot.kind === "video" && !slot.refmod && layout.sound.includes(name);
+        return { name, kind: slot.kind, role, on, sound, refmod: slot.refmod };
     });
     return numberEntries(entries, widgetNamed(node, TASK)?.value === REF_TASK);
 }
@@ -190,10 +192,10 @@ function commitOrder(node, strip) {
     writeLayout(node, layout);
 }
 
-function cycleRole(node, name) {
+function cycleRole(node, name, roles = IMAGE_ROLES) {
     const layout = readLayout(node);
-    const current = Math.max(0, IMAGE_ROLES.indexOf(layout.roles[name]));
-    layout.roles[name] = IMAGE_ROLES[(current + 1) % IMAGE_ROLES.length];
+    const current = Math.max(0, roles.indexOf(layout.roles[name]));
+    layout.roles[name] = roles[(current + 1) % roles.length];
     writeLayout(node, layout);
 }
 
@@ -246,9 +248,11 @@ function beginGesture(node, chip, role, entry, event) {
         if (node[STATE]) node[STATE].dragging = false;
 
         if (dragging) commitOrder(node, strip);
-        else if (onLabel && entry.kind === "image") cycleRole(node, entry.name);
-        else if (onLabel && entry.kind === "video" && entry.on) toggleSound(node, entry.name);
-        else toggleSlot(node, entry.name);
+        else if (onLabel && entry.kind === "image") {
+            cycleRole(node, entry.name, entry.refmod ? REFMOD_ROLES : IMAGE_ROLES);
+        } else if (onLabel && entry.kind === "video" && entry.on && !entry.refmod) {
+            toggleSound(node, entry.name);
+        } else toggleSlot(node, entry.name);
     };
 
     window.addEventListener("pointermove", move);
@@ -263,9 +267,11 @@ function buildChip(node, entry) {
     chip.appendChild(instructionBand(entry.name, entry.role, instructions(node)));
 
     let relabel = "";
-    if (entry.kind === "image") {
+    if (entry.kind === "image" && entry.refmod) {
+        relabel = "click the dark label band to call it a subject instead, ";
+    } else if (entry.kind === "image") {
         relabel = "click the dark label band to call it a subject or a clip instead, ";
-    } else if (entry.kind === "video") {
+    } else if (entry.kind === "video" && !entry.refmod) {
         relabel = entry.sound
             ? "click the label band to stop counting its own sound, "
             : "click the label band to count its own sound as a reference too, ";
@@ -279,6 +285,7 @@ function buildChip(node, entry) {
     chip.title =
         `${entry.name}: ${entry.role.toLowerCase()}` +
         (entry.on ? ` ${entry.number}${heard}` : ", switched off") +
+        (entry.refmod ? `\nRefMod '${entry.refmod.name}', its ${entry.refmod.channel} output` : "") +
         (about ? `\n${about}` : "") +
         `\nDrag to reorder, ${relabel}click below the label to switch it off.`;
 

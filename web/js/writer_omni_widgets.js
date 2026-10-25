@@ -112,8 +112,8 @@ function arranged(node) {
         const slot = connected.get(name);
         const role = ROLE_FOR_KIND[slot.kind] || ROLE_FOR_KIND.image;
         const on = !layout.off.includes(name);
-        const sound = on && slot.kind === "video" && layout.sound.includes(name);
-        return { name, kind: slot.kind, role, on, sound };
+        const sound = on && slot.kind === "video" && !slot.refmod && layout.sound.includes(name);
+        return { name, kind: slot.kind, role, on, sound, refmod: slot.refmod };
     });
     return numberEntries(entries, widgetNamed(node, TASK)?.value === REF_TASK);
 }
@@ -221,8 +221,9 @@ function beginGesture(node, chip, role, entry, event) {
         if (node[STATE]) node[STATE].dragging = false;
 
         if (dragging) commitOrder(node, strip);
-        else if (onLabel && entry.kind === "video" && entry.on) toggleSound(node, entry.name);
-        else toggleSlot(node, entry.name);
+        else if (onLabel && entry.kind === "video" && entry.on && !entry.refmod) {
+            toggleSound(node, entry.name);
+        } else toggleSlot(node, entry.name);
     };
 
     window.addEventListener("pointermove", move);
@@ -241,7 +242,7 @@ function buildChip(node, entry) {
             : ", its sound switched on (counted on Ref2AV only)";
     }
     const clip =
-        entry.kind === "video"
+        entry.kind === "video" && !entry.refmod
             ? entry.sound
                 ? " Click the label band to stop counting its own sound."
                 : " Click the label band to count its own sound as a reference too."
@@ -249,6 +250,7 @@ function buildChip(node, entry) {
     chip.title =
         `${entry.name}: <${entry.role} ${entry.on ? entry.number : "-"}>` +
         (entry.on ? heard : ", switched off") +
+        (entry.refmod ? `\nRefMod '${entry.refmod.name}', its ${entry.refmod.channel} output` : "") +
         (about ? `\n${about}` : "") +
         "\nDrag to reorder -- the order is what numbers the labels. Click to switch off." +
         clip;

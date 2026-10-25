@@ -137,11 +137,11 @@ def test_something_shows_the_result(name):
 
 @pytest.mark.parametrize("name", NAMES)
 def test_the_loaders_name_no_file(name):
-    """A picture named in a template is a picture nobody else has."""
+    """A picture named in a template is a picture nobody else has, and so is a RefMod."""
     named = [
         node.get("widgets_values")
         for node in graph(name)["nodes"]
-        if node.get("type") in {"LoadImage", "LoadAudio", "LoadVideo"}
+        if node.get("type") in {"LoadImage", "LoadAudio", "LoadVideo", "MiniMaxH3RewriterRefMod"}
         and (node.get("widgets_values") or [""])[0]
     ]
     assert not named, (

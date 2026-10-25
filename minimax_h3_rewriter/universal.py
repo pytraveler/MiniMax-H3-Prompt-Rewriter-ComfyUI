@@ -46,6 +46,7 @@ from . import (
     memory,
     mtmd_engine,
     previews,
+    refmods,
     snapshot,
 )
 from .constants import (
@@ -61,6 +62,7 @@ from .nodes import (
     INSTRUCTIONS_TOOLTIP,
     OPTIONS_TYPE,
     SYSTEM_PROMPT_TOOLTIP,
+    Question,
     _ensure_pair,
     _guided_text,
     _fix_once,
@@ -128,7 +130,8 @@ LAYOUT_TOOLTIP = (
 REFERENCE_TOOLTIP = (
     "One image, clip or sound per slot; more slots appear as you fill them. What a reference "
     "is used for is set on its square in the strip below, not by which slot it is in -- so "
-    "there is no wrong socket to plug into here."
+    "there is no wrong socket to plug into here. A RefMod node's output goes in a slot too: "
+    "it is described from its pictures, and handed on as the RefMod."
 )
 
 TASK_TOOLTIP = (
@@ -152,6 +155,10 @@ class Asset:
 
     ``sound`` is for a clip whose own sound is a reference as well, which the
     strip's label band switches; it is never set on anything but a VIDEO.
+
+    ``refmod`` is set for a RefMod, and ``value`` is then what it decodes to --
+    the picture, clip or sound that is described -- or None when nothing was
+    decoded. ``handed`` is what goes on to the generator: the RefMod itself.
     """
 
     slot: str
@@ -159,6 +166,11 @@ class Asset:
     kind: str
     value: object
     sound: bool = False
+    refmod: object = None
+
+    @property
+    def handed(self):
+        return self.refmod if self.refmod is not None else self.value
 
 
 def kind_of(value) -> str:
@@ -258,11 +270,53 @@ def arrange(supplied: dict | None, raw_layout: str) -> tuple[list[Asset], int]:
         if name in off:
             skipped += 1
             continue
-        kind = kind_of(connected[name])
+        value = connected[name]
+        if refmods.is_refmod(value):
+            assets.append(_refmod_asset(name, value, roles.get(name)))
+            continue
+        kind = kind_of(value)
         role = FIXED_ROLE.get(kind) or roles.get(name, ROLE_PICTURE)
         sound = kind == "video" and name in heard
-        assets.append(Asset(name, role, kind, connected[name], sound))
+        assets.append(Asset(name, role, kind, value, sound))
     return assets, skipped
+
+
+def _refmod_asset(name: str, mod, chosen: str | None) -> Asset:
+    """A RefMod's square: its kind from the file, its badge only where that is free.
+
+    The generator calls a RefMod what its file says it is, so the label has to
+    say the same. A clip or a stack of photos is a ``<Video N>`` and a voice an
+    ``<Audio N>`` whatever the badge reads; a picture may still be a subject,
+    which the generator numbers as a picture too, but never a clip. Its own
+    sound is never counted: a RefMod carries none.
+    """
+    role = FIXED_ROLE.get(mod.kind)
+    if role is None:
+        role = chosen if chosen == ROLE_SUBJECT else ROLE_PICTURE
+    return Asset(name, role, mod.kind, mod.view, False, mod)
+
+
+def _with_saved(question: Question | None, mod) -> Question | None:
+    """A slot's own question, with what a RefMod's file says of it after it."""
+    saved = refmods.hint(mod)
+    if not saved:
+        return question
+    if question is None:
+        return Question(saved, True)
+    return Question(f"{question.text} {saved}", question.add)
+
+
+def refuse_unseen(assets: list[Asset], node_id=None) -> None:
+    """Stop before any weights move if a RefMod has nothing to describe it from.
+
+    A voice that was never decoded can still be written from the description
+    saved with it; a look with no pictures cannot be written from anything.
+    """
+    for asset in assets:
+        if asset.refmod is not None:
+            problem = refmods.unseen(asset.slot, asset.refmod, saved_ok=True)
+            if problem:
+                refuse(node_id, problem)
 
 
 def refuse_mismatch(task: str, assets: list[Asset], node_id=None) -> None:
@@ -365,6 +419,27 @@ def in_turn(assets: list[Asset], sounds: dict) -> list[tuple[Asset, Asset | None
     return steps
 
 
+def partners(steps, block: str) -> dict[str, tuple[object, str]]:
+    """For each RefMod whose entry's other half is on the strip: that half and its label.
+
+    The labels are counted here as the description loop counts them, ahead of
+    it, because a voice may be described before the look it names.
+    """
+    taken: dict[str, int] = {}
+    labels, held = {}, {}
+    for asset, _clip in steps:
+        if asset.role not in taken:
+            taken[asset.role] = next_index(block, asset.role) - 1
+        taken[asset.role] += 1
+        labels[asset.slot] = f"{asset.role} {taken[asset.role]}"
+        if asset.refmod is not None:
+            held[asset.slot] = asset.refmod
+    return {
+        slot: (held[other], labels[other])
+        for slot, other in refmods.halves(held.items()).items()
+    }
+
+
 def within(asset: Asset, frames: int) -> Asset:
     """A frame batch read as a clip, cut to the frames the generator keeps of it.
 
@@ -417,10 +492,10 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                     template=io.Autogrow.TemplatePrefix(
                         input=io.MultiType.Input(
                             "ref",
-                            types=[io.Image, io.Video, io.Audio],
+                            types=[io.Image, io.Video, io.Audio, io.Custom(refmods.TYPE)],
                             tooltip=(
-                                "An image or batch of frames, a clip, or a sound. Its square "
-                                "appears in the strip as soon as it is connected."
+                                "An image or batch of frames, a clip, a sound, or a RefMod. Its "
+                                "square appears in the strip as soon as it is connected."
                             ),
                         ),
                         prefix="ref_",
@@ -666,12 +741,15 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         empty = ("",) * len(ALL_FIELDS)
 
         assets, skipped = arrange(references, reference_layout)
-        previews.announce(cls.hidden.unique_id, (references or {}).items())
+        previews.announce(
+            cls.hidden.unique_id,
+            ((name, refmods.seen(value)) for name, value in (references or {}).items()),
+        )
         handed_on = slot_bundle(
             ()
             if task == TEXT_TASK
             else (
-                (item.slot, item.role, item.value, item.sound and task == REF_TASK)
+                (item.slot, item.role, item.handed, item.sound and task == REF_TASK)
                 for item in assets
             )
         )
@@ -724,6 +802,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
             assets = []
         else:
             refuse_mismatch(task, assets, cls.hidden.unique_id)
+            refuse_unseen(assets, cls.hidden.unique_id)
             notes = pipeline_notes(
                 task, ((asset.slot, asset.role, asset.value) for asset in assets)
             )
@@ -743,9 +822,11 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         empty: list[str] = []
         if assets:
             steps = in_turn(assets, sounds)
-            kinds = {step.kind for step, _clip in steps}
+            paired = partners(steps, block)
+            read = [step for step, _clip in steps if step.value is not None]
+            kinds = {step.kind for step in read}
             model_path = mmproj_path = None
-            if clip is None:
+            if read and clip is None:
                 choice = _resolve_captioner_choice(caption_model)
                 if choice.local:
                     model_path, mmproj_path = choice.reference, choice.mmproj
@@ -756,7 +837,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                     )
                 refuse_deaf(sounds, mmproj_path=mmproj_path, node_id=cls.hidden.unique_id)
                 _check_encoders(mmproj_path, kinds)
-            else:
+            elif read:
                 refuse_deaf(sounds, clip=clip, node_id=cls.hidden.unique_id)
                 clip_caption.check(clip, kinds)
 
@@ -765,9 +846,9 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
 
             with mtmd_engine.session(
                 model_path or "", mmproj_path or "",
-                assets=len(steps),
+                assets=len(read),
                 attachments=mtmd_engine.busiest(
-                    (step.kind for step, _clip in steps), int(max_frames)
+                    (step.kind for step in read), int(max_frames)
                 ),
                 gpu_layers=int(settings["gpu_layers"]),
                 n_ctx=int(context_size),
@@ -785,10 +866,10 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                         f"{asset.role} {index}: reading {asset.slot} ({done + 1} of {len(steps)})",
                     )
 
-                    asked = caption_question(
-                        asset.role, caption_length,
-                        None if of_clip is not None else asked_for.get(asset.slot),
-                    )
+                    question = None if of_clip is not None else asked_for.get(asset.slot)
+                    if asset.refmod is not None:
+                        question = _with_saved(question, asset.refmod)
+                    asked = caption_question(asset.role, caption_length, question)
                     note = _clip_note(asset, max_frames)
                     if note:
                         asked = f"{note}\n\n{asked}"
@@ -797,7 +878,9 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                     as_audio = asset.value if asset.kind == "audio" else None
                     as_video = asset.value if asset.kind == "video" else None
 
-                    if clip is not None:
+                    if asset.value is None:
+                        caption = refmods.saved_caption(asset.refmod)
+                    elif clip is not None:
                         caption = clip_caption.describe(
                             clip,
                             instruction=asked,
@@ -846,7 +929,10 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                     line = caption
                     if of_clip is not None:
                         line = f"(the sound of Video {next_index(block, ROLE_VIDEO)}) {caption}"
-                    block = f"{block}\n{asset.role} {index}: {line}".strip()
+                    elif asset.refmod is not None:
+                        partner, label = paired.get(asset.slot, (None, ""))
+                        line = (refmods.writer_note(asset.refmod, partner, label) + caption).strip()
+                    block =f"{block}\n{asset.role} {index}: {line}".strip()
 
             described = f"{len(steps)} described"
             if skipped:

@@ -101,6 +101,8 @@ ComfyUI 节点。输入一句简短的提示词，输出一段结构化、可直
   - [MiniMax-H3 LoRA Triggers LoRA 触发词](#minimax-h3-lora-triggers-lora-触发词)
   - [MiniMax-H3 Reference Adapter 参考素材适配器](#minimax-h3-reference-adapter-参考素材适配器)
   - [MiniMax-H3 Reference Slots 参考素材插槽](#minimax-h3-reference-slots-参考素材插槽)
+  - [MiniMax-H3 RefMod 已保存的参考素材](#minimax-h3-refmod-已保存的参考素材)
+  - [MiniMax-H3 Reference Encode 参考素材编码](#minimax-h3-reference-encode-参考素材编码)
   - [MiniMax-H3 Prompt Presets 提示词预设](#minimax-h3-prompt-presets-提示词预设)
   - [时长小部件](#时长小部件)
   - [重复上一次的答案](#重复上一次的答案)
@@ -164,7 +166,7 @@ python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\MiniMax-H3-Prom
 
 ### 示例工作流
 
-节点包自带七个工作流。装好之后，它们会出现在 ComfyUI 的模板浏览器里
+节点包自带八个工作流。装好之后，它们会出现在 ComfyUI 的模板浏览器里
 （*Workflow → Browse Templates*），归在本节点包的名字下面。每一个都是独立的一张
 卡片，也都能独立跑起来：打开时没有任何节点被绕过，也不必先静音另一条分支才能
 按下运行。
@@ -178,15 +180,18 @@ python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\MiniMax-H3-Prom
 | 5 | **Prompt to video** —— ComfyUI 自带的文生视频模板，前面接上写作节点 | MiniMax-H3 的权重 |
 | 6 | **References to video** —— 同样的东西，换成 Ref2VA，图片经由写作节点、按素材条的编号顺序送到生成器 | MiniMax-H3 的 ref2va 权重 |
 | 7 | **LoRA triggers and effects** —— 适配器要听的那些词，和 MiniMax 的十个特效，放进一段写好的提示词里 | 什么都不需要 |
+| 8 | **RefMods to video** —— 一份 [RefMod](#minimax-h3-refmod-已保存的参考素材)，也就是已经编码好保存下来的外观和声音：写作节点能看见也能听见它，生成器拿到的就是它保存时的潜变量 | MiniMax-H3 的 ref2va 权重，以及 `models/refmods` 里的一份 RefMod |
 
-会加载 MiniMax-H3 检查点的只有 5 和 6。其余的到文本为止就结束了，而这正是本节点包
-大部分内容存在的意义。那两个是 ComfyUI 自己图库里的模板，把生成那一半折进了一个
+会加载 MiniMax-H3 检查点的只有 5、6 和 8。其余的到文本为止就结束了，而这正是本节点包
+大部分内容存在的意义。5 和 6 是 ComfyUI 自己图库里的模板，把生成那一半折进了一个
 子图方框，所以屏幕上剩下的就是提示词这一侧再加一个节点 —— 它们点名的检查点就是
-官方模板用的那些，缺了哪个 ComfyUI 会主动提出替你下载。
+官方模板用的那些，缺了哪个 ComfyUI 会主动提出替你下载。8 就是 6，只是那个方框里用
+[Reference Encode](#minimax-h3-reference-encode-参考素材编码) 换掉了原生的参考节点，
+两个 VAE 搬到了方框外面，和 RefMod 共用。
 
 每一个都带着一张 **Read me first** 说明：它做什么、会下载什么、按下运行之前要设置
-什么、接下来该往哪儿走。3 和 6 里面的图像加载器**故意是空的** —— 存进模板里的文件名
-指向的是你机器上没有的东西 —— 所以先挑你自己的图片。
+什么、接下来该往哪儿走。3 和 6 里面的图像加载器和 8 里的 RefMod 选择**故意是空的** ——
+存进模板里的文件名指向的是你机器上没有的东西 —— 所以先挑你自己的。
 
 浏览器在每个名字旁边画的那张卡片图来自 `python tools/template_cards.py`：它把图片
 写成 `<name>.jpg`，放在工作流旁边，也就是浏览器会去找的地方。
@@ -1719,6 +1724,103 @@ Universal Rewriter 的 `reference_video` 那一行勾上喇叭框 —— 写作�
 > 的标签，而它的 `references` 只装着它自己的参考素材，从一开始编号。当输出要去生成
 > 节点时，每个镜头只用一个写作节点。
 
+> **遇到 RefMod 它会停下。** `MiniMaxH3ReferenceToVideo` 自己编码交给它的图片、片段和
+> 声音，而 [RefMod](#minimax-h3-refmod-已保存的参考素材) 已经编码过了，没有插槽可放。
+> 这个节点会说明这一点，并指向
+> [MiniMax-H3 Reference Encode](#minimax-h3-reference-encode-参考素材编码) —— 它接收同样的
+> `references`，并取代这两个节点。
+
+### MiniMax-H3 RefMod 已保存的参考素材
+
+RefMod 是一份编码过一次并保存下来的参考素材：图片、片段、一组照片或一个声音经 H3 VAE
+得到的潜变量，存在 `ComfyUI/models/refmods` 下的 `.safetensors` 文件里，文件头写明它是
+什么。格式来自 [ComfyUI-MiniMaxH3Mod](https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod)。
+大家在 Hugging Face 上分享的 RefMod、那个节点包的单文件 bundle，以及
+[ComfyUI-Fantastic-MiniMaxH3-PromptBuilder](https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder)
+写出的文件，这里都能读。制作和编辑它们是那两个节点包的事；这个节点包只使用它们。
+
+这个节点选出一个，交给写作节点的素材条。从文件到视频的整条链路，模板
+**8 - RefMods to video** 里都已经搭好了。
+
+| 输入 | 用途 |
+|---|---|
+| `refmod` | 条目，按它在 `models/refmods` 下的路径。一起保存的外观和声音 —— 一个 bundle 文件，或一对名为 `<名称>_visual` 和 `<名称>_audio` 的文件 —— 是同一个条目。之后新加的文件，在图里按 **R** 刷新列表。 |
+| `strength` | 生成节点遵循它的强度。1 表示按保存的样子。更低的值会把潜变量向一份高度模糊的自身副本混合：颜色、构图和大致形状保留，细节消失；给 H3 文本编码器看的图片也以同样方式减弱。写作节点读到的始终是完整强度。 |
+| `vae` | H3 视频 VAE。大多数文件不保存自身的图片 —— Hugging Face 上的一个都没有 —— 而写作节点要看见参考素材才能描述它，所以外观在这里解码一次。 |
+| `audio_vae` | H3 音频 VAE：对声音做同样的事，让写作节点能听见它。 |
+
+| 输出 | 是什么 |
+|---|---|
+| `visual` | 图片、片段或一组照片。条目只有声音时为空。 |
+| `audio` | 声音。条目没有声音时为空。 |
+
+每个输出接到 [Universal Writer](#minimax-h3-universal-writer-通用写作节点) 或
+[Prompt Rewriter Omni](#minimax-h3-prompt-rewriter-omni-看得见也听得见) 素材条上各自的
+方块里，方块上标着 `mod`：
+
+![Universal Writer 的 ref_0 和 ref_1 接着同一份 RefMod 的两个输出，ref_2 空着、没有勾选。素材条上有两个标着 mod 的方块：ref_0 上方是绿色的 vid，显示一张解码出来的角色照片，带播放标记和数字 1；ref_1 上方是紫色的 aud，带扬声器图标、条目名 Yoda、波形和数字 1，每个下面都有一条“+ instr”。再往下是一行提示文字，以及点亮了 Ref2VA 的任务切换](docs/refmod_support_universal_writer.png)
+
+![Prompt Rewriter Omni 的 ref_0 和 ref_1 接着同样两个 RefMod 输出：一个绿色的 vid 方块和一个名为 Yoda 的紫色 aud 方块，都标着 mod、编号为 1，上方是一行“drag to reorder - that order numbers the labels - click a square to switch it off - a clip's label: its sound”。下面是点亮了 REF2AV 的五个任务、按比例画出的八个宽高比矩形（选中 16:9），以及时长 10.0](docs/refmod_support_omni_rewriter.png)
+
+之后：
+
+- **它叫它文件里写的那个名字。** 片段或一组照片是 `<Video N>`，声音是 `<Audio N>`，不管
+  标签上写着什么，因为生成节点就是这样叫它的。单张图片仍然可以标成主体，但不能标成片段；
+  它也没有可以打开的自带声音。
+- **它按自己的图片来描述，** 和任何参考素材一样。文件里关于它的内容作为提示跟在角色本身
+  的问题后面：一组照片被描述成分开拍摄的同一个主体，而不是一串事件；保存的主体名字会给出
+  以供使用；保存的外观或声音描述会被提供出来，在图片与之相符的地方照着写。没人解码过的
+  声音，Universal Writer 会按它保存的描述来写（如果有的话）。Omni 适配器自己听声音，所以
+  它会拒绝这样的声音，并提示接上 `audio_vae`。
+- **Universal Writer 的写作模型会被告知文件里写的内容，** 写在参考素材块里、描述之前：
+  一组照片是同一个主体的照片而不是一段画面，它是作为什么的参考保存的（声音参考只指声音本身，
+  不包括它背后播放的东西）；如果一份外观和与它一起保存的声音都在素材条上，还会写明另一半在
+  哪个标签下：`Audio 1: (saved as a reference for a voice, the voice alone and not what plays
+  behind it; the voice of the subject in Video 1) ...`。描述模型是分开读这两者的，所以哪条
+  描述都不会说它们属于一起；而叠在音乐上录的声音，否则会被当成音乐，被拿去写配乐。生成节点
+  拿到的仍然是整段录音，连同音乐：提示词只是不再要求更多音乐。
+- **交出去的是 RefMod 本身**，连同潜变量，放在 `references` 里，交给
+  [MiniMax-H3 Reference Encode](#minimax-h3-reference-encode-参考素材编码)。
+
+一组照片按每张照片分别解码，因为每张都是单独编码的；片段则整体解码。无论哪种，每次选择只
+解码一次：ComfyUI 会保留节点的输出，图片也随之保留。
+
+RefMod 在采样时并不免费。节点的说明文字会写出它的代价，而有些分享出来的很重：一组十张
+1024x1824 的照片是 18,240 个 token，每个采样步都要带着，相当于十八张 1344x768 的参考
+图片，或者一段两秒半的参考片段。降低 `strength` 改变的是遵循的程度，而不是代价。
+
+### MiniMax-H3 Reference Encode 参考素材编码
+
+`MiniMaxH3ReferenceToVideo` 会编码交给它的参考素材。RefMod 已经编码过了：生成节点需要
+把它的潜变量作为单独的参考块，而 H3 的文本编码器仍然需要它的图片。所以这个节点做的是
+[Reference Slots](#minimax-h3-reference-slots-参考素材插槽) 和
+`MiniMaxH3ReferenceToVideo` 合起来做的事，对 RefMod 则做那件它俩都做不到的事。
+
+```
+Universal Writer ─ references ───────▶ references ┐
+                 ─ rewritten_prompt ─▶ prompt     ├ MiniMax-H3 Reference Encode ─ positive ─▶ 采样器
+clip, vae, audio_vae ────────────────────────────┘                              ─ latent   ─▶ 采样器
+```
+
+它的设置和 `MiniMaxH3ReferenceToVideo` 相同 —— `width`、`height`、`length`、
+`ref_image_size` —— 再加上写作节点的 `references` 和来自 Reference Slots 的
+`soundtracks` 开关。它输出 `positive`、用来采样的空 `latent`，以及一份 `summary`：
+放进了什么、按什么顺序、代价多少。
+
+**顺序就是全部约定。** H3 的 DiT 没有参考素材的索引：一个块靠它所在的位置对应到它的
+标签。所以所有东西都按 `MiniMaxH3ReferenceToVideo` 的顺序放 —— 先是所有图片，然后是
+所有片段（每个片段自带的声音紧挨在它前面），最后是所有声音 —— RefMod 占据写作节点给它
+编的位置。图片、片段或声音用那个节点自己的辅助函数来准备，缩放和截断也一样，所以没有
+RefMod 的素材条编码出来的条件和经过 Reference Slots 时相同。
+
+**文本编码器看到的 RefMod 是什么样。** 图片原样给出。片段每秒两帧，和任何参考片段一样。
+一组照片每四张取一张，每块两张 —— 这是保存这类图片的那个节点包的默认做法，也接近同一
+潜变量作为片段播放时每秒两帧会给出的样子。保存了自身图片的文件给出那些图片；没保存的，
+如果它的 RefMod 节点没接 VAE，就在这里用 `vae` 解码。
+
+对普通参考素材，`vae` 和 `audio_vae` 沿用 `MiniMaxH3ReferenceToVideo` 的规则：没有它们，
+这些素材只到达文本编码器，`summary` 会说有几个。RefMod 无论如何都会到达生成节点。
+
 ### MiniMax-H3 Prompt Presets 提示词预设
 
 节点包里自带一千段写好的 MiniMax-H3 提示词，而这个节点把其中一段递出去。按
@@ -2699,6 +2801,7 @@ python tools/locales.py fill ru       把缺掉的键以英文补进去，再往
 | 推理框架 | [ModelTC/LightX2V](https://github.com/ModelTC/LightX2V) |
 | 随包附带的提示词，以及它们描述的那些片段 | [ostris/minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k) —— 经作者许可使用；提示词实际上等同于 MIT，片段以及从中截下来的帧是 MiniMax-H3 的输出，不得用于训练模型 |
 | 它们的拍摄风格和主体标签 | [H3 Atlas](https://cohub.live/baize/video-altas/w/h3-atlas) |
+| RefMod 格式，以及它的参考素材如何呈现 | [ComfyUI-MiniMaxH3Mod](https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod)，作者 Luisa (luisacaotica)，MIT；为文本编码器保存的图片和“每四张取一张”的默认做法来自 [ComfyUI-Fantastic-MiniMaxH3-PromptBuilder](https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder)。由本节点包自己的代码读取，没有复制它们的代码 |
 
 `minimax_h3_rewriter/prompt_template.py` 和 `prompt_template_8b.py` 里的提示词模板，
 是从它们各自的适配器仓库逐字节复制过来的；改动它们会让重写变差。

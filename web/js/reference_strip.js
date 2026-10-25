@@ -1,5 +1,6 @@
 import { graphChanged, installStyle, refresh, widgetNamed } from "./mmx_controls.js";
 import { drawPreview } from "./reference_previews.js";
+import { isRefmodLink, refmodAt } from "./refmods.js";
 
 
 export const CHIP_W = 52;
@@ -51,6 +52,9 @@ const STYLE = `
     border-radius: 8px; background: rgba(0, 0, 0, 0.66); }
 .mmx-chip-icon { position: absolute; left: 2px; top: 2px; width: 11px; height: 11px;
     pointer-events: none; filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9)); }
+.mmx-chip-mod { position: absolute; left: 2px; bottom: 2px; height: 12px; padding: 0 3px;
+    font-size: 8px; line-height: 12px; letter-spacing: 0.04em; border-radius: 3px;
+    color: #fff; background: rgba(0, 0, 0, 0.66); pointer-events: none; }
 .mmx-chip-name { position: absolute; left: 14px; right: 2px; top: 1px;
     font-size: 8px; line-height: 12px; white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; color: rgba(255, 255, 255, 0.92);
@@ -309,6 +313,12 @@ export function chipElement(entry, plain = false, preview = null) {
     const media = document.createElement("div");
     media.className = "mmx-chip-media";
     const about = drawPreview(media, chip, entry.kind ?? KIND_OF_ROLE[entry.role], preview);
+    if (entry.refmod) {
+        const mark = document.createElement("span");
+        mark.className = "mmx-chip-mod";
+        mark.textContent = "mod";
+        media.appendChild(mark);
+    }
     const number = document.createElement("span");
     number.className = "mmx-chip-num";
     number.textContent = entry.on ? String(entry.number) : "--";
@@ -350,12 +360,19 @@ export function stripHeight(node, count, hintHeight, hintGap, margin, chipHeight
 
 
 export function linkKind(node, link) {
+    if (isRefmodLink(node, link)) return refmodAt(node, link)?.kind || "image";
     const links = node.graph?.links;
     const info = links?.get ? links.get(link) : links?.[link];
     const type = String(info?.type || "").toUpperCase();
     if (type.includes("AUDIO")) return "audio";
     if (type.includes("VIDEO")) return "video";
     return "image";
+}
+
+function linkRefmod(node, link) {
+    if (!isRefmodLink(node, link)) return null;
+    const found = refmodAt(node, link);
+    return { name: found?.name ?? "", channel: found?.channel ?? "visual" };
 }
 
 export function slotNumber(name) {
@@ -371,7 +388,12 @@ export function slots(node, prefix) {
         if (!tail.startsWith(prefix)) continue;
         const link = input.link;
         const connected = link !== null && link !== undefined;
-        found.push({ name: tail, connected, kind: connected ? linkKind(node, link) : "image" });
+        found.push({
+            name: tail,
+            connected,
+            kind: connected ? linkKind(node, link) : "image",
+            refmod: connected ? linkRefmod(node, link) : null,
+        });
     }
     return found;
 }

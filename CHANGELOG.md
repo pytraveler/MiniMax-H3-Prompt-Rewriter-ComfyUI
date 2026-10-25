@@ -6,6 +6,61 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.32.0 - 2026-10-25
+
+### Added
+
+- **RefMods, read and used.** A RefMod is a reference encoded once and saved in
+  `models/refmods`: the H3 VAE's latent of a picture, a clip, a stack of photos
+  or a voice. The new **MiniMax-H3 RefMod** node picks one -- the files shared
+  on Hugging Face, ComfyUI-MiniMaxH3Mod's single-file bundles and pairs named
+  `<name>_visual` / `<name>_audio` included -- with a `visual` and an `audio`
+  output, a `strength`, and optional `vae` / `audio_vae` to decode it once so a
+  writer can see and hear it. None of the shared files keep pictures of
+  themselves; a stack is decoded one photo at a time.
+- **RefMods in the strip of the Universal Writer and the Prompt Rewriter Omni.**
+  Each output goes into a square of its own, marked `mod`, and is numbered as
+  what its file says it is: a clip or a stack of photos is a `<Video N>`, a
+  voice an `<Audio N>`, and a picture can be a subject but not a clip. The
+  Universal Writer describes it from its pictures, with what the file says --
+  a stack being separate photos of one subject, a saved name, a saved
+  appearance or voice -- added after the role's question, and writes a voice
+  nobody decoded from its saved description. Its writer is told, ahead of each
+  caption, what the file says the RefMod is -- a voice being the voice alone,
+  not what plays behind it -- and which label holds the voice saved with a
+  look and the look saved with a voice: the captioner reads the two apart, and
+  without it a voice saved over music was taken for the music and borrowed
+  for the score. The Omni adapter refuses one it
+  cannot see or hear, and names the input to connect. Both hand the RefMod
+  itself on in `references`.
+- **MiniMax-H3 Reference Encode**, which stands in for Reference Slots and
+  MiniMaxH3ReferenceToVideo together and takes the same settings. Pictures,
+  clips and sounds are prepared with that node's own helpers; a RefMod is given
+  to the generator as the latent it saved, in the place the writer numbered,
+  and H3's text encoder is shown its pictures -- a clip at two frames a second,
+  a stack every fourth photo. The order is MiniMaxH3ReferenceToVideo's, because
+  the DiT matches a reference block to its label by position alone. Its
+  `summary` says what went in and what it costs in tokens.
+- **Template 8 - RefMods to video.** The whole chain on one screen: a RefMod
+  node, the Universal Writer, and template 6's generator box with Reference
+  Encode in it in place of the native reference node, the two VAEs outside it
+  and shared with the RefMod node. The RefMod picker ships empty, like the
+  image loaders, and an empty pick is refused as such rather than as a file
+  gone missing. Template 6's note points here for a RefMod.
+- **Screenshots of a RefMod in both strips** in the README, in all three
+  languages.
+
+### Changed
+
+- **Reference Slots refuses a RefMod** and names Reference Encode: the native
+  node encodes what it is given, and a RefMod is encoded already.
+- **The Prompt Rewriter Omni on a safetensors base names what it cannot take.**
+  That route shows the model pictures only, and its refusal used to read
+  "clip, sound cannot be passed". It now names each slot and what is in it --
+  a RefMod by its entry, and a stack of photos as the clip H3 reads it as --
+  says it on screen too, and offers switching the squares off besides a GGUF
+  base.
+
 ## 0.31.0 - 2026-10-24
 
 ### Changed

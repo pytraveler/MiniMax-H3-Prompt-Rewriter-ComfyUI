@@ -1,6 +1,7 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 import { refresh } from "./mmx_controls.js";
+import { refmodAt, refmodPreview } from "./refmods.js";
 
 const EVENT = "minimax_h3_rewriter.previews";
 const STATE_URL = "/minimax_h3_rewriter/previews";
@@ -99,6 +100,8 @@ function startOf(source, spec) {
 function loaderFile(node, slot) {
     const link = inputLink(node, slot);
     if (link === null) return null;
+    const refmod = refmodAt(node, link);
+    if (refmod) return refmodPreview(refmod);
     const source = sourceNode(node, link);
     const spec = source && LOADERS[source.type];
     if (!spec) return null;

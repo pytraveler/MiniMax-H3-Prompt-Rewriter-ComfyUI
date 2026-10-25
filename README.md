@@ -97,6 +97,8 @@ If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2va
   - [MiniMax-H3 LoRA Triggers](#minimax-h3-lora-triggers)
   - [MiniMax-H3 Reference Adapter](#minimax-h3-reference-adapter)
   - [MiniMax-H3 Reference Slots](#minimax-h3-reference-slots)
+  - [MiniMax-H3 RefMod](#minimax-h3-refmod)
+  - [MiniMax-H3 Reference Encode](#minimax-h3-reference-encode)
   - [MiniMax-H3 Prompt Presets](#minimax-h3-prompt-presets)
   - [The duration widget](#the-duration-widget)
   - [Repeating the last answer](#repeating-the-last-answer)
@@ -163,7 +165,7 @@ Or install it from the Comfy registry through ComfyUI-Manager.
 
 ### Example workflows
 
-Seven workflows ship with the pack and appear in ComfyUI's template browser
+Eight workflows ship with the pack and appear in ComfyUI's template browser
 (*Workflow → Browse Templates*) under this node pack's name once it is
 installed. Each is a card of its own and each runs on its own: nothing is
 bypassed on open, and there is no second branch to mute before pressing Run.
@@ -177,17 +179,21 @@ bypassed on open, and there is no second branch to mute before pressing Run.
 | 5 | **Prompt to video** — ComfyUI's text-to-video template with the writer in front of it | the MiniMax-H3 weights |
 | 6 | **References to video** — the same for Ref2VA, the pictures reaching the generator through the writer, in the order its strip numbers them | the MiniMax-H3 ref2va weights |
 | 7 | **LoRA triggers and effects** — the words an adapter answers to, and MiniMax's ten effects, put into a finished prompt | nothing at all |
+| 8 | **RefMods to video** — a [RefMod](#minimax-h3-refmod), a look and a voice saved already encoded: the writer sees and hears it, and the generator is given the latent it was saved as | the MiniMax-H3 ref2va weights, and a RefMod in `models/refmods` |
 
-Only 5 and 6 load a MiniMax-H3 checkpoint. The rest end at the text, which is
-what most of this pack is for. Those two are ComfyUI's own gallery templates
+Only 5, 6 and 8 load a MiniMax-H3 checkpoint. The rest end at the text, which
+is what most of this pack is for. 5 and 6 are ComfyUI's own gallery templates
 with the generator folded into a single subgraph box, so what is on screen is
 the prompt side plus one node — the checkpoints they name are the ones the
-stock templates use, and ComfyUI offers to download any that are missing.
+stock templates use, and ComfyUI offers to download any that are missing. 8 is
+6 with [Reference Encode](#minimax-h3-reference-encode) in that box in place of
+the native reference node, and the two VAEs outside it, shared with the RefMod.
 
 Every one carries a **Read me first** note: what it does, what it downloads,
 what to set before pressing Run, and where to go next. The image loaders in 3
-and 6 ship **empty** on purpose — a file name saved into a template points at
-something your machine does not have — so choose your own pictures first.
+and 6 and the RefMod picker in 8 ship **empty** on purpose — a file name saved
+into a template points at something your machine does not have — so choose
+your own first.
 
 The card pictures the browser draws beside each name come from
 `python tools/template_cards.py`, which writes them as `<name>.jpg` next to the
@@ -1964,6 +1970,123 @@ now.
 > own references only and starts from one. Use one writer per shot when the
 > output is going to the generator.
 
+> **A RefMod stops it.** `MiniMaxH3ReferenceToVideo` encodes the pictures, clips
+> and sounds it is given, and a [RefMod](#minimax-h3-refmod) is encoded already,
+> so there is no socket to put one on. The node says so and names
+> [MiniMax-H3 Reference Encode](#minimax-h3-reference-encode), which takes the
+> same `references` and replaces both nodes.
+
+### MiniMax-H3 RefMod
+
+A RefMod is a reference that was encoded once and kept: the H3 VAE's latent of a
+picture, a clip, a stack of photos or a voice, in a `.safetensors` file under
+`ComfyUI/models/refmods`, with a header saying which it is. The format is
+[ComfyUI-MiniMaxH3Mod](https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod)'s.
+The RefMods people share on Hugging Face, that pack's single-file bundles and the
+files [ComfyUI-Fantastic-MiniMaxH3-PromptBuilder](https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder)
+writes are all read here. Making and editing them is what those two packs are
+for; this one only uses them.
+
+This node picks one and hands it to a writer's strip. The template
+**8 - RefMods to video** has the whole chain, from the file to the video.
+
+| Input | What it is for |
+| --- | --- |
+| `refmod` | The entry, by its path under `models/refmods`. A look and a voice saved together — one bundle file, or a pair named `<name>_visual` and `<name>_audio` — are one entry. Press **R** in the graph to list files added since. |
+| `strength` | How strongly the generator follows it. 1 is as saved. Lower mixes the latent toward a heavily blurred copy of itself, so colour, layout and the broad shape stay while the detail goes, and the pictures H3's text encoder is shown are weakened the same way. The writer still reads it at full strength. |
+| `vae` | The H3 video VAE. Most files keep no pictures of themselves — none of the ones on Hugging Face do — and a writer has to see a reference to describe it, so the look is decoded here, once. |
+| `audio_vae` | The H3 audio VAE: the same for a voice, so a writer can hear it. |
+
+| Output | What it is |
+| --- | --- |
+| `visual` | The picture, clip or stack of photos. Empty for a voice alone. |
+| `audio` | The voice. Empty when the entry has none. |
+
+Each output goes into a square of its own on the
+[Universal Writer](#minimax-h3-universal-writer) or the
+[Prompt Rewriter Omni](#minimax-h3-prompt-rewriter-omni-sees-and-hears), where it
+is marked `mod`:
+
+![The Universal Writer with a RefMod's two outputs on ref_0 and ref_1, and ref_2 empty and unticked. Its strip holds two squares marked mod: a green vid over ref_0 showing a decoded photo of the character with a play mark and a 1, and a purple aud over ref_1 with a speaker, the entry's name Yoda, a waveform and a 1, each with an "+ instr" band. Under them the line of help and the task switch with Ref2VA lit](docs/refmod_support_universal_writer.png)
+
+![The Prompt Rewriter Omni with the same two RefMod outputs on ref_0 and ref_1: a green vid square and a purple aud square named Yoda, both marked mod and numbered 1, above the line "drag to reorder - that order numbers the labels - click a square to switch it off - a clip's label: its sound". Below them the five tasks with REF2AV lit, eight aspect-ratio rectangles drawn to proportion with 16:9 chosen, and a duration of 10.0](docs/refmod_support_omni_rewriter.png)
+
+From there:
+
+- **It is called what its file says it is.** A clip or a stack of photos is a
+  `<Video N>` and a voice an `<Audio N>` whatever the badge reads, because that
+  is what the generator calls it. A single picture can still be made a subject,
+  but not a clip, and there is no sound of its own to switch on.
+- **It is described from its pictures,** like any other reference. What the
+  file says about it travels as a hint after the role's own question: a stack is
+  described as one subject seen in separate photographs rather than as a
+  sequence of events, a saved subject name is given to use, and a saved
+  appearance or voice description is offered to keep to where the pictures
+  agree. The Universal Writer writes a voice nobody decoded from its saved
+  description, when it has one. The Omni adapter hears the sound itself, so it
+  refuses such a voice and says to connect `audio_vae`.
+- **The Universal Writer's writer is told what the file says,** in the
+  reference block, ahead of the caption: that a stack is photos of one subject
+  rather than footage, what it was saved as a reference for — a voice being the
+  voice alone, not what plays behind it — and, when a look and the voice saved
+  with it are both on the strip, which label holds the other half:
+  `Audio 1: (saved as a reference for a voice, the voice alone and not what
+  plays behind it; the voice of the subject in Video 1) ...`. The captioner
+  reads the two apart, so neither caption says they belong together, and a
+  voice saved over music is otherwise taken for the music and borrowed for the
+  score. The generator is still handed the whole recording, music and all: the
+  prompt only stops asking for more of it.
+- **The RefMod itself is handed on** in `references`, latent and all, to
+  [MiniMax-H3 Reference Encode](#minimax-h3-reference-encode).
+
+A stack is decoded one photo at a time, because each photo was encoded on its
+own, and a clip whole. Either way it happens once per pick: ComfyUI keeps the
+node's output, and the pictures with it.
+
+A RefMod is not free at sampling time. The node's caption says what it costs,
+and some of the shared ones are heavy: a ten-photo stack at 1024x1824 is 18,240
+tokens riding through every sampling step, as many as eighteen reference
+pictures at 1344x768 or a two-and-a-half-second reference clip. Lowering
+`strength` changes how closely it is followed, not what it costs.
+
+### MiniMax-H3 Reference Encode
+
+`MiniMaxH3ReferenceToVideo` encodes the references it is given. A RefMod is
+encoded already: the generator needs its latent as a reference block of its own,
+and H3's text encoder still needs its pictures. So this node does what
+[Reference Slots](#minimax-h3-reference-slots) and `MiniMaxH3ReferenceToVideo` do
+together, and for a RefMod the one thing neither can.
+
+```
+Universal Writer ─ references ───────▶ references ┐
+                 ─ rewritten_prompt ─▶ prompt     ├ MiniMax-H3 Reference Encode ─ positive ─▶ sampler
+clip, vae, audio_vae ────────────────────────────┘                              ─ latent   ─▶ sampler
+```
+
+Its settings are `MiniMaxH3ReferenceToVideo`'s — `width`, `height`, `length`,
+`ref_image_size` — with the writer's `references` and the `soundtracks` switch
+from Reference Slots. It gives `positive`, the empty `latent` to sample into,
+and a `summary` of what went in, in order, and what it costs.
+
+**Order is the whole contract.** H3's DiT has no index for a reference: a block
+is matched to its label by where it sits. So everything goes in the order
+`MiniMaxH3ReferenceToVideo` uses — every picture, then every clip with its own
+sound just ahead of it, then every sound — and a RefMod takes the place the
+writer numbered. A picture, a clip or a sound is prepared with that node's own
+helpers, sizing and cutting included, so a strip without a RefMod in it encodes
+to the same conditioning it did through Reference Slots.
+
+**What the text encoder is shown of a RefMod.** A picture as it is. A clip at two
+frames a second, as for any reference clip. A stack every fourth photo, two to a
+block — the default of the pack that stores such pictures, and close to what two
+a second of the same latent played as a clip would show. A file that stores its
+pictures is shown those; one that does not is decoded here with `vae` when its
+RefMod node had none.
+
+`vae` and `audio_vae` keep `MiniMaxH3ReferenceToVideo`'s rule for ordinary
+references: without them those reach the text encoder only, and the summary says
+how many did. A RefMod reaches the generator either way.
+
 ### MiniMax-H3 Prompt Presets
 
 A thousand finished MiniMax-H3 prompts ship inside the pack, and this node hands
@@ -3093,6 +3216,7 @@ maintained.
 | Inference framework | [ModelTC/LightX2V](https://github.com/ModelTC/LightX2V) |
 | Bundled prompts, and the clips they describe | [ostris/minimax_h3_1k](https://huggingface.co/datasets/ostris/minimax_h3_1k) — used with the author's permission; the prompts are effectively MIT, the clips and the frames cut from them are MiniMax-H3 output and may not be used to train models |
 | Shooting-style and subject tags for them | [H3 Atlas](https://cohub.live/baize/video-altas/w/h3-atlas) |
+| RefMod format, and how its references are presented | [ComfyUI-MiniMaxH3Mod](https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod) by Luisa (luisacaotica), MIT; the pictures stored for the text encoder, and the every-fourth-photo default, from [ComfyUI-Fantastic-MiniMaxH3-PromptBuilder](https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder). Read by this pack's own code, none of theirs copied |
 
 The prompt templates in `minimax_h3_rewriter/prompt_template.py` and
 `prompt_template_8b.py` are reproduced byte-for-byte from their adapter

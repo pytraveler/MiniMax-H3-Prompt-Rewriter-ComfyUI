@@ -25,6 +25,8 @@ for _module_name, _label in (
     ("preset_node", "Prompt Presets"),
     ("reference_adapter", "Reference Adapter"),
     ("reference_slots", "Reference Slots"),
+    ("refmod_node", "RefMod"),
+    ("reference_encode", "Reference Encode"),
     ("writer_omni", "Prompt Rewriter Omni"),
     ("universal_rewriter", "Universal Rewriter"),
     ("reduce_node", "Prompt Reducer"),

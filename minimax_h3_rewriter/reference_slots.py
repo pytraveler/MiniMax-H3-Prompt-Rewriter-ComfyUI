@@ -34,8 +34,8 @@ from comfy_api.latest import io
 
 from . import media
 from .nodes import CATEGORY
-from .progress import NodeProgress, announce
-from .references import MAX_AUDIOS, MAX_PICTURES, MAX_VIDEOS, SLOTS_TYPE, fan_out
+from .progress import NodeProgress, announce, refuse
+from .references import MAX_AUDIOS, MAX_PICTURES, MAX_VIDEOS, SLOTS_TYPE, fan_out, refmods_in
 
 log = logging.getLogger(__name__)
 
@@ -105,6 +105,18 @@ class MiniMaxH3ReferenceSlots(io.ComfyNode):
     def execute(cls, references=None, soundtracks=False):
         node_id = cls.hidden.unique_id
         progress = NodeProgress(node_id)
+
+        held = refmods_in(references)
+        if held:
+            refuse(
+                node_id,
+                f"{', '.join(repr(slot) for slot in held)} "
+                f"{'is a RefMod' if len(held) == 1 else 'are RefMods'}, which "
+                f"MiniMaxH3ReferenceToVideo cannot take: it encodes the pictures, clips and "
+                f"sounds it is given, and a RefMod is encoded already. Use 'MiniMax-H3 "
+                f"Reference Encode' in place of this node and MiniMaxH3ReferenceToVideo -- "
+                f"it takes the same 'references' and the same settings.",
+            )
 
         with media.Workspace(prefix="minimax_h3_slots_") as workspace:
             decoded = 0

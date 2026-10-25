@@ -47,6 +47,7 @@ from . import (
     model_sections,
     mtmd_engine,
     previews,
+    refmods,
     snapshot,
 )
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
@@ -152,6 +153,9 @@ class Reference:
     ``clip`` is set on the reference ``with_sounds`` makes of that sound -- the
     slot of the clip it came out of -- so the checks that count what was
     connected can tell it from a sound that was.
+
+    ``refmod`` is set for a RefMod, whose ``value`` is then what it decodes to:
+    the model is shown that, and the generator is handed the RefMod.
     """
 
     slot: str
@@ -159,6 +163,11 @@ class Reference:
     value: object
     sound: bool = False
     clip: str = ""
+    refmod: object = None
+
+    @property
+    def handed(self):
+        return self.refmod if self.refmod is not None else self.value
 
 
 def render(messages: list[dict], counts: list[int] | None = None) -> tuple[str, str]:
@@ -219,9 +228,27 @@ def arrange(supplied: dict | None, raw_layout: str) -> tuple[list[Reference], in
     for name in named:
         if name in off:
             continue
-        kind = kind_of(connected[name])
-        found.append(Reference(name, kind, connected[name], kind == "video" and name in heard))
+        value = connected[name]
+        if refmods.is_refmod(value):
+            found.append(Reference(name, value.kind, value.view, refmod=value))
+            continue
+        kind = kind_of(value)
+        found.append(Reference(name, kind, value, kind == "video" and name in heard))
     return found, len(connected) - len(found)
+
+
+def refuse_unseen(references: list[Reference], node_id=None) -> None:
+    """Stop before any weights move if a RefMod has not been decoded.
+
+    The adapter is shown the asset itself and nothing about it, so a voice it
+    cannot hear is not written from a saved description here: it is refused,
+    and the fix is on the RefMod node.
+    """
+    for reference in references:
+        if reference.refmod is not None:
+            problem = refmods.unseen(reference.slot, reference.refmod, saved_ok=False)
+            if problem:
+                refuse(node_id, problem)
 
 
 def with_sounds(references: list[Reference], task: str, node_id=None) -> list[Reference]:
@@ -388,6 +415,17 @@ def _resolve_model_choice(choice: str) -> BaseChoice:
     raise RuntimeError(_gone(choice))
 
 
+def _unshowable(reference: Reference) -> str:
+    """One reference the safetensors route cannot take, by its slot and what it is."""
+    if reference.clip:
+        return f"the sound of '{reference.clip}'"
+    if reference.refmod is not None:
+        said, read = refmods.kind_words(reference.refmod), KIND_NAMES[reference.kind]
+        what = said if said == read else f"{said}, which H3 reads as a {read}"
+        return f"'{reference.slot}' (RefMod '{reference.refmod.name}', a {what})"
+    return f"'{reference.slot}' (a {KIND_NAMES[reference.kind]})"
+
+
 def _with_transformers(
     choice: BaseChoice,
     references: list[Reference],
@@ -409,12 +447,14 @@ def _with_transformers(
     the turn -- which would leave the model writing about a reference it was
     never given.
     """
-    unheard = [KIND_NAMES[r.kind] for r in references if r.kind != "image"]
+    unheard = [_unshowable(r) for r in references if r.kind != "image"]
     if unheard:
-        raise RuntimeError(
+        refuse(
+            progress.node_id,
             f"This base is a folder of safetensors, and that route can show the model "
-            f"pictures only -- {', '.join(unheard)} cannot be passed to it here. Pick one of "
-            f"the GGUF bases, which run through llama-mtmd-cli and do hear."
+            f"pictures only, so {'; '.join(unheard)} cannot be passed to it. Pick one of the "
+            f"GGUF bases, which run through llama-mtmd-cli and do hear -- or switch those "
+            f"squares off on the strip.",
         )
 
     _verify_base_model(choice.reference, progress, discovery.SHAPE_OMNI, BASE_REPO_OMNI)
@@ -774,10 +814,10 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
                     template=io.Autogrow.TemplatePrefix(
                         input=io.MultiType.Input(
                             "ref",
-                            types=[io.Image, io.Video, io.Audio],
+                            types=[io.Image, io.Video, io.Audio, io.Custom(refmods.TYPE)],
                             tooltip=(
-                                "A picture or batch of frames, a clip, or a sound. Its square "
-                                "appears in the strip as soon as it is connected."
+                                "A picture or batch of frames, a clip, a sound, or a RefMod. Its "
+                                "square appears in the strip as soon as it is connected."
                             ),
                         ),
                         prefix="ref_",
@@ -939,13 +979,16 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         empty = ("",) * len(ALL_FIELDS)
 
         connected, switched_off = arrange(references, reference_layout)
-        previews.announce(cls.hidden.unique_id, (references or {}).items())
+        previews.announce(
+            cls.hidden.unique_id,
+            ((name, refmods.seen(value)) for name, value in (references or {}).items()),
+        )
         handed_on = slot_bundle(
             ()
             if normalize_task(task) == TEXT_TASK
             else (
                 (
-                    item.slot, LABEL_PREFIX[item.kind], item.value,
+                    item.slot, LABEL_PREFIX[item.kind], item.handed,
                     item.sound and normalize_task(task) == REF_TASK,
                 )
                 for item in connected
@@ -983,6 +1026,8 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
                 switched_off,
             )
 
+        if not saved and wanted != TEXT_TASK:
+            refuse_unseen(connected, cls.hidden.unique_id)
         turn = connected if saved else with_sounds(connected, wanted, cls.hidden.unique_id)
         text = saved or rewrite_omni(
             model=model,

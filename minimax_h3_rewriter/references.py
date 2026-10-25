@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 
-from . import checks, media
+from . import checks, media, refmods
 
 log = logging.getLogger(__name__)
 
@@ -419,6 +419,27 @@ def _frame_count(value) -> int:
         return 0
 
 
+def refmods_in(bundle) -> list[str]:
+    """The writer slots in a ``references`` bundle that hold a RefMod.
+
+    MiniMaxH3ReferenceToVideo encodes what it is given, and a RefMod is a latent
+    already, so 'Reference Slots' has nowhere to put one -- and has to say so
+    rather than hand the generator something it cannot read.
+    """
+    if not hasattr(bundle, "get"):
+        return []
+    sources = bundle.get("sources")
+    if not hasattr(sources, "get"):
+        sources = {}
+    found = []
+    for group in ("pictures", "videos", "audios"):
+        named = _values(sources, group)
+        for index, value in enumerate(_values(bundle, group)):
+            if refmods.is_refmod(value):
+                found.append(str(named[index]) if index < len(named) else value.name)
+    return found
+
+
 def fan_out(bundle, soundtracks: bool, clip) -> tuple[dict, str, str]:
     """``(slots, summary, warning)``: a writer's references, one to a socket.
 
@@ -437,6 +458,10 @@ def fan_out(bundle, soundtracks: bool, clip) -> tuple[dict, str, str]:
     prompt and the generator agree. ``soundtracks`` puts every clip's sound
     there as well; one the writer did not count moves the prompt's labels, and
     the warning says by how much.
+
+    A RefMod is placed as it is, in its own group, for 'Reference Encode' to
+    present: it is a latent already and has nothing to decode, and a voice
+    RefMod is a sound of its own, never a clip's.
     """
     slots = {
         "pictures": [None] * MAX_PICTURES,
@@ -474,11 +499,16 @@ def fan_out(bundle, soundtracks: bool, clip) -> tuple[dict, str, str]:
     def picture_or_sound(group):
         def handle(position, _index, value, line):
             slots[group][position] = value
+            if refmods.is_refmod(value):
+                line += f" (RefMod '{value.name}', {value.tokens:,} tokens)"
             return line
         return handle
 
     def video(position, index, value, line):
         nonlocal paired, forced
+        if refmods.is_refmod(value):
+            slots["videos"][position] = value
+            return f"{line} (RefMod '{value.name}', {value.tokens:,} tokens)"
         writer_counted = index < len(counted) and counted[index] is True
         wanted = writer_counted or soundtracks
         if kind_of(value) == "video":

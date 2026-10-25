@@ -118,6 +118,21 @@ CARDS = [
             "H3 prompt",
         ],
     },
+    {
+        "number": "8",
+        "name": "8 - RefMods to video",
+        "title": "RefMods to video",
+        "line": "A saved look and voice: the writer reads them, the generator gets the latent.",
+        "cost": "Needs the MiniMax-H3 ref2va weights, tens of gigabytes.",
+        "accent": HEAVY,
+        "chain": [
+            "RefMod",
+            ("look", "voice"),
+            "Universal Writer",
+            "Reference Encode",
+            "video",
+        ],
+    },
 ]
 
 

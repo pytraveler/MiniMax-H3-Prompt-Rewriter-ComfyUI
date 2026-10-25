@@ -19,6 +19,7 @@ from . import (
     paths,
     presets,
     previews,
+    refmods,
     resident,
 )
 
@@ -558,6 +559,42 @@ def register() -> None:
             return {**_effects(), "downloaded": made["files"], "bytes": made["bytes"]}
 
         return await answered(fetch)
+
+    def _refmods() -> dict:
+        return {"ok": True, "items": [refmods.entry_record(item) for item in refmods.listing()]}
+
+    @routes.get(f"{PREFIX}/refmods")
+    async def refmod_list(request):
+        """Every RefMod, and what each output of its node carries.
+
+        The strip asks before anything has run: a RefMod's square has to show
+        a clip or a voice, and its number, from the moment it is connected --
+        and the wire says only that it is a RefMod.
+        """
+        return await answered(_refmods)
+
+    @routes.get(f"{PREFIX}/refmods/preview")
+    async def refmod_preview(request):
+        """The picture an entry's square is drawn with, named by its dropdown value.
+
+        Looked up in the listing, never joined onto a folder, so the name in the
+        query cannot reach a file outside the RefMod folders.
+        """
+
+        def picture():
+            item = refmods.find(request.query.get("name") or "")
+            return refmods.preview_bytes(item) if item else None
+
+        try:
+            found = await off_loop(picture)
+        except Exception as error:  # noqa: BLE001 - a missing thumbnail is not a fault
+            log.info("[minimax_h3_rewriter.routes] no RefMod preview: %s", error)
+            found = None
+        if found is None:
+            return web.Response(status=404)
+        return web.Response(
+            body=found[0], content_type=found[1], headers={"Cache-Control": "no-cache"}
+        )
 
 
 try:
