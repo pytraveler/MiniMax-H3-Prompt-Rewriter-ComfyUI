@@ -6,6 +6,23 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.32.2 - 2026-10-26
+
+### Fixed
+
+- **The Ref2VA writer checks its tags against `reference_assets`.** The node
+  never told the self-check which references were listed, so a `<Video 1>` or
+  an `<Audio 1>` with nothing behind it passed as an ordinary Ref2VA tag. Writer
+  models do add them: MiniMax's full-reference guide shows a sample
+  `retention_analysis` entry for every kind of label, and a model can fill all
+  of them in whatever it was given. Now a line of `reference_assets` that starts
+  with a label lists that asset -- `Picture 1: ...`, `<Picture 1> is ...`, or the
+  same as a list item -- and a tag with no such line is a warning; with
+  `fix_once` on, the writer is asked once more. A block with no labels in it at
+  all is not checked against rather than read as listing nothing. The Universal
+  Writer and both caption nodes read labels by the same rule, so a hand-typed
+  `<Picture 1>:` in `previous` now counts when the next number is picked.
+
 ## 0.32.1 - 2026-10-26
 
 ### Fixed

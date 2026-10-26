@@ -490,6 +490,52 @@ def test_no_block_means_nothing_was_shown():
     assert checks.block_kinds(None) == []
 
 
+def test_a_typed_block_reads_in_the_shapes_people_type_it():
+    block = "\n".join(
+        [
+            "<Picture 1>: a woman in a red coat.",
+            "- Video 1: a street at night.",
+            "2. Audio 1 - rain on a window.",
+            "<Picture 2> is the character reference for <Subject 1>.",
+        ]
+    )
+    assert sorted(checks.block_kinds(block)) == ["audio", "image", "image", "video"]
+
+
+def test_a_label_inside_a_sentence_does_not_list_an_asset():
+    assert checks.block_kinds("a woman, the one from Picture 1: red coat.") == []
+    assert checks.block_kinds("Pictures 1: a woman.") == []
+
+
+def test_a_typed_block_with_no_labels_is_unread_rather_than_empty():
+    assert checks.typed_kinds("a young woman in a red coat, and the street behind her") is None
+    assert checks.typed_kinds("") is None
+    assert checks.typed_kinds("Subject 1: a red kite.") == []
+
+
+def test_a_clip_and_a_sound_nobody_listed_are_found_and_fixable():
+    """Issue #22: the guide's sample entries, filled in with nothing behind them."""
+    block = "Subject 1: a young woman in a red coat.\nPicture 1: character reference for Subject 1."
+    sections = {name: "" for name in REF_FIELDS}
+    sections["retention_analysis"] = "\n".join(
+        [
+            "<Subject 1> (appears in [Shot 1]): fully_preserved - ...",
+            "<Picture 1> ([Shot 1] first frame): fully_preserved - ...",
+            "<Video 1> (cut and pacing structure): weak_reference - ...",
+            "<Audio 1>: fully_copy - ...",
+        ]
+    )
+    text = "\n\n".join(f"{name}: {sections[name]}" for name in REF_FIELDS)
+    issues = checks.review(
+        text, sections, REF_FIELDS, task="Ref2VA", having=checks.typed_kinds(block)
+    )
+    assert [issue.message for issue in issues if issue.code == "tags"] == [
+        "<Audio 1> is cited, but only 0 audio(s) reached this node",
+        "<Video 1> is cited, but only 0 video(s) reached this node",
+    ]
+    assert repair.fixable(issues)
+
+
 def test_sounds_alone_are_an_audio_only_set():
     assert checks.audio_only("Ref2VA", {"Audio": 2})
     assert checks.audio_only("ref2av", {"Audio": 1, "Picture": 0})

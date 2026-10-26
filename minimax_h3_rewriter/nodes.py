@@ -2043,6 +2043,7 @@ class MiniMaxH3GuidedWriterRef:
         if options:
             settings.update(options)
         progress = NodeProgress(unique_id)
+        shown = checks.typed_kinds(reference_assets)
 
         text = saved or _guided_text(
             guide_prompt.REF_MODE, model, prompt, resolution, duration, reference_assets,
@@ -2057,13 +2058,14 @@ class MiniMaxH3GuidedWriterRef:
                     system_prompt,
                 ),
                 REF_OUTPUT_FIELDS, task=guide_prompt.REF_MODE, duration=duration,
-                fallback="detailed_description", settings=settings,
+                having=shown, fallback="detailed_description", settings=settings,
             )
         _head, sections = split_sections(text, REF_OUTPUT_FIELDS, fallback="detailed_description")
         if not saved:
             _report(
                 progress, text, sections, REF_OUTPUT_FIELDS,
-                task=guide_prompt.REF_MODE, duration=duration, settings=settings,
+                task=guide_prompt.REF_MODE, duration=duration, having=shown,
+                settings=settings,
             )
         outputs = (text,) + tuple(sections[name] for name in REF_OUTPUT_FIELDS)
         if not saved:

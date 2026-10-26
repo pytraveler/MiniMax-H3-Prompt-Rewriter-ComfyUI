@@ -599,3 +599,20 @@ def test_the_universal_writer_checks_what_its_block_says():
     for call in calls:
         having = next(keyword.value for keyword in call.keywords if keyword.arg == "having")
         assert isinstance(having, ast.Name) and having.id == "shown"
+
+
+def test_the_ref2va_writer_checks_what_its_block_says():
+    """Without it a <Video 1> nobody listed passed as any other Ref2VA tag (issue #22)."""
+    tree = ast.parse((ROOT / _PKG / "nodes.py").read_text(encoding="utf-8"))
+    writer = next(
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef) and node.name == "MiniMaxH3GuidedWriterRef"
+    )
+    calls = [
+        node for node in ast.walk(writer)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") in ("_fix_once", "_report")
+    ]
+    assert len(calls) == 2
+    for call in calls:
+        having = next(keyword.value for keyword in call.keywords if keyword.arg == "having")
+        assert isinstance(having, ast.Name) and having.id == "shown"

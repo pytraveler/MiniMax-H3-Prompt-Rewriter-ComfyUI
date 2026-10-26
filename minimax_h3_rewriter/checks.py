@@ -87,7 +87,8 @@ ALIGNMENT_PHRASE = {
 
 TAG = re.compile(r"<(Picture|Video|Audio)\s+(\d+)>")
 ASSET_LINE = re.compile(
-    r"^[ \t]*(Subject|Picture|Video|Audio)[ \t]+(\d+)[ \t]*:", re.IGNORECASE | re.MULTILINE
+    r"^[ \t]*(?:(?:[-*]|\d+[.)])[ \t]+)?<?(Subject|Picture|Video|Audio)[ \t]*(\d+)\b",
+    re.IGNORECASE | re.MULTILINE,
 )
 SHOT = re.compile(r"\[Shot\s+(\d+)\]\s*(?:[Aa]t\s+(\d{1,2}):(\d{2}(?:\.\d{1,3})?))?")
 DIALOGUE = re.compile(r"<d>(.*?)</d>", re.DOTALL)
@@ -233,6 +234,21 @@ def block_kinds(block: str) -> list[str]:
         if kind:
             seen[(kind, int(match.group(2)))] = kind
     return list(seen.values())
+
+
+def typed_kinds(block: str):
+    """``block_kinds`` for a block a person typed, or None when none of it reads.
+
+    The Ref2VA writer gets its block as text, in whatever shape the person wrote
+    it -- ``Picture 1:``, ``<Picture 1> is ...``, a bulleted list. A line is read
+    as an asset when it starts with a label. A block where no line does says
+    nothing about what the writer was shown, which is not the same as saying it
+    was shown nothing: an empty list would make every tag in the answer a phantom,
+    and 'fix_once' would spend a generation rewriting a correct answer.
+    """
+    if not ASSET_LINE.search(block or ""):
+        return None
+    return block_kinds(block)
 
 
 def review(
