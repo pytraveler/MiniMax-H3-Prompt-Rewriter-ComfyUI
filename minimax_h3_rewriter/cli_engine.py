@@ -27,7 +27,7 @@ import os
 import tempfile
 
 from . import chat_template, checks, devices, llamacpp, runner
-from .constants import normalize_seed
+from .constants import EMPTY_ANSWER_HINT, normalize_seed
 from .progress import NodeProgress
 
 log = logging.getLogger(__name__)
@@ -183,6 +183,15 @@ def generate(
             os.unlink(prompt_file)
         except OSError:
             log.debug("[minimax_h3_rewriter.cli.generate] could not remove %s", prompt_file)
+
+    if not text:
+        tail = "\n".join(stderr_text.splitlines()[-runner.STDERR_TAIL:])
+        raise RuntimeError(
+            f"{os.path.basename(model_path)} wrote nothing: {os.path.basename(binary)} "
+            f"finished without an error and without a word of answer, so there is no "
+            f"prompt to hand on. {EMPTY_ANSWER_HINT}\n"
+            f"Last output from {os.path.basename(binary)}:\n{tail}"
+        )
 
     if progress is not None:
         progress.finish(f"Done · {len(text)} chars{runner.speed(stderr_text)}")

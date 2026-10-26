@@ -6,6 +6,21 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.32.1 - 2026-10-26
+
+### Fixed
+
+- **A writer that answers with nothing stops the node.** When a GGUF writer
+  model ended its answer before writing a word, the empty answer went on as the
+  prompt and the video was made from nothing -- with `self_check` off, not even
+  the log said so. Every writer, rewriter and the reducer that runs a GGUF model,
+  through llama-cpp-python or the official llama.cpp binaries, now stops with an
+  error instead. From the binaries, the error ends with their last output, which
+  says how many tokens the model ran -- the one line the report that led here
+  did not have. With `greedy` on, the same input gets the same empty answer every
+  time, so the error suggests turning it off or trying another writer model.
+  Reference captions are unchanged: an empty one is still a warning.
+
 ## 0.32.0 - 2026-10-25
 
 ### Added

@@ -108,6 +108,11 @@ THINK_CLOSE = "</think>"
 
 NO_REASONING = "Do not think out loud: give the answer only, with no reasoning and no preamble."
 
+EMPTY_ANSWER_HINT = (
+    "With 'greedy' on, the same input gets the same nothing every time; turning it "
+    "off, or another writer model, tells whether it is this input or this model."
+)
+
 
 def answer_only(text: str) -> str:
     """The answer without the model's reasoning in front of it.

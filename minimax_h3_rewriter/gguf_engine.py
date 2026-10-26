@@ -33,7 +33,7 @@ import sys
 import threading
 
 from . import chat_template, checks, devices, gguf_meta, llamacpp, resident
-from .constants import install_command, normalize_seed
+from .constants import EMPTY_ANSWER_HINT, install_command, normalize_seed
 from .progress import NodeProgress
 
 log = logging.getLogger(__name__)
@@ -512,12 +512,21 @@ def generate(
 
         raise mm.InterruptProcessingException()
 
+    text = "".join(pieces).strip()
+    if not text:
+        name = os.path.basename(str(getattr(llama, "model_path", "") or "")) or "The model"
+        what = f"{produced} token(s) of blank space" if produced else "not a single token"
+        raise RuntimeError(
+            f"{name} wrote nothing: it ended its answer after {what}, so there is no "
+            f"prompt to hand on. {EMPTY_ANSWER_HINT}"
+        )
+
     if progress is not None:
         if looped:
             progress.finish(f"Stopped at a repetition · {produced} tokens")
         else:
             progress.finish(f"Done · {produced} tokens")
-    return "".join(pieces).strip()
+    return text
 
 
 def rewrite(
