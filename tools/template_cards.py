@@ -133,6 +133,18 @@ CARDS = [
             "video",
         ],
     },
+    {
+        "number": "9", "name": "9 - P-H3 text to image", "title": "P-H3 text to image",
+        "line": "Pruna's upsampler writes the prompt; P-H3 renders one image.",
+        "cost": "Needs P-H3 image weights and the prompt upsampler.", "accent": HEAVY,
+        "chain": ["your idea", "P-H3 Writer", "Conditioning", "image"],
+    },
+    {
+        "number": "10", "name": "10 - P-H3 image editing", "title": "P-H3 image editing",
+        "line": "An edit request, ordered references and instructions on what to keep.",
+        "cost": "Needs P-H3 image weights and the prompt upsampler.", "accent": HEAVY,
+        "chain": ["your image", "P-H3 Writer", "Reference Slots", "edited image"],
+    },
 ]
 
 

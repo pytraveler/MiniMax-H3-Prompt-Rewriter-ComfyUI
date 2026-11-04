@@ -68,6 +68,7 @@ class Record:
     references: list = field(default_factory=list)
     fields: tuple = ()
     edited_at: float = 0.0
+    plain_text: bool = False
 
     @property
     def text(self) -> str:
@@ -85,7 +86,7 @@ class Record:
         rather than an answer with fields. They are told apart by whether the
         node said what its fields were when it kept the record.
         """
-        return bool(self.fields)
+        return self.plain_text or bool(self.fields)
 
 
 LAST: dict[str, Record] = {}
@@ -174,6 +175,7 @@ def keep(
     references=None,
     task: str = "",
     fields: tuple = (),
+    plain_text: bool = False,
 ) -> Record | None:
     """Remember what this node just produced."""
     if node_id is None:
@@ -187,6 +189,7 @@ def keep(
         task=task or str(given.get("task") or ""),
         references=list(references or ()),
         fields=tuple(fields or ()),
+        plain_text=plain_text,
     )
     LAST[str(node_id)] = record
     log.info(
@@ -212,6 +215,11 @@ def rewrite(node_id, text: str) -> Record | None:
     record = recall(node_id)
     if record is None or not record.editable:
         return None
+    if record.plain_text:
+        record.outputs = (text,) + record.outputs[1:]
+        record.edited_at = time.time()
+        announce(node_id, summary(record))
+        return record
     sections = split_fields(text, record.fields, fallback=body_field(record.fields))
     record.outputs = (
         (text,)

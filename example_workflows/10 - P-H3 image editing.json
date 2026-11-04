@@ -1,0 +1,1270 @@
+{
+  "id": "826e679e-6289-491d-ab83-dff2f6da9428",
+  "revision": 0,
+  "last_node_id": 18,
+  "last_link_id": 28,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "CLIPLoader",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        390,
+        125
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            1
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader",
+        "models": [
+          {
+            "name": "p-h3-image_prompt_upsampler_int8_convrot.safetensors",
+            "directory": "text_encoders",
+            "url": "https://huggingface.co/PrunaAI/P-H3-Image-Comfy/resolve/main/text_encoders/p-h3-image_prompt_upsampler_int8_convrot.safetensors"
+          }
+        ]
+      },
+      "widgets_values": [
+        "p-h3-image_prompt_upsampler_int8_convrot.safetensors",
+        "minimax",
+        "default"
+      ],
+      "widgets_values_named": {
+        "clip_name": "p-h3-image_prompt_upsampler_int8_convrot.safetensors",
+        "type": "minimax",
+        "device": "default"
+      },
+      "title": "P-H3 prompt upsampler"
+    },
+    {
+      "id": 2,
+      "type": "MiniMaxH3PH3Writer",
+      "pos": [
+        480,
+        40
+      ],
+      "size": [
+        500,
+        780
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "upsampler",
+          "type": "CLIP",
+          "link": 1
+        },
+        {
+          "name": "refmod_vae",
+          "type": "VAE",
+          "link": null,
+          "shape": 7
+        },
+        {
+          "name": "references.ref_0",
+          "type": "IMAGE,VIDEO,H3_REWRITER_REFMOD",
+          "link": 19
+        }
+      ],
+      "outputs": [
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            6,
+            18
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "thinking",
+          "type": "STRING",
+          "links": null,
+          "slot_index": 1
+        },
+        {
+          "name": "summary",
+          "type": "STRING",
+          "links": null,
+          "slot_index": 2
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "links": [
+            7
+          ],
+          "slot_index": 3
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": [
+            8
+          ],
+          "slot_index": 4
+        },
+        {
+          "name": "references",
+          "type": "H3_REWRITER_REFERENCES",
+          "links": [
+            20
+          ],
+          "slot_index": 5
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3PH3Writer"
+      },
+      "widgets_values": [
+        "Image2Image",
+        "Make the fox wear a red knitted scarf.",
+        "The fox, its pose, the sign and its lettering, the snow, background and light.",
+        "3:2",
+        8,
+        true,
+        3,
+        2048,
+        true,
+        false,
+        false,
+        "",
+        "",
+        "",
+        3,
+        ""
+      ],
+      "widgets_values_named": {
+        "task": "Image2Image",
+        "prompt": "Make the fox wear a red knitted scarf.",
+        "keep": "The fox, its pose, the sign and its lettering, the snow, background and light.",
+        "resolution": "3:2",
+        "megapixels": 8,
+        "match_image_ratio": true,
+        "refmod_images": 3,
+        "max_length": 2048,
+        "thinking": true,
+        "bypass": false,
+        "repeat_last": false,
+        "library_pick": "",
+        "reference_layout": "",
+        "reference_instructions": "",
+        "video_images": 3,
+        "frame_selection": ""
+      }
+    },
+    {
+      "id": 3,
+      "type": "UNETLoader",
+      "pos": [
+        40,
+        580
+      ],
+      "size": [
+        390,
+        90
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            2
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "UNETLoader",
+        "models": [
+          {
+            "name": "p-h3-image_int8_convrot.safetensors",
+            "directory": "diffusion_models",
+            "url": "https://huggingface.co/PrunaAI/P-H3-Image-Comfy/resolve/main/diffusion_models/p-h3-image_int8_convrot.safetensors"
+          }
+        ]
+      },
+      "widgets_values": [
+        "p-h3-image_int8_convrot.safetensors",
+        "default"
+      ],
+      "widgets_values_named": {
+        "unet_name": "p-h3-image_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    {
+      "id": 4,
+      "type": "MiniMaxH3SigmaShift",
+      "pos": [
+        480,
+        890
+      ],
+      "size": [
+        320,
+        100
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            3
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3SigmaShift"
+      },
+      "widgets_values": [
+        1.0,
+        1.0
+      ],
+      "widgets_values_named": {
+        "shift_video": 1.0,
+        "shift_audio": 1.0
+      }
+    },
+    {
+      "id": 5,
+      "type": "CLIPLoader",
+      "pos": [
+        40,
+        730
+      ],
+      "size": [
+        390,
+        125
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            4
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader",
+        "models": [
+          {
+            "name": "p-h3-image_text_encoder_int8_convrot.safetensors",
+            "directory": "text_encoders",
+            "url": "https://huggingface.co/PrunaAI/P-H3-Image-Comfy/resolve/main/text_encoders/p-h3-image_text_encoder_int8_convrot.safetensors"
+          }
+        ]
+      },
+      "widgets_values": [
+        "p-h3-image_text_encoder_int8_convrot.safetensors",
+        "minimax",
+        "default"
+      ],
+      "widgets_values_named": {
+        "clip_name": "p-h3-image_text_encoder_int8_convrot.safetensors",
+        "type": "minimax",
+        "device": "default"
+      },
+      "title": "P-H3 image text encoder"
+    },
+    {
+      "id": 6,
+      "type": "VAELoader",
+      "pos": [
+        40,
+        930
+      ],
+      "size": [
+        390,
+        65
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            5,
+            16
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader",
+        "models": [
+          {
+            "name": "p-h3-image_vae_int8_convrot.safetensors",
+            "directory": "vae",
+            "url": "https://huggingface.co/PrunaAI/P-H3-Image-Comfy/resolve/main/vae/p-h3-image_vae_int8_convrot.safetensors"
+          }
+        ]
+      },
+      "widgets_values": [
+        "p-h3-image_vae_int8_convrot.safetensors"
+      ],
+      "widgets_values_named": {
+        "vae_name": "p-h3-image_vae_int8_convrot.safetensors"
+      }
+    },
+    {
+      "id": 7,
+      "type": "PH3ImageConditioning",
+      "pos": [
+        1100,
+        430
+      ],
+      "size": [
+        390,
+        240
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 4
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 5,
+          "shape": 7
+        },
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "link": 6,
+          "widget": {
+            "name": "prompt"
+          }
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "link": 7,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": 8,
+          "widget": {
+            "name": "height"
+          }
+        },
+        {
+          "name": "images.image_1",
+          "type": "IMAGE",
+          "link": 21
+        },
+        {
+          "name": "images.image_2",
+          "type": "IMAGE",
+          "link": 22
+        },
+        {
+          "name": "images.image_3",
+          "type": "IMAGE",
+          "link": 23
+        },
+        {
+          "name": "images.image_4",
+          "type": "IMAGE",
+          "link": 24
+        },
+        {
+          "name": "images.image_5",
+          "type": "IMAGE",
+          "link": 25
+        },
+        {
+          "name": "images.image_6",
+          "type": "IMAGE",
+          "link": 26
+        },
+        {
+          "name": "images.image_7",
+          "type": "IMAGE",
+          "link": 27
+        },
+        {
+          "name": "images.image_8",
+          "type": "IMAGE",
+          "link": 28
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            9
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            14
+          ],
+          "slot_index": 1
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PH3ImageConditioning"
+      },
+      "widgets_values": [
+        "",
+        0,
+        0
+      ],
+      "widgets_values_named": {
+        "prompt": "",
+        "width": 0,
+        "height": 0
+      }
+    },
+    {
+      "id": 8,
+      "type": "BasicGuider",
+      "pos": [
+        1560,
+        430
+      ],
+      "size": [
+        280,
+        90
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 3
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 9
+        }
+      ],
+      "outputs": [
+        {
+          "name": "GUIDER",
+          "type": "GUIDER",
+          "links": [
+            11
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "BasicGuider"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 9,
+      "type": "RandomNoise",
+      "pos": [
+        1560,
+        40
+      ],
+      "size": [
+        280,
+        90
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "NOISE",
+          "type": "NOISE",
+          "links": [
+            10
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "RandomNoise"
+      },
+      "widgets_values": [
+        42,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "noise_seed": 42
+      }
+    },
+    {
+      "id": 10,
+      "type": "KSamplerSelect",
+      "pos": [
+        1560,
+        170
+      ],
+      "size": [
+        280,
+        65
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            12
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSamplerSelect"
+      },
+      "widgets_values": [
+        "er_sde"
+      ],
+      "widgets_values_named": {
+        "sampler_name": "er_sde"
+      }
+    },
+    {
+      "id": 11,
+      "type": "ManualSigmas",
+      "pos": [
+        1560,
+        290
+      ],
+      "size": [
+        390,
+        65
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            13
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ManualSigmas"
+      },
+      "widgets_values": [
+        "1.0, 0.984753, 0.967905, 0.951688, 0.925372, 0.881923, 0.810083, 0.528718, 0.0"
+      ],
+      "widgets_values_named": {
+        "sigmas": "1.0, 0.984753, 0.967905, 0.951688, 0.925372, 0.881923, 0.810083, 0.528718, 0.0"
+      }
+    },
+    {
+      "id": 12,
+      "type": "SamplerCustomAdvanced",
+      "pos": [
+        2030,
+        40
+      ],
+      "size": [
+        310,
+        180
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "noise",
+          "type": "NOISE",
+          "link": 10
+        },
+        {
+          "name": "guider",
+          "type": "GUIDER",
+          "link": 11
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 12
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 13
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 14
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "LATENT",
+          "links": [
+            15
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "denoised_output",
+          "type": "LATENT",
+          "links": null,
+          "slot_index": 1
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SamplerCustomAdvanced"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 13,
+      "type": "VAEDecode",
+      "pos": [
+        2030,
+        320
+      ],
+      "size": [
+        280,
+        65
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 15
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            17
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 14,
+      "type": "SaveImage",
+      "pos": [
+        2420,
+        40
+      ],
+      "size": [
+        600,
+        560
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 17
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "P-H3"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "P-H3"
+      }
+    },
+    {
+      "id": 15,
+      "type": "PreviewAny",
+      "pos": [
+        1100,
+        40
+      ],
+      "size": [
+        390,
+        330
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 18
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": null,
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [
+        "text"
+      ],
+      "widgets_values_named": {},
+      "title": "P-H3 image prompt"
+    },
+    {
+      "id": 17,
+      "type": "LoadImage",
+      "pos": [
+        40,
+        220
+      ],
+      "size": [
+        390,
+        310
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            19
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null,
+          "slot_index": 1
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "",
+        "upload": "image"
+      },
+      "title": "Choose the base image"
+    },
+    {
+      "id": 18,
+      "type": "MiniMaxH3ReferenceSlots",
+      "pos": [
+        1100,
+        760
+      ],
+      "size": [
+        300,
+        475
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "references",
+          "type": "H3_REWRITER_REFERENCES",
+          "link": 20
+        }
+      ],
+      "outputs": [
+        {
+          "name": "picture_1",
+          "type": "IMAGE",
+          "links": [
+            21
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "picture_2",
+          "type": "IMAGE",
+          "links": [
+            22
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "picture_3",
+          "type": "IMAGE",
+          "links": [
+            23
+          ],
+          "slot_index": 2
+        },
+        {
+          "name": "picture_4",
+          "type": "IMAGE",
+          "links": [
+            24
+          ],
+          "slot_index": 3
+        },
+        {
+          "name": "picture_5",
+          "type": "IMAGE",
+          "links": [
+            25
+          ],
+          "slot_index": 4
+        },
+        {
+          "name": "picture_6",
+          "type": "IMAGE",
+          "links": [
+            26
+          ],
+          "slot_index": 5
+        },
+        {
+          "name": "picture_7",
+          "type": "IMAGE",
+          "links": [
+            27
+          ],
+          "slot_index": 6
+        },
+        {
+          "name": "picture_8",
+          "type": "IMAGE",
+          "links": [
+            28
+          ],
+          "slot_index": 7
+        },
+        {
+          "name": "picture_9",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 8
+        },
+        {
+          "name": "video_1",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 9
+        },
+        {
+          "name": "video_2",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 10
+        },
+        {
+          "name": "video_3",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 11
+        },
+        {
+          "name": "video_audio_1",
+          "type": "AUDIO",
+          "links": null,
+          "slot_index": 12
+        },
+        {
+          "name": "video_audio_2",
+          "type": "AUDIO",
+          "links": null,
+          "slot_index": 13
+        },
+        {
+          "name": "video_audio_3",
+          "type": "AUDIO",
+          "links": null,
+          "slot_index": 14
+        },
+        {
+          "name": "audio_1",
+          "type": "AUDIO",
+          "links": null,
+          "slot_index": 15
+        },
+        {
+          "name": "audio_2",
+          "type": "AUDIO",
+          "links": null,
+          "slot_index": 16
+        },
+        {
+          "name": "audio_3",
+          "type": "AUDIO",
+          "links": null,
+          "slot_index": 17
+        },
+        {
+          "name": "summary",
+          "type": "STRING",
+          "links": null,
+          "slot_index": 18
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3ReferenceSlots"
+      },
+      "widgets_values": [
+        false
+      ],
+      "widgets_values_named": {
+        "soundtracks": false
+      }
+    },
+    {
+      "id": 16,
+      "type": "MarkdownNote",
+      "pos": [
+        40,
+        1100
+      ],
+      "size": [
+        930,
+        360
+      ],
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "## P-H3 Image2Image\nChoose an image on Load Image before queuing. Picture 1 is the base.\n\nAdd further images or visual RefMods to the writer's growing reference inputs. Drag its strip to reorder, click to disable, and use role to state what to take. RefMods expand to pictures; the writer's summary reports exact Picture numbers. For files without pictures, connect the original H3 video VAE to refmod_vae.\n\nReference Slots picture_1 through picture_8 are already wired to Conditioning in the same order.\n\nRequires ComfyUI 0.44.0 or newer. The upsampler and image text encoder are separate models; both Load CLIP nodes use type minimax.\n\nUse the eight-step sigmas shown here, ER SDE, BasicGuider (no CFG), and shifts 1.0/1.0. Models: https://huggingface.co/PrunaAI/P-H3-Image-Comfy\n\nPrompt library: run once, then save or edit the result. repeat_last reuses text with the current pictures and canvas. bypass passes the request through without rewriting."
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "CLIP"
+    ],
+    [
+      2,
+      3,
+      0,
+      4,
+      0,
+      "MODEL"
+    ],
+    [
+      3,
+      4,
+      0,
+      8,
+      0,
+      "MODEL"
+    ],
+    [
+      4,
+      5,
+      0,
+      7,
+      0,
+      "CLIP"
+    ],
+    [
+      5,
+      6,
+      0,
+      7,
+      1,
+      "VAE"
+    ],
+    [
+      6,
+      2,
+      0,
+      7,
+      2,
+      "STRING"
+    ],
+    [
+      7,
+      2,
+      3,
+      7,
+      3,
+      "INT"
+    ],
+    [
+      8,
+      2,
+      4,
+      7,
+      4,
+      "INT"
+    ],
+    [
+      9,
+      7,
+      0,
+      8,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      10,
+      9,
+      0,
+      12,
+      0,
+      "NOISE"
+    ],
+    [
+      11,
+      8,
+      0,
+      12,
+      1,
+      "GUIDER"
+    ],
+    [
+      12,
+      10,
+      0,
+      12,
+      2,
+      "SAMPLER"
+    ],
+    [
+      13,
+      11,
+      0,
+      12,
+      3,
+      "SIGMAS"
+    ],
+    [
+      14,
+      7,
+      1,
+      12,
+      4,
+      "LATENT"
+    ],
+    [
+      15,
+      12,
+      0,
+      13,
+      0,
+      "LATENT"
+    ],
+    [
+      16,
+      6,
+      0,
+      13,
+      1,
+      "VAE"
+    ],
+    [
+      17,
+      13,
+      0,
+      14,
+      0,
+      "IMAGE"
+    ],
+    [
+      18,
+      2,
+      0,
+      15,
+      0,
+      "STRING"
+    ],
+    [
+      19,
+      17,
+      0,
+      2,
+      2,
+      "IMAGE,H3_REWRITER_REFMOD"
+    ],
+    [
+      20,
+      2,
+      5,
+      18,
+      0,
+      "H3_REWRITER_REFERENCES"
+    ],
+    [
+      21,
+      18,
+      0,
+      7,
+      5,
+      "IMAGE"
+    ],
+    [
+      22,
+      18,
+      1,
+      7,
+      6,
+      "IMAGE"
+    ],
+    [
+      23,
+      18,
+      2,
+      7,
+      7,
+      "IMAGE"
+    ],
+    [
+      24,
+      18,
+      3,
+      7,
+      8,
+      "IMAGE"
+    ],
+    [
+      25,
+      18,
+      4,
+      7,
+      9,
+      "IMAGE"
+    ],
+    [
+      26,
+      18,
+      5,
+      7,
+      10,
+      "IMAGE"
+    ],
+    [
+      27,
+      18,
+      6,
+      7,
+      11,
+      "IMAGE"
+    ],
+    [
+      28,
+      18,
+      7,
+      7,
+      12,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.65,
+      "offset": [
+        20,
+        20
+      ]
+    }
+  },
+  "version": 0.4
+}

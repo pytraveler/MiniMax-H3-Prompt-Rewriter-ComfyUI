@@ -6,6 +6,10 @@ ComfyUI 节点。输入一句简短的提示词，输出一段结构化、可直
 
 [English version](README.md) · [Русская версия](README_RU.md) · [更新日志](CHANGELOG.md)
 
+P-H3 image support: [P-H3 Prompt Writer](README.md#p-h3-prompt-writer-images),
+with Text2Image, Image2Image and visual RefMod references.
+
+
 > **本文档为机器翻译。** 本项目作者不懂中文，这份中文 README 是由 AI 从英文版翻译过来的。
 > 术语和措辞难免有不准确的地方；如果发现错误、意思偏了或者读不通顺的段落，欢迎到
 > [issue](https://github.com/pytraveler/MiniMax-H3-Prompt-Rewriter-ComfyUI/issues)
@@ -89,6 +93,7 @@ ComfyUI 节点。输入一句简短的提示词，输出一段结构化、可直
   - [MiniMax-H3 Prompt Writer (T2VA/I2VA/FL2VA/L2VA) 提示词写作节点](#minimax-h3-prompt-writer-t2vai2vafl2val2va-提示词写作节点)
   - [MiniMax-H3 Prompt Writer (Ref2VA) 提示词写作节点](#minimax-h3-prompt-writer-ref2va-提示词写作节点)
   - [MiniMax-H3 Universal Writer 通用写作节点](#minimax-h3-universal-writer-通用写作节点)
+  - [P-H3 Prompt Writer (图像)](#p-h3-prompt-writer-图像)
   - [MiniMax-H3 Reference Caption 参考素材描述](#minimax-h3-reference-caption-参考素材描述)
   - [MiniMax-H3 Multi Reference Caption 多参考素材描述](#minimax-h3-multi-reference-caption-多参考素材描述)
   - [用 ComfyUI 已经加载好的模型来生成描述](#用-comfyui-已经加载好的模型来生成描述)
@@ -926,6 +931,18 @@ Load Image、Load Video、Load Audio 或 VideoHelperSuite 的加载器，中间�
 > **这个节点需要较新的 ComfyUI**，理由和 Multi Reference Caption 一样：它那些会
 > 自动增长的输入是 v3 节点 API 里的 `io.Autogrow`。装在旧版本上，这两个节点会直接
 > 不出现，节点包的其余部分照常注册。
+
+### P-H3 Prompt Writer (图像)
+
+节点界面和图像编辑结果。完整用法见[英文版说明](README.md#p-h3-prompt-writer-images)。
+
+在 Text2Image 中启用 `use_ref_description`，可根据第一个启用的参考图和用户请求编写独立提示词。视频、图像批次或视觉 RefMod 使用选中帧中的第一帧；可通过 `frame` 选择单帧。生成器只接收文字，`references` 输出仍为空。
+
+![启用 use_ref_description 的 Text2Image 模式 P-H3 Prompt Writer，显示来源参考图预览和帧选择](docs/p_h3_prompt_writer.png)
+
+![P-H3 帧选择窗口，带大图预览、编号缩略图和已选参考帧](docs/p_h3_frames_editor.png)
+
+![Save Image 中的 P-H3 图像编辑结果：一只戴着红色针织围巾的乌龟](docs/p_h3_result.png)
 
 ### MiniMax-H3 Reference Caption 参考素材描述
 

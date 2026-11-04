@@ -194,6 +194,13 @@ def inspect(text: str, task: str = "", duration=None, having=None) -> list[dict]
 
     Findings come back as plain dicts, which is what the browser reads.
     """
+    from . import ph3_prompt
+
+    if task in ph3_prompt.TASKS:
+        return [
+            {"level": issue.level, "message": issue.message, "code": issue.code}
+            for issue in ph3_prompt.review(text, task, having)
+        ]
     mode = MODE_FOR_TASK.get(checks.normalize(task), "")
     names = guide_prompt.FIELDS_FOR_MODE.get(mode) or OUTPUT_FIELDS
     fallback = guide_prompt.BODY_FIELD.get(mode) or names[0]

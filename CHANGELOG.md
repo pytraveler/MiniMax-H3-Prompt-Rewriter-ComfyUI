@@ -6,6 +6,22 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.33.0 - 2026-11-04
+
+### Added
+
+- P-H3 Prompt Writer with Text2Image and Image2Image modes, using Pruna's native prompt upsampler through Load CLIP. Requires ComfyUI 0.44.0 or newer.
+- Ordered image references, per-reference roles, keep instructions and matching canvas outputs. Visual RefMods expand to pictures for P-H3 to re-encode; audio RefMods are refused.
+- Image prompt checks, library editing and repeat support, plus two P-H3 generation workflows.
+- Optional use_ref_description in P-H3 Text2Image: the first active reference supplies one selected frame for a standalone prompt. The existing upsampler combines its appearance with the user request; the image generator receives text only.
+- VIDEO and VHS IMAGE references with a visual frame picker: overview, nearby frames, exact frame numbers and workflow-saved selections. The same pictures reach the upsampler and generator.
+
+### Fixed
+
+- P-H3 RefMod thumbnails keep a single-line role above the preview; the lower mod badge identifies the source.
+- P-H3 Text2Image ignores connected references instead of stopping with an error, matching Universal Writer. Its references output stays empty.
+- P-H3 reference chips appear above the mode tabs without changing saved widget positions. Optional STRING/COMBO aspect_ratio overrides the picker and base-image ratio, including custom canvas ratios.
+
 ## 0.32.2 - 2026-10-26
 
 ### Fixed

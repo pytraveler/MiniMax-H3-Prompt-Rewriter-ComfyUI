@@ -17,6 +17,7 @@ from . import (
     memory,
     model_sections,
     paths,
+    ph3_frames,
     presets,
     previews,
     refmods,
@@ -177,6 +178,25 @@ def register() -> None:
     async def reference_previews(request):
         """The last previews every node sent its strip, for a page that reloaded since."""
         return web.json_response(previews.LAST)
+
+    @routes.get(f"{PREFIX}/ph3/frames")
+    async def ph3_frame_previews(request):
+        node = request.query.get("node", "")
+        slot = request.query.get("slot", "")
+        if not slot:
+            return web.json_response({"slots": ph3_frames.metadata(node)})
+        try:
+            indices = [int(value) for value in request.query.get("indices", "").split(",") if value]
+            frames = await asyncio.to_thread(ph3_frames.thumbnails, node, slot,
+                                             request.query.get("token", ""), indices)
+            return web.json_response({"frames": frames})
+        except LookupError as error:
+            return web.json_response({"error": str(error)}, status=404)
+        except (TypeError, ValueError) as error:
+            return web.json_response({"error": str(error)}, status=400)
+        except Exception as error:
+            log.exception("[minimax_h3_rewriter] P-H3 frame preview failed")
+            return web.json_response({"error": str(error)}, status=500)
 
     @routes.get(f"{PREFIX}/memory/text")
     async def memory_text(request):

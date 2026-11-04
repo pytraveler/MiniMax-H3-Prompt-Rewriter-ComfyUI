@@ -85,6 +85,7 @@ If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2va
   - [MiniMax-H3 Prompt Writer (T2VA/I2VA/FL2VA/L2VA)](#minimax-h3-prompt-writer-t2vai2vafl2val2va)
   - [MiniMax-H3 Prompt Writer (Ref2VA)](#minimax-h3-prompt-writer-ref2va)
   - [MiniMax-H3 Universal Writer](#minimax-h3-universal-writer)
+  - [P-H3 Prompt Writer (images)](#p-h3-prompt-writer-images)
   - [MiniMax-H3 Reference Caption](#minimax-h3-reference-caption)
   - [MiniMax-H3 Multi Reference Caption](#minimax-h3-multi-reference-caption)
   - [Captioning with a model ComfyUI already has loaded](#captioning-with-a-model-comfyui-already-has-loaded)
@@ -1053,6 +1054,87 @@ numbered, for [Reference Slots](#minimax-h3-reference-slots) to wire into
 > Caption does: its growing inputs are `io.Autogrow` from the v3 node API. On an
 > older install these two go missing and the rest of the pack registers as
 > before.
+
+### P-H3 Prompt Writer (images)
+
+Writes prompts for [Pruna P-H3-Image](https://huggingface.co/PrunaAI/P-H3-Image-Comfy)
+with its official Qwen3.5-9B upsampler. Requires ComfyUI 0.44.0 or newer.
+
+![P-H3 Prompt Writer in Text2Image mode with use_ref_description enabled, a source reference preview and frame selection](docs/p_h3_prompt_writer.png)
+
+Connect **Load CLIP**, type `minimax`, with a `p-h3-image_prompt_upsampler` file to
+`upsampler`. The similarly named 4B text encoder belongs to the image generator,
+not this writer. ComfyUI manages model loading and offloading.
+
+- **Text2Image** writes from the request, aspect ratio and 4 or 8 MP canvas.
+  Connected references are ignored by default and the `references` output is empty;
+  switching modes does not require disconnecting them.
+- **Image2Image** reads up to eight pictures in total. The first enabled picture
+  is the base; drag the reference strip to change the order, click to switch a
+  reference off, and use **role** to say what to take from it. **keep** names
+  what must remain unchanged. By default the canvas follows the base's ratio.
+
+Enable **use_ref_description** in Text2Image to write the prompt from the first
+active reference and your request. Its chip is marked **source**; drag the chips
+to choose another source, and use **role** to say which details to take. For an
+IMAGE batch, VIDEO or visual RefMod, only the first selected frame is described;
+**frame** opens a picker for one frame, and Automatic uses the first frame.
+The same upsampler first describes the frame, then writes a standalone prompt
+from that description and your request, with no image supplied to the second
+step. Your request takes priority; an empty request describes the pictured scene.
+The image generator receives text only, and `references` stays empty. `summary`
+shows the generated visual description. Canvas
+settings still come from the ratio picker or `aspect_ratio`. With `bypass` on,
+the source is prepared for its preview and the original prompt passes through.
+
+The reference chips sit above the mode tabs. Optional `aspect_ratio` accepts
+STRING or COMBO values such as `16:9`, `3840x1080` or `1.78`, overriding both
+the ratio picker and `match_image_ratio`. Custom ratios keep the selected
+megapixel budget, with canvas dimensions rounded to multiples of 32.
+
+Wire `prompt`, `width` and `height` to **p-h3-image Conditioning**. Pass
+`references` through **MiniMax-H3 Reference Slots**, connecting `picture_1` to
+`image_1`, `picture_2` to `image_2`, and so on. Use the P-H3 text encoder and VAE
+on Conditioning. Its sampler uses P-H3's eight-step sigma schedule and
+ModelSamplingMiniMaxH3 shifts of 1.0/1.0; see the example workflows.
+
+Visual **RefMods** expand into ordinary pictures. `refmod_images` selects up to
+that many evenly spaced photos or frames per RefMod; all expanded pictures count
+toward the eight-picture limit. Files without stored or decoded pictures need
+the original H3 video VAE on the loader or `refmod_vae`. Strength is applied to
+the pictures. P-H3 re-encodes them: the original RefMod latent is not injected,
+and decoding then re-encoding can lose detail. Audio RefMods are refused.
+`summary` reports the exact Picture numbers after expansion.
+
+Connect native **VIDEO** outputs or the **IMAGE** output of VHS Load Video to
+the same reference sockets. `video_images` automatically selects evenly spaced
+frames from VIDEO and IMAGE batches larger than eight; smaller IMAGE batches
+keep all pictures. All sources share the eight-picture limit.
+
+Use **frames** under a reference to choose exact frames: inspect the overview,
+browse nearby frames or enter a frame number, then tick the pictures to keep.
+**Apply frames** saves the choice in the workflow; **Automatic** restores the
+socket's default selection. Frames pass to both the upsampler and `references`
+in chronological order. For the first preview, run the input branch once with
+`bypass`. Refresh it after changing the source, or if ComfyUI evicts the input
+from its cache. The picker retains small thumbnails, not the full input batch.
+Numbers start at one in the received reference: VHS numbering follows its
+`skip_first_frames`, `select_every_nth` and other processing; RefMod numbering
+follows its stored or decoded pictures.
+
+![P-H3 frame picker with a large preview, numbered filmstrip and selected reference frames](docs/p_h3_frames_editor.png)
+
+The checkpoint's own template and edit brief are kept intact. Image checks cover
+empty output, repetition and invalid reference tags, without requiring video
+fields, shot timings or sound. The prompt library supports saving, editing and
+repeating the result; references and canvas always follow the current inputs.
+`bypass` passes the request through while still preparing those inputs.
+
+Start with **9 - P-H3 text to image** or **10 - P-H3 image editing**. For edits,
+choose your image on Load Image before queuing. Increase `max_length` if the
+upsampler uses its token budget on thinking and returns no final prompt.
+
+![P-H3 image editing result in Save Image: a turtle wearing a red knitted scarf](docs/p_h3_result.png)
 
 ### MiniMax-H3 Reference Caption
 

@@ -27,6 +27,7 @@ for _module_name, _label in (
     ("reference_slots", "Reference Slots"),
     ("refmod_node", "RefMod"),
     ("reference_encode", "Reference Encode"),
+    ("ph3_node", "P-H3 Prompt Writer"),
     ("writer_omni", "Prompt Rewriter Omni"),
     ("universal_rewriter", "Universal Rewriter"),
     ("reduce_node", "Prompt Reducer"),

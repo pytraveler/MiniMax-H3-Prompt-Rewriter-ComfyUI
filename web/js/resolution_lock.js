@@ -10,6 +10,7 @@ const NODES = [
     "MiniMaxH3GuidePrompt",
     "MiniMaxH3UniversalWriter",
     "MiniMaxH3UniversalRewriter",
+    "MiniMaxH3PH3Writer",
 ];
 
 function apply(node) {

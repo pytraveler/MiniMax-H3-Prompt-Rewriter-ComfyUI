@@ -8,6 +8,7 @@ const WRITERS = [
     "MiniMaxH3GuidedWriterRef",
     "MiniMaxH3UniversalWriter",
     "MiniMaxH3UniversalRewriter",
+    "MiniMaxH3PH3Writer",
 ];
 const CAPTIONERS = ["MiniMaxH3ReferenceCaption", "MiniMaxH3MultiReferenceCaption"];
 const REDUCERS = ["MiniMaxH3PromptReducer"];
