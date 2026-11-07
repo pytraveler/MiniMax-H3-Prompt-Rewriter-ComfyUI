@@ -179,6 +179,25 @@ def register() -> None:
         """The last previews every node sent its strip, for a page that reloaded since."""
         return web.json_response(previews.LAST)
 
+    from .api_model_routes import register as register_api_models
+
+    register_api_models(routes, PREFIX, web)
+
+    from .api_management_routes import register as register_api_management
+
+    register_api_management(routes, PREFIX, web)
+
+    @routes.get(f"{PREFIX}/api/profiles")
+    async def api_recipients(request):
+        from . import api_config
+
+        try:
+            return web.json_response({"profiles": api_config.public_profiles()},
+                                     headers={"Cache-Control": "no-store"})
+        except api_config.ConfigError:
+            return web.json_response({"profiles": [], "error": "API profiles are unavailable. Configure them locally."},
+                                     status=503, headers={"Cache-Control": "no-store"})
+
     @routes.get(f"{PREFIX}/ph3/frames")
     async def ph3_frame_previews(request):
         node = request.query.get("node", "")

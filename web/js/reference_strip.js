@@ -162,8 +162,11 @@ export function writeInstruction(node, name, slot, text, add) {
 
 
 let openEditor = null;
+let dismissEditor = null;
 
 function closeEditor() {
+    dismissEditor?.();
+    dismissEditor = null;
     openEditor?.remove();
     openEditor = null;
 }
@@ -247,10 +250,13 @@ export function askForInstruction(anchor, label, current, save) {
 
     const away = (event) => {
         if (panel.contains(event.target)) return;
-        window.removeEventListener("pointerdown", away, true);
         closeEditor();
     };
-    setTimeout(() => window.addEventListener("pointerdown", away, true), 0);
+    const opening = setTimeout(() => window.addEventListener("pointerdown", away, true), 0);
+    dismissEditor = () => {
+        clearTimeout(opening);
+        window.removeEventListener("pointerdown", away, true);
+    };
 }
 
 

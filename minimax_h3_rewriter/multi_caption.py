@@ -441,6 +441,7 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
             backend=settings["llama_backend"],
             auto_download=settings["auto_download"],
             progress=progress,
+            thinking=settings["captioner_thinking"],
         ) as batch:
             progress.set_total(len(assets))
             captions = []
@@ -494,9 +495,17 @@ class MiniMaxH3MultiReferenceCaption(io.ComfyNode):
                             auto_download=settings["auto_download"],
                             progress=progress,
                             server=batch,
+                            thinking=settings["captioner_thinking"],
+                            allow_server=False,
                         )
 
                 caption = " ".join(caption.split())
+                if not caption and clip is None:
+                    raise RuntimeError(
+                        f"{asset.role} {index}: the captioner returned an empty description. "
+                        "Try captioner_thinking off with a supported llama-server, "
+                        "or another caption model."
+                    )
                 captions.append(caption)
                 block = f"{block}\n{asset.role} {index}: {caption}".strip()
 

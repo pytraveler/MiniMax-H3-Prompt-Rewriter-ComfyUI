@@ -15,10 +15,10 @@ loading happens once.
 
 Three things shape the code:
 
-- **It is an optimisation, never a requirement.** Every failure here -- no
-  binary in this build, a port that will not bind, a server that never reports
-  healthy -- returns rather than raises, and the caller goes back to starting a
-  process per asset. A caption run must not fail because a speed-up did.
+- **Unavailable servers preserve the CLI fallback.** A missing binary, a
+  port that will not bind or a failed startup returns rather than raises. A
+  server also lets a single caption control thinking when its CLI cannot;
+  falling back then warns that the template default will be used instead.
 - **The wire format is not llama.cpp's own.** Attachments go through the
   OpenAI-compatible chat endpoint as content parts, base64 in a data URI for a
   picture and an ``input_audio`` part for a sound, because that is the only
@@ -42,7 +42,7 @@ import time
 import urllib.error
 import urllib.request
 
-from . import devices, runner
+from . import devices, llama_flags, runner
 
 log = logging.getLogger(__name__)
 
@@ -141,6 +141,7 @@ def build_command(
     n_ctx: int,
     device: str = devices.AUTO,
     adapter_path: str | None = None,
+    thinking: str = llama_flags.AUTO,
 ) -> list[str]:
     """The same flags ``mtmd_engine.build_command`` uses, minus the one-shot ones.
 
@@ -164,6 +165,7 @@ def build_command(
     ]
     if adapter_path:
         command += ["--lora", adapter_path]
+    command += llama_flags.reasoning_arguments(binary, thinking)
     return command
 
 
@@ -261,6 +263,7 @@ class Server:
 
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
+            llama_flags.check_interrupt()
             if self.process.poll() is not None:
                 raise ServerUnavailable(
                     f"{os.path.basename(self.binary)} exited with code "
@@ -387,6 +390,7 @@ def open_server(
     device: str = devices.AUTO,
     adapter_path: str | None = None,
     on_wait=None,
+    thinking: str = llama_flags.AUTO,
 ) -> Server | None:
     """Start a server for this model, or return None having said why in the log.
 
@@ -405,7 +409,7 @@ def open_server(
     server = Server(
         binary,
         build_command(binary, model_path, mmproj_path, port, gpu_layers, n_ctx,
-                      device, adapter_path),
+                      device, adapter_path, thinking),
         port,
         n_ctx,
     )
@@ -418,6 +422,9 @@ def open_server(
         )
         server.close()
         return None
+    except BaseException:
+        server.close()
+        raise
     log.info(
         "[minimax_h3_rewriter.server_engine] %s ready on port %d",
         os.path.basename(model_path), server.port,

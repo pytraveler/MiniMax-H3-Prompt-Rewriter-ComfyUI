@@ -1,3 +1,7 @@
+requests>=2.32.5
+aiohttp>=3.13.5
+av>=14.0
+cryptography>=50.0.2
 transformers>=4.57.1
 peft>=0.17
 accelerate>=1.10

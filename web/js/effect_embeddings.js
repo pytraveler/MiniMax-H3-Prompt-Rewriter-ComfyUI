@@ -135,7 +135,7 @@ function height(node) {
 
 function redraw(node) {
     const state = node[STATE];
-    if (!state) return;
+    if (!state || state.disposed) return;
 
     const chosen = readChosen(node);
     const effects = rowsFor(node);
@@ -164,33 +164,51 @@ function redraw(node) {
 async function load(node, again = false) {
     const answer = await catalogue(again);
     const state = node[STATE];
-    if (!state) return;
+    if (!state || state.disposed) return;
     state.effects = answer?.effects || null;
     state.folder = answer?.dir || "";
     redraw(node);
 }
 
 async function download(node, button) {
+    const state = node[STATE];
+    if (!state || state.disposed || state.stopDownload) return;
     button.disabled = true;
     const total = node[STATE]?.effects?.length || 10;
     button.textContent = `downloading... 0 of ${total}`;
 
-    const watching = setInterval(async () => {
-        const { ok, payload } = await ask("/minimax_h3_rewriter/embeddings");
-        if (!ok || !payload?.ok) return;
-        const here = payload.effects.filter((effect) => effect.present).length;
-        if (button.disabled) button.textContent = `downloading... ${here} of ${total}`;
-    }, 3000);
+    let watching;
+    let stopped = false;
+    let cancelled = false;
+    const controller = new AbortController();
+    const stop = () => {
+        stopped = true;
+        clearTimeout(watching);
+        controller.abort();
+    };
+    state.stopDownload = () => { cancelled = true; stop(); };
+    const poll = async () => {
+        const { ok, payload } = await ask("/minimax_h3_rewriter/embeddings", undefined, { signal: controller.signal });
+        if (stopped) return;
+        if (ok && payload?.ok) {
+            const here = payload.effects.filter((effect) => effect.present).length;
+            button.textContent = `downloading... ${here} of ${total}`;
+        }
+        watching = setTimeout(poll, 3000);
+    };
+    watching = setTimeout(poll, 3000);
 
     let ok = false;
     let payload = {};
     try {
-        ({ ok, payload } = await ask("/minimax_h3_rewriter/embeddings/download", {}));
+        ({ ok, payload } = await ask("/minimax_h3_rewriter/embeddings/download", {}, { signal: controller.signal }));
     } finally {
-        clearInterval(watching);
+        stop();
+        state.stopDownload = null;
         button.disabled = false;
         button.textContent = LABEL;
     }
+    if (cancelled || state.disposed) return;
     if (ok && payload?.ok) {
         known = Promise.resolve(payload);
         await load(node, false);
@@ -213,7 +231,7 @@ function build(node) {
     holder.appendChild(grid);
     holder.appendChild(hint);
 
-    node[STATE] = { grid, hint, effects: null, button: null };
+    node[STATE] = { grid, hint, effects: null, button: null, disposed: false, stopDownload: null };
     onRefresh(node, () => redraw(node));
 
     replaceWithDom(node, EFFECTS, "minimaxh3_effects", holder, () => height(node));
@@ -236,6 +254,23 @@ function build(node) {
 app.registerExtension({
     name: "minimax_h3_rewriter.effect_embeddings",
     async beforeRegisterNodeDef(nodeType, nodeData) {
-        if (nodeData.name === NODE) repaintOn(nodeType, build);
+        if (nodeData.name !== NODE) return;
+        repaintOn(nodeType, build);
+        const added = nodeType.prototype.onAdded;
+        nodeType.prototype.onAdded = function () {
+            if (this[STATE]) this[STATE].disposed = false;
+            const result = added?.apply(this, arguments);
+            redraw(this);
+            return result;
+        };
+        const previous = nodeType.prototype.onRemoved;
+        nodeType.prototype.onRemoved = function () {
+            const state = this[STATE];
+            if (state) {
+                state.disposed = true;
+                state.stopDownload?.();
+            }
+            return previous?.apply(this, arguments);
+        };
     },
 });

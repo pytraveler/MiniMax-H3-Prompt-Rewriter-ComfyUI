@@ -6,6 +6,23 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.34.0 - 2026-11-08
+
+### Added
+
+- GGUF captioner thinking control (`off` by default, `auto`, `on`) in Rewriter Options. Reads supported flags through cached `--help` probes and uses a compatible sibling server for a single reference when the CLI cannot set thinking (#24).
+- API Universal Writer for T2VA, I2VA, FL2VA, L2VA and Ref2VA through configured local or remote Chat Completions servers. Sends the guide or custom system message, raw request and enabled references; original references pass through.
+- JPEG images, sampled video frames with timestamps, WAV audio, decoded RefMods and an explicit descriptions mode. Model capabilities and limits are declared per connection and model.
+- API providers editor with model selection, encrypted key replacement, and Test connection for unsaved settings. Windows uses current-user DPAPI; Linux/server storage uses an operator-supplied AES-GCM master key. Remote editing requires HTTPS and an administrator token.
+- API Writer Options, shared reference controls, bypass/repeat badges, prompt-library support, a portable API workflow, Russian node descriptions/tooltips and a Russian setup guide.
+
+### Fixed
+
+- Empty GGUF captions stop the run with a caption-specific error; cancelling server startup releases the child process (#24).
+- Cancelled streaming API requests close their connection, allowing supporting servers/proxies to cancel generation; network errors are never retried automatically.
+- Removed reference previews release media requests and hover timers. Closing instruction and preset windows releases listeners, playback and observers; removing Effect Embeddings aborts client polling.
+- Linked API configuration paths retain their specific rejection message instead of being reported as a generic unavailable location.
+
 ## 0.33.0 - 2026-11-04
 
 ### Added

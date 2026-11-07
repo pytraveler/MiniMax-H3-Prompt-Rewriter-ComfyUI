@@ -2,7 +2,9 @@
 
 ComfyUI nodes for the [LightX2V MiniMax-H3 T2VA Prompt Rewriter LoRA](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA).
 A short prompt goes in; a structured, production-ready audio-video description
-for [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) comes out — entirely locally.
+for [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) comes out. Local writers
+run on your machine; the optional [API Universal Writer](docs/api_writer.md)
+uses a separately configured local server or remote provider.
 
 [Русская версия](README_RU.md) · [中文版](README_ZH.md) · [Changelog](CHANGELOG.md)
 
@@ -606,7 +608,7 @@ tabs in one window — `models` for the 27B tab, `models_8b` for the 8B one,
 Everything you rarely touch, kept off the main node. Leave it unconnected and the
 rewriter uses the decoding parameters the adapter was published with.
 
-![The Rewriter Options node, one output socket named options and nineteen widgets: max_new_tokens 4096, temperature 0.60, top_p 0.85, top_k 20, repetition_penalty 1.10, attn_implementation flash_attention_2, the adapter to apply, use_lora true, merge_lora auto, auto_download true, gpu_layers -1, n_ctx 8192, gguf_runtime auto, device auto, llama_backend auto, prompt_file global, self_check warnings and notes, fix_once false, and downloader on built-in at the foot, with a New prompt file button under them](docs/node_options.png)
+![Rewriter Options with generation, model loading and device settings; captioner_thinking is off](docs/node_options.png)
 
 | Input | Default | Purpose |
 |---|---|---|
@@ -623,6 +625,18 @@ rewriter uses the decoding parameters the adapter was published with.
 | `prompt_file` | `global` | Which set of saved prompts the nodes wired to this one work in — see [the prompt library](#the-prompt-library) |
 | `self_check` | `warnings and notes` | How much of [the self-check](#the-answer-is-checked) is said out loud: everything, warnings only, or nothing |
 | `fix_once` | `false` | Let the nodes act on what the check found — [one re-run, never a loop](#acting-on-what-it-found) |
+| `captioner_thinking` | `off` | GGUF reference captions: `off` disables thinking, `auto` keeps the model template default, `on` enables it when supported. |
+
+For GGUF captions, supported flags are read from each binary's `--help` once
+per executable revision. Explicit `off`/`on` uses `--reasoning` and, when
+available, `--jinja`. If `llama-mtmd-cli` cannot set thinking, a compatible
+`llama-server` beside it is used even for a single reference. The server loads
+once per strip and exits when the run completes or is cancelled.
+`MINIMAX_H3_MTMD_SERVER=never` keeps the CLI route. If neither available route
+can apply the setting, the run uses the template default and logs a warning;
+it never sends an unsupported flag. The 1024-token caption cap remains in
+place. An empty GGUF caption raises an error. This option does not change the
+writer or CLIP caption settings.
 
 The same options node feeds the writer nodes and the captioner; `adapter` and
 `use_lora` simply do not apply there.
@@ -908,6 +922,16 @@ One node for a whole shot: the references, the order they are in, and the
 rewrite. It does what [Multi Reference Caption](#minimax-h3-multi-reference-caption)
 and both writer nodes do, in a single box, for all five tasks. Those three stay
 exactly as they are — nothing you have already built stops working.
+
+For H3 writing from text, images, video frames, audio or RefMods through a running llama-server or a remote API, use the
+additional [API Universal Writer](docs/api_writer.md). Configure connections and models
+in **API providers**, and generation settings in **API Writer Options**. Keys are
+encrypted on the Windows or Linux server; workflows store connection/model IDs.
+Start with **11 - Write through an API** in the workflow templates.
+
+![API Universal Writer with task, aspect ratio, provider and model selection, reference inputs and prompt outputs](docs/api_universal_writer_node.png)
+
+![API Writer Options with generation limits, response format, video sampling, audio rate and repair settings](docs/api_options_node.png)
 
 The reason to fold them together is **order**. `Picture 1` and `Picture 2` are
 not interchangeable in FL2VA: one opens the video and the other closes it. Until

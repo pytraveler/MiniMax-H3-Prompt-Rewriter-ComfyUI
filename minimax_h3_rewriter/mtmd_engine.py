@@ -30,9 +30,11 @@ understands. See ``models.json`` for the ones this pack has been run against.
 
 A run with several references to read does not want a process each. ``session``
 holds one model open for the whole loop -- see ``server_engine`` -- and hands
-``describe`` something to ask instead of something to start. Everything below
-behaves identically either way; a machine where the server cannot start keeps
-the one-process-per-asset behaviour and loses only the time.
+``describe`` something to ask instead of something to start. Explicit caption
+thinking control can also select a server for one asset, when the CLI lacks
+that flag. An unavailable server retains the CLI path with a warning if the
+requested thinking mode cannot be applied. Writer callers default to ``auto``
+and retain their original routing.
 """
 
 from __future__ import annotations
@@ -41,7 +43,7 @@ import contextlib
 import logging
 import os
 
-from . import checks, devices, discovery, llamacpp, media, runner, server_engine
+from . import checks, devices, discovery, llama_flags, llamacpp, media, runner, server_engine
 from .constants import answer_only, normalize_seed
 from .progress import NodeProgress
 
@@ -201,6 +203,7 @@ def build_command(
     device: str = devices.AUTO,
     adapter_path: str | None = None,
     system_prompt: str = "",
+    thinking: str = llama_flags.AUTO,
 ) -> list[str]:
     layers = devices.layers_for(device, gpu_layers)
     layers = ALL_LAYERS if layers < 0 else layers
@@ -231,6 +234,7 @@ def build_command(
         ]
     if system_prompt:
         command += ["--system-prompt", system_prompt]
+    command += llama_flags.reasoning_arguments(binary, thinking)
     # Last, so the instruction is never mistaken for a value of another flag.
     command += ["--prompt", instruction]
     return command
@@ -391,8 +395,14 @@ def session(
     auto_download: bool = True,
     adapter_path: str | None = None,
     progress: NodeProgress | None = None,
+    thinking: str = llama_flags.AUTO,
 ):
-    """Hold one model open for ``assets`` descriptions, when that is worth it.
+    """Hold one model for a strip, or to control thinking for a single asset.
+
+    ``auto`` retains the original route. Explicit ``off``/``on`` also prefer
+    a server if only it advertises ``--reasoning``; the operator's ``never``
+    override still wins. Callers with their own session pass ``allow_server=False``
+    to ``describe`` so a failed startup is not repeated for every asset.
 
     Yields something to pass to :func:`describe` as ``server``, or ``None``.
     ``None`` is not an error and is not rare -- one asset, a build with no
@@ -406,13 +416,18 @@ def session(
     and cost a round trip to say so.
     """
     device = devices.validate(device)
-    if not model_path or not mmproj_path or not server_engine.wanted(int(assets)):
+    mode = llama_flags.thinking_mode(thinking)
+    held = server_engine.wanted(int(assets))
+    choice = (os.environ.get(server_engine.CHOICE_ENV) or server_engine.AUTO).strip().lower()
+    single_control = mode != llama_flags.AUTO and choice != server_engine.NEVER
+    if not model_path or not mmproj_path or int(assets) < 1 or not (held or single_control):
         yield None
         return
 
     try:
         captioner = llamacpp.ensure_mtmd(backend, auto_download, progress)
     except Exception:
+        llama_flags.check_interrupt()
         log.info(
             "[minimax_h3_rewriter.mtmd_engine.session] no runtime to hold open",
             exc_info=True,
@@ -420,8 +435,12 @@ def session(
         yield None
         return
 
+    if not held and "--reasoning" in llama_flags.supported(captioner):
+        yield None
+        return
+
     binary = llamacpp.server_beside(captioner)
-    if not binary:
+    if not binary or (not held and "--reasoning" not in llama_flags.supported(binary)):
         yield None
         return
 
@@ -439,6 +458,7 @@ def session(
         fit_context(model_path, mmproj_path, attachments, device, n_ctx),
         device,
         adapter_path,
+        thinking=mode,
     )
     try:
         yield server
@@ -472,6 +492,8 @@ def describe(
     progress: NodeProgress | None = None,
     server=None,
     max_seconds: float = 0.0,
+    thinking: str = llama_flags.AUTO,
+    allow_server: bool = True,
 ) -> str:
     """Fetch the runtime if needed, describe the attachments once, and return the text.
 
@@ -498,6 +520,7 @@ def describe(
     length: its frames stop there, as the generator's do.
     """
     device = devices.validate(device)
+    mode = llama_flags.thinking_mode(thinking)
     if system_prompt is None:
         system_prompt = DEFAULT_SYSTEM
     if attachments is None and image is None and audio is None and video is None:
@@ -508,11 +531,21 @@ def describe(
     if attachments is not None and not attachments:
         raise ValueError("nothing to describe: 'attachments' is empty.")
 
-    binary = server.binary if server is not None else llamacpp.ensure_mtmd(
-        backend, auto_download, progress
-    )
-
-    with media.Workspace() as workspace:
+    with contextlib.ExitStack() as stack:
+        if server is None and allow_server and mode != llama_flags.AUTO:
+            count = len(attachments) if attachments is not None else expected_attachments(
+                image, audio, video, max_frames,
+            )
+            server = stack.enter_context(session(
+                model_path, mmproj_path, assets=1, attachments=count,
+                gpu_layers=gpu_layers, n_ctx=n_ctx, device=device, backend=backend,
+                auto_download=auto_download, adapter_path=adapter_path,
+                progress=progress, thinking=mode,
+            ))
+        binary = server.binary if server is not None else llamacpp.ensure_mtmd(
+            backend, auto_download, progress,
+        )
+        workspace = stack.enter_context(media.Workspace())
         note = ""
         if attachments is None:
             n_ctx = server.n_ctx if server is not None else fit_context(
@@ -539,7 +572,7 @@ def describe(
             command = build_command(
                 binary, model_path, mmproj_path, instruction, attachments,
                 gpu_layers, n_ctx, seed, greedy, max_new_tokens, temperature, top_p,
-                top_k, device, adapter_path, system_prompt,
+                top_k, device, adapter_path, system_prompt, mode,
             )
             runner.free_comfy_vram(device)
 

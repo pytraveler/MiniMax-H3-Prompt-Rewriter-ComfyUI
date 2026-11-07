@@ -21,6 +21,7 @@ except Exception:  # noqa: BLE001 - the nodes must still load
 for _module_name, _label in (
     ("multi_caption", "Multi Reference Caption"),
     ("universal", "Universal Writer"),
+    ("api_writer", "API Universal Writer"),
     ("prompt_check", "Prompt Check"),
     ("preset_node", "Prompt Presets"),
     ("reference_adapter", "Reference Adapter"),

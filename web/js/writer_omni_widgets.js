@@ -1,5 +1,5 @@
 import { app } from "../../scripts/app.js";
-import { previewFor } from "./reference_previews.js";
+import { previewFor, releasePreviews } from "./reference_previews.js";
 import { addSlotSwitches } from "./slot_switches.js";
 import {
     CHIP_H_PLAIN,
@@ -267,6 +267,7 @@ function renderStrip(node) {
     node[STATE].chipCount = entries.length;
     const hint = node[STATE].hint;
 
+    releasePreviews(strip);
     strip.replaceChildren();
     if (!entries.length) {
         const note = document.createElement("span");

@@ -27,6 +27,7 @@ const LOADERS = {
 };
 
 const received = new Map();
+const previewCleanup = new WeakMap();
 
 
 function tailOf(name) {
@@ -253,6 +254,7 @@ function listen(holder, url, start, total) {
         for (const bar of bars) bar.classList.remove("mmx-played");
         line?.remove();
     };
+    session.finish = finish;
     session.stop = () => {
         if (session.done || session.closing) return;
         session.closing = performance.now() + CLOSE_MS;
@@ -325,13 +327,16 @@ function cycleOnHover(chip, image, frames) {
     const still = image.src;
     let timer = null;
     let at = 0;
+    let disposed = false;
     const stop = () => {
         clearInterval(timer);
         timer = null;
         at = 0;
-        image.src = still;
+        if (!disposed) image.src = still;
     };
+    previewCleanup.set(image, () => { disposed = true; clearInterval(timer); });
     chip.addEventListener("pointerenter", () => {
+        if (disposed) return;
         clearInterval(timer);
         timer = setInterval(() => {
             if (!image.isConnected) {
@@ -393,6 +398,22 @@ export function drawPreview(holder, chip, kind, preview) {
         : drawPicture(holder, chip, kind, file, data);
 }
 
+export function releasePreviews(root) {
+    if (!root) return;
+    if (listening?.holder && root.contains(listening.holder)) {
+        listening.finish();
+        listening = null;
+    }
+    for (const media of root.querySelectorAll("video, audio, img")) {
+        previewCleanup.get(media)?.();
+        previewCleanup.delete(media);
+        media.pause?.();
+        media.removeAttribute("src");
+        for (const source of media.querySelectorAll("source")) source.removeAttribute("src");
+        media.load?.();
+    }
+}
+
 
 async function pull() {
     try {
@@ -408,6 +429,14 @@ async function pull() {
 
 app.registerExtension({
     name: "minimax_h3_rewriter.reference_previews",
+    beforeRegisterNodeDef(nodeType, nodeData) {
+        if (!nodeData.name.startsWith("MiniMaxH3")) return;
+        const previous = nodeType.prototype.onRemoved;
+        nodeType.prototype.onRemoved = function () {
+            for (const widget of this.widgets || []) releasePreviews(widget.element);
+            return previous?.apply(this, arguments);
+        };
+    },
     setup() {
         api.addEventListener(EVENT, (event) => {
             const detail = event.detail ?? {};

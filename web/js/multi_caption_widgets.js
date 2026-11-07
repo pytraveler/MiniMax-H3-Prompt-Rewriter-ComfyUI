@@ -1,5 +1,5 @@
 import { app } from "../../scripts/app.js";
-import { previewFor } from "./reference_previews.js";
+import { previewFor, releasePreviews } from "./reference_previews.js";
 import { addSlotSwitches } from "./slot_switches.js";
 import {
     MARGIN,
@@ -144,6 +144,7 @@ function redraw(node) {
     const entries = arranged(node);
     state.chipCount = entries.length;
 
+    releasePreviews(state.strip);
     state.strip.replaceChildren();
     if (!entries.length) {
         const note = document.createElement("span");

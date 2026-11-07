@@ -22,6 +22,7 @@ from . import (
     guides,
     hub_sync,
     library,
+    llama_flags,
     llamacpp,
     media,
     memory,
@@ -94,6 +95,7 @@ DEFAULT_OPTIONS = {
     "prompt_file": library.DEFAULT_FILE,
     "self_check": checks.REPORT_ALL,
     "fix_once": False,
+    "captioner_thinking": llama_flags.OFF,
 }
 
 BASE_SPEC = {
@@ -1080,6 +1082,22 @@ class MiniMaxH3RewriterOptions:
                             "file that is already complete is never fetched twice either way.\n\n"
                             "Cancelling stops between files at once; inside a file it can take "
                             "a moment on the Xet path."
+                        ),
+                    },
+                ),
+                "captioner_thinking": (
+                    list(llama_flags.THINKING),
+                    {
+                        "default": llama_flags.OFF,
+                        "tooltip": (
+                            "GGUF reference captioners only. 'off' disables thinking with "
+                            "--reasoning off when supported; 'auto' keeps the model template "
+                            "default, and 'on' requests thinking. Supported flags are read "
+                            "once from the binary's --help. If the CLI cannot set thinking, "
+                            "a compatible llama-server beside it is used even for one "
+                            "reference. Old builds still run with a warning when the "
+                            "setting cannot be applied. Does not change writer generation "
+                            "or the CLIP caption route. Captions keep their 1024-token cap."
                         ),
                     },
                 ),
@@ -2589,6 +2607,12 @@ class MiniMaxH3ReferenceCaption:
                     backend=settings["llama_backend"],
                     auto_download=settings["auto_download"],
                     progress=progress,
+                    thinking=settings["captioner_thinking"],
+                )
+            if not caption.strip() and clip is None:
+                raise RuntimeError(
+                    "The captioner returned an empty description. Try captioner_thinking "
+                    "off with a supported llama-server, or another caption model."
                 )
             memory.keep(
                 unique_id, "MiniMaxH3ReferenceCaption", (caption,), given, task="caption"

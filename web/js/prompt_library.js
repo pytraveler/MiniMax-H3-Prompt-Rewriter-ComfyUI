@@ -28,6 +28,7 @@ const NODES = [
     "MiniMaxH3GuidedWriter",
     "MiniMaxH3GuidedWriterRef",
     "MiniMaxH3UniversalWriter",
+    "MiniMaxH3ApiUniversalWriter",
     "MiniMaxH3UniversalRewriter",
     "MiniMaxH3PH3Writer",
 ];

@@ -92,13 +92,14 @@ const BACK_ICON =
     '<path d="M4.5 4.5V2.7c0-.7.5-1.2 1.2-1.2h5.6c.7 0 1.2.5 1.2 1.2v5.6c0 .7-.5 1.2-1.2 ' +
     '1.2H9.5"/></svg>';
 
-export async function ask(url, body) {
+export async function ask(url, body, { signal } = {}) {
     let response;
     try {
         response = await api.fetchApi(url, {
             method: body ? "POST" : "GET",
             headers: body ? { "Content-Type": "application/json" } : undefined,
             body: body ? JSON.stringify(body) : undefined,
+            signal,
         });
     } catch (error) {
         return {

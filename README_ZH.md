@@ -543,7 +543,7 @@ MiniMax-H3 的长度是从它自己的设置里拿的，不是从这一行拿的
 所有你很少去动的东西，都从主节点上挪到了这里。不接它，重写器就用适配器发布时
 自带的那套解码参数。
 
-![重写器选项节点，一个名为 options 的输出插槽，十九个小部件：max_new_tokens 4096、temperature 0.60、top_p 0.85、top_k 20、repetition_penalty 1.10、attn_implementation flash_attention_2、要套用的适配器、use_lora 打开、merge_lora auto、auto_download 打开、gpu_layers -1、n_ctx 8192、gguf_runtime auto、device auto、llama_backend auto、prompt_file global、self_check warnings and notes、fix_once 关闭，最下面是设为 built-in 的 downloader，它们底下还有一个 New prompt file 按钮](docs/node_options.png)
+![Rewriter Options：生成、模型加载和设备设置，captioner_thinking 为 off](docs/node_options.png)
 
 | 输入 | 默认值 | 作用 |
 |---|---|---|
@@ -560,6 +560,15 @@ MiniMax-H3 的长度是从它自己的设置里拿的，不是从这一行拿的
 | `prompt_file` | `global` | 接在这个节点上的那些节点，在哪一套已保存的提示词里工作 —— 见[提示词库](#提示词库) |
 | `self_check` | `warnings and notes` | [自检](#答案会被检查一遍)的结果说出多少：全说、只说警告，或者什么都不说 |
 | `fix_once` | `false` | 让节点照着检查发现的问题动手 —— [只重跑一次，绝不成环](#照着发现的问题动手) |
+| `captioner_thinking` | `off` | GGUF 参考描述：`off` 关闭思考，`auto` 保留模型模板默认值，`on` 在二进制支持时启用思考。 |
+
+GGUF 描述会通过 `--help` 检查可用参数，每个可执行文件版本只检查一次。
+`off`/`on` 使用 `--reasoning`，并在支持时启用 `--jinja`。如果
+`llama-mtmd-cli` 无法控制思考，则使用同一目录中支持该参数的 `llama-server`，
+单个参考也适用。多个参考共用一次模型加载；运行结束或取消后关闭服务器。
+`MINIMAX_H3_MTMD_SERVER=never` 保留 CLI 路径。如果可用二进制均无法应用此设置，
+则使用模板默认值并记录警告，不传入未知参数。描述仍最多生成 1024 个 token，
+空的 GGUF 描述会报错。此设置不改变写作模型或 CLIP 描述路径的参数。
 
 同一个选项节点也喂给写作节点和描述节点；在那些节点上，`adapter` 和 `use_lora`
 单纯用不上。
@@ -805,6 +814,16 @@ Audio 1: voice-timbre reference for the woman — low, unhurried, slight rasp
 直接从素材本身替你写出这几行。
 
 ### MiniMax-H3 Universal Writer 通用写作节点
+
+另有独立的 [API Universal Writer](docs/api_writer.md)，可通过已运行的本地 LLM
+或兼容的远程 API 编写 H3 提示词，支持图片、视频采样帧、音频和 RefMod。
+在 **API providers** 中设置连接和模型，在 **API Writer Options** 中设置生成参数。
+密钥在 Windows 或 Linux 服务器上加密保存，不写入工作流。
+从 **11 - Write through an API** 模板开始，先配置自己的连接。
+
+![API Universal Writer：任务、画面比例、连接和模型选择，以及参考素材输入和提示词输出](docs/api_universal_writer_node.png)
+
+![API Writer Options：生成限制、响应格式、视频采样、音频采样率和提示词修复设置](docs/api_options_node.png)
 
 一个节点管完一整个镜头：参考素材、它们的顺序，以及重写本身。
 [Multi Reference Caption](#minimax-h3-multi-reference-caption-多参考素材描述)

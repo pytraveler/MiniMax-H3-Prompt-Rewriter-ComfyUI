@@ -163,7 +163,18 @@ function sayCredit(holder, data) {
 
 function watchClip(item, where) {
     installStyle(STYLE_ID, STYLE);
-    const { panel, close } = frame(false);
+    let closed = false;
+    let waiting;
+    const { panel, close } = frame(false, {
+        onClose() {
+            closed = true;
+            clearTimeout(waiting);
+            clip.removeEventListener("error", toMirror);
+            clip.pause();
+            clip.removeAttribute("src");
+            clip.load();
+        },
+    });
     panel.classList.add("mmxpre-clip");
     panel.parentElement.style.alignItems = "flex-start";
     panel.style.marginTop = "40px";
@@ -181,12 +192,12 @@ function watchClip(item, where) {
 
     let moved = false;
     function toMirror() {
-        if (moved || !where.mirror || clip.src === where.mirror) return;
+        if (closed || moved || !where.mirror || clip.src === where.mirror) return;
         moved = true;
         clip.src = where.mirror;
         clip.play?.().catch(() => {});
     }
-    const waiting = setTimeout(toMirror, PATIENCE);
+    waiting = setTimeout(toMirror, PATIENCE);
     clip.addEventListener("loadeddata", () => clearTimeout(waiting));
     clip.addEventListener("error", toMirror);
 
@@ -207,11 +218,7 @@ function watchClip(item, where) {
 
     const row = element("div", "mmxlib-row");
     const shut = element("button", "", "Close");
-    shut.addEventListener("click", () => {
-        clearTimeout(waiting);
-        clip.pause?.();
-        close();
-    });
+    shut.addEventListener("click", close);
     row.appendChild(shut);
     panel.appendChild(row);
 }
@@ -267,7 +274,17 @@ function chipRow(holder, legend, options, chosen, redraw) {
 
 function openPicker(node) {
     installStyle(STYLE_ID, STYLE);
-    const { panel, close } = frame(true, { size: "presets" });
+    let closed = false;
+    let filling = null;
+    let typing = null;
+    const { panel, close } = frame(true, {
+        size: "presets",
+        onClose() {
+            closed = true;
+            clearTimeout(typing);
+            filling?.stop();
+        },
+    });
     panel.classList.add("mmxpre-panel");
     panel.appendChild(element("h3", "mmxlib-title", "Bundled prompts"));
     panel.appendChild(
@@ -311,8 +328,6 @@ function openPicker(node) {
         spoken: new Set(),
     };
     let data = null;
-    let filling = null;
-    let typing = null;
     let clearing = null;
     let opened = false;
 
@@ -383,6 +398,7 @@ function openPicker(node) {
     }
 
     function draw() {
+        if (closed) return;
         filling?.stop();
         list.replaceChildren();
         list.scrollTop = 0;
@@ -480,6 +496,7 @@ function openPicker(node) {
 
     list.appendChild(element("div", "mmxlib-none", "Reading the collection..."));
     shelf().then((found) => {
+        if (closed) return;
         if (found?.unread) {
             list.replaceChildren(
                 element("div", "mmxlib-none", `The bundled prompts did not arrive. ${found.unread}`)

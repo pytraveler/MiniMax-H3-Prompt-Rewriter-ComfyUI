@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "llama-server-local",
+      "name": "Local llama-server",
+      "base_url": "http://127.0.0.1:8080/v1",
+      "model": "local-model",
+      "network": "loopback",
+      "protocol": "chat_completions",
+      "stream": true,
+      "secret": {
+        "kind": "none",
+        "name": ""
+      },
+      "capabilities": {
+        "modalities": [
+          "text"
+        ],
+        "formats": [
+          "json_object",
+          "json_schema",
+          "text"
+        ],
+        "parameters": [
+          "max_tokens",
+          "seed",
+          "temperature"
+        ]
+      },
+      "limits": {
+        "output_tokens": 8192,
+        "request_bytes": 1048576,
+        "response_bytes": 8388608,
+        "references": 12,
+        "context_tokens": null
+      }
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek API",
+      "base_url": "https://api.deepseek.com",
+      "model": "deepseek-flash",
+      "network": "cloud",
+      "protocol": "chat_completions",
+      "stream": true,
+      "secret": {
+        "kind": "vault",
+        "name": "deepseek"
+      },
+      "capabilities": {
+        "modalities": [
+          "image",
+          "text"
+        ],
+        "formats": [
+          "json_object",
+          "text"
+        ],
+        "parameters": [
+          "max_tokens",
+          "temperature"
+        ]
+      },
+      "limits": {
+        "output_tokens": 8192,
+        "request_bytes": 1048576,
+        "response_bytes": 8388608,
+        "references": 12,
+        "context_tokens": 1048576
+      }
+    }
+  ]
+}

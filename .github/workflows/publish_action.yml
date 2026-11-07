@@ -33,6 +33,21 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Version unchanged, skipping publish."
           fi
+      - name: Set up Python for local package validation
+        if: steps.version.outputs.changed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build and check the Registry ZIP before upload
+        if: steps.version.outputs.changed == 'true'
+        env:
+          DO_NOT_TRACK: "1"
+          COMFY_NO_TELEMETRY: "1"
+        run: |
+          python -m pip install --quiet comfy-cli==1.25.0
+          comfy --skip-prompt node pack
+          python tools/check_release.py node.zip --kind registry
+          rm node.zip
       - name: Publish Custom Node
         if: steps.version.outputs.changed == 'true'
         uses: Comfy-Org/publish-node-action@main

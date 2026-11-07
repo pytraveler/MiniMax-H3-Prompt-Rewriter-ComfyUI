@@ -856,6 +856,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                 backend=settings["llama_backend"],
                 auto_download=settings["auto_download"],
                 progress=progress,
+                thinking=settings["captioner_thinking"],
             ) as batch:
                 progress.set_total(len(steps))
                 for done, (asset, of_clip) in enumerate(steps):
@@ -915,10 +916,18 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
                             auto_download=settings["auto_download"],
                             progress=progress,
                             server=batch,
+                            thinking=settings["captioner_thinking"],
+                            allow_server=False,
                             max_seconds=target_frames / FRAME_RATE,
                         )
 
                     caption = " ".join(caption.split())
+                    if not caption and clip is None:
+                        raise RuntimeError(
+                            f"{asset.role} {index}: the GGUF captioner returned an empty "
+                            "description. Try captioner_thinking off with a supported "
+                            "llama-server, or another caption model."
+                        )
                     if not caption:
                         empty.append(f"{asset.role} {index} ({asset.slot})")
                         log.warning(

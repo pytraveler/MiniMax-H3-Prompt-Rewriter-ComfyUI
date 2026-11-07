@@ -201,6 +201,13 @@ def announce(node_id, items) -> None:
     except Exception:
         log.info("[minimax_h3_rewriter.previews] no previews this run", exc_info=True)
         return
+    publish(node_id, slots)
+
+
+def publish(node_id, slots: dict[str, dict]) -> None:
+    """Keep and send already prepared thumbnails, without reading source media."""
+    if node_id is None:
+        return
     LAST[str(node_id)] = slots
     try:
         from server import PromptServer

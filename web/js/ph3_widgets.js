@@ -1,5 +1,5 @@
 import { app } from "../../scripts/app.js";
-import { previewFor } from "./reference_previews.js";
+import { previewFor, releasePreviews } from "./reference_previews.js";
 import { addSlotSwitches } from "./slot_switches.js";
 import { firstSelectedFrame, frameInfo, openFramePicker, selectedCount } from "./ph3_frame_picker.js";
 import {
@@ -174,6 +174,7 @@ function redraw(node) {
         state[name].dataset.mmxPh3Node = String(node.id);
         state[name].dataset.mmxPh3Widget = name;
     }
+    releasePreviews(state.strip);
     state.strip.replaceChildren();
     const instructions = readInstructions(node, INSTRUCTIONS);
     for (const entry of entries) {

@@ -145,6 +145,13 @@ CARDS = [
         "cost": "Needs P-H3 image weights and the prompt upsampler.", "accent": HEAVY,
         "chain": ["your image", "P-H3 Writer", "Reference Slots", "edited image"],
     },
+    {
+        "number": "11", "name": "11 - Write through an API", "title": "Write through an API",
+        "line": "Your idea and references, written by a configured LLM server.",
+        "cost": "Needs a running local server or an API account. No video weights.",
+        "accent": LIGHT,
+        "chain": ["your idea", "API Options", "API Writer", "H3 prompt"],
+    },
 ]
 
 

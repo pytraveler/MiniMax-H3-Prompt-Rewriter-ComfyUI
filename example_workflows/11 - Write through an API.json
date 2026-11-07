@@ -1,0 +1,837 @@
+{
+  "id": "6351b266-856d-45bf-b0f3-f84f94cc8604",
+  "revision": 0,
+  "last_node_id": 6,
+  "last_link_id": 4,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "MiniMaxH3ApiUniversalWriter",
+      "pos": [
+        440,
+        0
+      ],
+      "size": [
+        540,
+        1026
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "ref_0",
+          "name": "ref_0",
+          "shape": 7,
+          "type": "IMAGE,VIDEO,AUDIO,H3_REWRITER_REFMOD",
+          "link": null
+        },
+        {
+          "localized_name": "options",
+          "name": "options",
+          "shape": 7,
+          "type": "H3_API_WRITER_OPTIONS",
+          "link": 1
+        },
+        {
+          "localized_name": "profile_id",
+          "name": "profile_id",
+          "type": "COMBO",
+          "widget": {
+            "name": "profile_id"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "task",
+          "name": "task",
+          "type": "COMBO",
+          "widget": {
+            "name": "task"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "resolution",
+          "name": "resolution",
+          "type": "COMBO",
+          "widget": {
+            "name": "resolution"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "duration",
+          "name": "duration",
+          "type": "FLOAT,INT",
+          "widget": {
+            "name": "duration"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "max_tokens",
+          "name": "max_tokens",
+          "type": "INT",
+          "widget": {
+            "name": "max_tokens"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "system_prompt",
+          "name": "system_prompt",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "system_prompt"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "validation",
+          "name": "validation",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "validation"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "response_format",
+          "name": "response_format",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "response_format"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "temperature",
+          "name": "temperature",
+          "shape": 7,
+          "type": "FLOAT",
+          "widget": {
+            "name": "temperature"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "shape": 7,
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "timeout_seconds",
+          "name": "timeout_seconds",
+          "shape": 7,
+          "type": "FLOAT",
+          "widget": {
+            "name": "timeout_seconds"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "repair_once",
+          "name": "repair_once",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "repair_once"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "auto_download_guide",
+          "name": "auto_download_guide",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "auto_download_guide"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "reference_layout",
+          "name": "reference_layout",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "reference_layout"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "reference_instructions",
+          "name": "reference_instructions",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "reference_instructions"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "image_max_side",
+          "name": "image_max_side",
+          "shape": 7,
+          "type": "INT",
+          "widget": {
+            "name": "image_max_side"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "repeat_last",
+          "name": "repeat_last",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "repeat_last"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "library_pick",
+          "name": "library_pick",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "library_pick"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "media_mode",
+          "name": "media_mode",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "media_mode"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "reference_descriptions",
+          "name": "reference_descriptions",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "reference_descriptions"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "video_max_frames",
+          "name": "video_max_frames",
+          "shape": 7,
+          "type": "INT",
+          "widget": {
+            "name": "video_max_frames"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "video_sample_seconds",
+          "name": "video_sample_seconds",
+          "shape": 7,
+          "type": "FLOAT",
+          "widget": {
+            "name": "video_sample_seconds"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "video_max_seconds",
+          "name": "video_max_seconds",
+          "shape": 7,
+          "type": "FLOAT",
+          "widget": {
+            "name": "video_max_seconds"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "batch_video_fps",
+          "name": "batch_video_fps",
+          "shape": 7,
+          "type": "FLOAT",
+          "widget": {
+            "name": "batch_video_fps"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "audio_max_seconds",
+          "name": "audio_max_seconds",
+          "shape": 7,
+          "type": "FLOAT",
+          "widget": {
+            "name": "audio_max_seconds"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "audio_sample_rate",
+          "name": "audio_sample_rate",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "audio_sample_rate"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "bypass",
+          "name": "bypass",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "bypass"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "model"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            2
+          ]
+        },
+        {
+          "localized_name": "integrated_multimodal_description",
+          "name": "integrated_multimodal_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "subject_definitions",
+          "name": "subject_definitions",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "summary",
+          "name": "summary",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "retention_analysis",
+          "name": "retention_analysis",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "detailed_description",
+          "name": "detailed_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "overall_soundscape",
+          "name": "overall_soundscape",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "non_diegetic_music",
+          "name": "non_diegetic_music",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "reasoning",
+          "name": "reasoning",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "findings",
+          "name": "findings",
+          "type": "STRING",
+          "links": [
+            3
+          ]
+        },
+        {
+          "localized_name": "report",
+          "name": "report",
+          "type": "STRING",
+          "links": [
+            4
+          ]
+        },
+        {
+          "localized_name": "references",
+          "name": "references",
+          "type": "H3_REWRITER_REFERENCES",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3ApiUniversalWriter",
+        "max_duration": 30,
+        "minimax_h3_api_widget_order": [
+          "reference_layout",
+          "task",
+          "resolution",
+          "duration",
+          "profile_id",
+          "model",
+          "prompt",
+          "system_prompt",
+          "max_tokens",
+          "validation",
+          "response_format",
+          "temperature",
+          "seed",
+          "control_after_generate",
+          "timeout_seconds",
+          "repair_once",
+          "auto_download_guide",
+          "reference_instructions",
+          "image_max_side",
+          "repeat_last",
+          "library_pick",
+          "media_mode",
+          "reference_descriptions",
+          "video_max_frames",
+          "video_sample_seconds",
+          "video_max_seconds",
+          "batch_video_fps",
+          "audio_max_seconds",
+          "audio_sample_rate",
+          "bypass",
+          "api_recipient",
+          "mmx_prompt_actions",
+          "mmx_library"
+        ]
+      },
+      "widgets_values": [
+        "{}",
+        "T2VA",
+        "16:9",
+        10,
+        "configure-a-profile",
+        "",
+        "A black cat walks along a sunlit wooden fence. Birds sing nearby.",
+        "",
+        4096,
+        "h3",
+        "text",
+        -1,
+        -1,
+        "fixed",
+        180,
+        false,
+        true,
+        "{}",
+        1024,
+        false,
+        "",
+        "native",
+        "{}",
+        8,
+        1,
+        15,
+        24,
+        30,
+        16000,
+        false,
+        ""
+      ],
+      "widgets_values_named": {
+        "reference_layout": "{}",
+        "task": "T2VA",
+        "resolution": "16:9",
+        "duration": 10,
+        "profile_id": "configure-a-profile",
+        "model": "",
+        "prompt": "A black cat walks along a sunlit wooden fence. Birds sing nearby.",
+        "system_prompt": "",
+        "max_tokens": 4096,
+        "validation": "h3",
+        "response_format": "text",
+        "temperature": -1,
+        "seed": -1,
+        "control_after_generate": "fixed",
+        "timeout_seconds": 180,
+        "repair_once": false,
+        "auto_download_guide": true,
+        "reference_instructions": "{}",
+        "image_max_side": 1024,
+        "repeat_last": false,
+        "library_pick": "",
+        "media_mode": "native",
+        "reference_descriptions": "{}",
+        "video_max_frames": 8,
+        "video_sample_seconds": 1,
+        "video_max_seconds": 15,
+        "batch_video_fps": 24,
+        "audio_max_seconds": 30,
+        "audio_sample_rate": 16000,
+        "bypass": false,
+        "api_recipient": ""
+      }
+    },
+    {
+      "id": 2,
+      "type": "MiniMaxH3ApiWriterOptions",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        380,
+        400
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "max_tokens",
+          "name": "max_tokens",
+          "type": "INT",
+          "widget": {
+            "name": "max_tokens"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "response_format",
+          "name": "response_format",
+          "type": "COMBO",
+          "widget": {
+            "name": "response_format"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "temperature",
+          "name": "temperature",
+          "type": "FLOAT",
+          "widget": {
+            "name": "temperature"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "timeout_seconds",
+          "name": "timeout_seconds",
+          "type": "FLOAT",
+          "widget": {
+            "name": "timeout_seconds"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "auto_download_guide",
+          "name": "auto_download_guide",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "auto_download_guide"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "video_sample_seconds",
+          "name": "video_sample_seconds",
+          "type": "FLOAT",
+          "widget": {
+            "name": "video_sample_seconds"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "video_max_seconds",
+          "name": "video_max_seconds",
+          "type": "FLOAT",
+          "widget": {
+            "name": "video_max_seconds"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "batch_video_fps",
+          "name": "batch_video_fps",
+          "type": "FLOAT",
+          "widget": {
+            "name": "batch_video_fps"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "audio_sample_rate",
+          "name": "audio_sample_rate",
+          "type": "COMBO",
+          "widget": {
+            "name": "audio_sample_rate"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "repair_once",
+          "name": "repair_once",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "repair_once"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "options",
+          "name": "options",
+          "type": "H3_API_WRITER_OPTIONS",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3ApiWriterOptions"
+      },
+      "widgets_values": [
+        4096,
+        "text",
+        -1,
+        180,
+        true,
+        1,
+        15,
+        24,
+        16000,
+        false
+      ],
+      "widgets_values_named": {
+        "max_tokens": 4096,
+        "response_format": "text",
+        "temperature": -1,
+        "timeout_seconds": 180,
+        "auto_download_guide": true,
+        "video_sample_seconds": 1,
+        "video_max_seconds": 15,
+        "batch_video_fps": 24,
+        "audio_sample_rate": 16000,
+        "repair_once": false
+      }
+    },
+    {
+      "id": 3,
+      "type": "PreviewAny",
+      "pos": [
+        1040,
+        0
+      ],
+      "size": [
+        540,
+        430
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "источник",
+          "name": "source",
+          "type": "*",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "СТРОКА",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "prompt",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 4,
+      "type": "PreviewAny",
+      "pos": [
+        1040,
+        470
+      ],
+      "size": [
+        540,
+        160
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "источник",
+          "name": "source",
+          "type": "*",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "СТРОКА",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "findings",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 5,
+      "type": "PreviewAny",
+      "pos": [
+        1040,
+        670
+      ],
+      "size": [
+        540,
+        350
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "источник",
+          "name": "source",
+          "type": "*",
+          "link": 4
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "СТРОКА",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "report",
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 6,
+      "type": "MarkdownNote",
+      "pos": [
+        0,
+        450
+      ],
+      "size": [
+        380,
+        550
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "# 11 - Write through an API\n\nWrites an H3 prompt through your own configured LLM server.\n\n1. Open API providers. Add your connection, exact served model IDs and capabilities. Keep keys in encrypted server storage or an explicit environment credential.\n2. Test connection, Save provider, then Use in this node. Replace configure-a-profile before queuing.\n3. Enter your idea and set the task, ratio and duration. Options controls generation and media copies.\n4. Run. Prompt, findings and report appear on the right.\n\nThe default uses the MiniMax guide. A custom system_prompt replaces it. repair_once is off; enabling it permits one additional, potentially paid request.\n\nFor I2VA, connect your Load Image to ref_0 and choose I2VA. Ref2VA accepts pictures, video, audio and decoded RefMods. Roles, order, sound flags and disabled slots control what is sent. Video is sampled into timestamped images. Descriptions mode sends only your descriptions.\n\nNo endpoint, key, personal model ID or media file is stored here. The server is managed separately. See docs/api_writer.md or docs/api_writer_RU.md in the pack."
+      ],
+      "widgets_values_named": {
+        "text": "# 11 - Write through an API\n\nWrites an H3 prompt through your own configured LLM server.\n\n1. Open API providers. Add your connection, exact served model IDs and capabilities. Keep keys in encrypted server storage or an explicit environment credential.\n2. Test connection, Save provider, then Use in this node. Replace configure-a-profile before queuing.\n3. Enter your idea and set the task, ratio and duration. Options controls generation and media copies.\n4. Run. Prompt, findings and report appear on the right.\n\nThe default uses the MiniMax guide. A custom system_prompt replaces it. repair_once is off; enabling it permits one additional, potentially paid request.\n\nFor I2VA, connect your Load Image to ref_0 and choose I2VA. Ref2VA accepts pictures, video, audio and decoded RefMods. Roles, order, sound flags and disabled slots control what is sent. Video is sampled into timestamped images. Descriptions mode sends only your descriptions.\n\nNo endpoint, key, personal model ID or media file is stored here. The server is managed separately. See docs/api_writer.md or docs/api_writer_RU.md in the pack."
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      2,
+      1,
+      0,
+      3,
+      0,
+      "STRING"
+    ],
+    [
+      3,
+      1,
+      9,
+      4,
+      0,
+      "STRING"
+    ],
+    [
+      4,
+      1,
+      10,
+      5,
+      0,
+      "STRING"
+    ],
+    [
+      1,
+      2,
+      0,
+      1,
+      1,
+      "H3_API_WRITER_OPTIONS"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.8,
+      "offset": [
+        80,
+        80
+      ]
+    },
+    "frontendVersion": "1.57.6"
+  },
+  "version": 0.4
+}
