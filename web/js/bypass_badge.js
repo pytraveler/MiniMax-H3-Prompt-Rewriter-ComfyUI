@@ -9,6 +9,7 @@ const WRITERS = [
     "MiniMaxH3UniversalWriter",
     "MiniMaxH3ApiUniversalWriter",
     "MiniMaxH3UniversalRewriter",
+    "MiniMaxH3QwenRewriter",
     "MiniMaxH3PH3Writer",
 ];
 const CAPTIONERS = ["MiniMaxH3ReferenceCaption", "MiniMaxH3MultiReferenceCaption"];

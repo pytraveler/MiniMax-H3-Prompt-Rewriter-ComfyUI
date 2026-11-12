@@ -57,6 +57,14 @@ class SectionSpec:
 
 
 SECTIONS: dict[str, SectionSpec] = {
+    "qwen_rewriters": SectionSpec(
+        key="qwen_rewriters", title="Full Qwen rewriters",
+        blurb=("Full LightX2V Qwen3.5 9B / Qwen3.8 27B checkpoints, or their GGUF conversions. "
+               "Name the task Ref2VA or FL2VA in the entry name or source. These are full models; no LoRA is loaded."),
+        formats=(catalog.FORMAT_TRANSFORMERS, catalog.FORMAT_GGUF),
+        default_format=catalog.FORMAT_TRANSFORMERS,
+        mmproj=MMPROJ_REQUIRED, mmproj_needs=("vision",),
+    ),
     "models": SectionSpec(
         key="models",
         title="27B rewriter",
@@ -164,6 +172,7 @@ def _at(*pairs: tuple[str, str]) -> tuple[NodeSection, ...]:
 
 
 NODE_SECTIONS: dict[str, tuple[NodeSection, ...]] = {
+    "MiniMaxH3QwenRewriter": _at(("model", "qwen_rewriters")),
     "MiniMaxH3PromptRewriter": _at(("model", "models")),
     "MiniMaxH3PromptWriter8B": _at(("model", "models_8b")),
     "MiniMaxH3PromptWriterOmni": _at(("model", "models_omni")),
@@ -205,6 +214,10 @@ def sections_of(node_id: str) -> tuple[str, ...]:
 def requirements(section: str) -> list[str]:
     """What has to be true of an entry here, in the words the window prints."""
     found = spec(section)
+    if section == "qwen_rewriters":
+        return ["SFT: full qwen3_5 checkpoint with vision encoder and LM head (9B or 27B).",
+                "GGUF: qwen35, 32 x 4096 or 64 x 5120, plus the matching vision mmproj.",
+                "Name the checkpoint Ref2VA or FL2VA explicitly. These checkpoints do not encode audio."]
     lines: list[str] = []
 
     if found.gguf_only:
@@ -243,6 +256,7 @@ def requirements(section: str) -> list[str]:
 
 
 _CHOICE_SOURCE = {
+    "qwen_rewriters": ("qwen_models", "model_choices"),
     "models": ("nodes", "model_choices"),
     "models_8b": ("writer_8b", "model_choices"),
     "models_omni": ("writer_omni", "model_choices"),
@@ -272,6 +286,7 @@ def choices(section: str) -> list[str]:
 
 
 _MAP_SOURCE = {
+    "qwen_rewriters": ("qwen_models", "_build_model_map"),
     "models": ("nodes", "_build_model_map"),
     "models_8b": ("writer_8b", "_build_model_map"),
     "models_omni": ("writer_omni", "_build_model_map"),
@@ -459,6 +474,12 @@ def clean_entry(section: str, raw: dict) -> dict:
         value = str(raw.get(field) or "").strip()
         if value:
             entry[field] = value
+    if section == "qwen_rewriters":
+        from .qwen_models import family
+        try:
+            family(entry["name"], entry.get("repo", ""), entry.get("file", ""))
+        except ValueError as error:
+            raise catalog.CatalogWriteError(str(error)) from None
     return entry
 
 
@@ -830,6 +851,9 @@ def check(section: str, entry: dict) -> dict:
     typo in ``file``, which today surfaces as a download that fails minutes in.
     """
     found = spec(section)
+    if section == "qwen_rewriters" and entry.get("format") != catalog.FORMAT_GGUF:
+        from .qwen_models import check_native
+        return check_native(entry)
     lines: list[dict] = []
     picks: dict = {}
     size: float | None = None
@@ -927,6 +951,9 @@ def seed_names_of(section: str) -> set[str]:
 def gguf_problem(section: str, path: str) -> str:
     """Why this GGUF cannot serve in this list, or an empty string when it can."""
     found = spec(section)
+    if section == "qwen_rewriters":
+        from .qwen_models import gguf_problem as full_qwen_problem
+        return full_qwen_problem(path)
     if found.gguf is not None:
         arch, blocks, width = found.gguf
         return discovery.gguf_problem(path, arch, blocks, width, found.base_name)

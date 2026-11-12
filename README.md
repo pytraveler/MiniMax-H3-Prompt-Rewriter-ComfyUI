@@ -1,10 +1,14 @@
-# MiniMax-H3 Prompt Rewriter for ComfyUI
+# MiniMax-H3 Prompt Writers & Rewriters for ComfyUI
 
-ComfyUI nodes for the [LightX2V MiniMax-H3 T2VA Prompt Rewriter LoRA](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA).
-A short prompt goes in; a structured, production-ready audio-video description
-for [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) comes out. Local writers
-run on your machine; the optional [API Universal Writer](docs/api_writer.md)
-uses a separately configured local server or remote provider.
+ComfyUI nodes for creating, rewriting and checking structured video-and-audio
+prompts for [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3). Choose
+LightX2V LoRAs, [full Qwen SFT/GGUF checkpoints](docs/qwen_rewriter.md), local
+models following MiniMax's writing guide, or the [API Universal Writer](docs/api_writer.md)
+with a configured local server or remote provider.
+
+The pack also includes P-H3 image prompting, reference conditioning, saved
+RefMods, prompt reduction, presets and prompt/model libraries. Local writers
+run on your machine; API requests go to the provider you configure.
 
 [Русская версия](README_RU.md) · [中文版](README_ZH.md) · [Changelog](CHANGELOG.md)
 
@@ -21,6 +25,13 @@ uses a separately configured local server or remote provider.
   <a href="https://www.youtube.com/watch?v=PZd9fWX15VA"><img alt="Video review, in Russian" src="https://img.shields.io/badge/YouTube-review%20(RU)-FF0000?logo=youtube&logoColor=white"></a>
 </p>
 
+<p align="center">
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA"><img alt="LightX2V SFT: Qwen3.5 9B Ref2VA" src="docs/badges/hf-sft-9b-ref2va.svg"></a>
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA"><img alt="LightX2V SFT: Qwen3.5 9B FL2VA" src="docs/badges/hf-sft-9b-fl2va.svg"></a>
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA"><img alt="LightX2V SFT: Qwen3.8 27B Ref2VA" src="docs/badges/hf-sft-27b-ref2va.svg"></a>
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA"><img alt="LightX2V SFT: Qwen3.8 27B FL2VA" src="docs/badges/hf-sft-27b-fl2va.svg"></a>
+</p>
+
 ![The rewriter node in ComfyUI between its options node and a text viewer: a short prompt in the node, and on the right the structured shot-by-shot description, soundscape and music fields](docs/node_preview.png)
 
 The prompt may be in any language the base model reads; the rewrite comes back in
@@ -30,7 +41,7 @@ English, which is what MiniMax-H3 expects.
 "A red fox walks through a snowy forest at dawn."  +  16:9  +  15s
                               │
                               ▼
-              Qwen3.6-27B + Prompt Rewriter LoRA
+              Prompt Writer / Rewriter
                               │
                               ▼
    integrated_multimodal_description: [Shot 1] ... [Shot 2] 0:06 ...
@@ -41,29 +52,23 @@ English, which is what MiniMax-H3 expects.
               MiniMax-H3 video + synchronized audio
 ```
 
-There are three ways to get that output, and the pack ships all of them:
+Choose a node family for your model and references:
 
-| | Rewriter node | Rewriter 8B | Rewriter Omni | Writer nodes |
-|---|---|---|---|---|
-| Where the format comes from | the LoRA — a 27B trained until H3 output came out of it unprompted | a second LoRA, on a model that also sees | a third LoRA, on a model that also hears | MiniMax's own writing guide, in the system prompt |
-| Model | Qwen3.6-27B only | Qwen3-VL-8B-Instruct only | Qwen2.5-Omni-7B only | any instruction-following GGUF |
-| Smallest working setup | ~10 GB download, ~13 GB VRAM | ~6.1 GB download, ~9 GB VRAM | ~6.2 GB download, ~9 GB VRAM | **2.6 GB download, ~5 GB VRAM** |
-| Tasks | T2VA | T2VA, I2VA, FL2VA, L2VA | T2VA, I2VA, FL2VA, L2VA, **Ref2VA** | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
-| Reference frames | described to it in words | **it looks at them** | **it looks at them** | described to it in words |
-| Clips and sound | described to it in words | described to it in words | **it watches and listens** | described to it in words |
-| Quality | the reference | the same trained contract, at a third of the download; wobblier on the alignment line | the only one that hears; six fields on Ref2VA | close, and it runs on hardware the LoRA cannot touch |
+| Node family | Model or service | Reference input | Tasks |
+|---|---|---|---|
+| LoRA Rewriter 27B | Qwen3.6-27B + LightX2V LoRA | Text descriptions | T2VA |
+| LoRA Rewriter 8B | Qwen3-VL-8B-Instruct + LoRA | Reads first/last-frame images directly | T2VA, I2VA, FL2VA, L2VA |
+| LoRA Rewriter Omni | Qwen2.5-Omni-7B + LoRA | Images; video and audio on the GGUF path | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
+| [Qwen Rewriter](docs/qwen_rewriter.md) | Full LightX2V Qwen3.5 9B / Qwen3.8 27B, SFT or GGUF | Reads images and sampled video frames; sound uses text descriptions | FL2VA checkpoint: T2VA, I2VA, FL2VA, L2VA; Ref2VA checkpoint: Ref2VA |
+| Guide-based writers | Local instruction-following GGUF | Media descriptions from captioners | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
+| [API Universal Writer](docs/api_writer.md) | Configured local server or remote provider | Images, sampled video and audio according to model/server capabilities; descriptions mode is also available | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
 
-The first three columns are also available as one node — [Universal Rewriter](#minimax-h3-universal-rewriter) — where a tab swaps the adapter and everything else stays where it is.
-
-Two of the four read text only. [Reference Caption](#minimax-h3-reference-caption)
-turns an image, an audio clip or a video into the text they need — 3 to 5 seconds
-per asset on a 3.4 GB model. When a whole shot's worth of references is waiting,
-[Multi Reference Caption](#minimax-h3-multi-reference-caption) does all of them at
-once — or [Universal Writer](#minimax-h3-universal-writer) describes them and writes
-the prompt in the same node, with their order a widget you can drag rather than a
-consequence of which slot you happened to use. The 8B rewriter needs none of that
-for its reference *frames*: connect the picture and it reads it. The Omni rewriter
-needs none of it at all — a clip and a sound reach it as themselves.
+The three LoRA variants are also available in [Universal Rewriter](#minimax-h3-universal-rewriter),
+where a tab chooses the adapter. For guide-based writers,
+[Reference Caption](#minimax-h3-reference-caption) and
+[Multi Reference Caption](#minimax-h3-multi-reference-caption) turn media into text.
+[Universal Writer](#minimax-h3-universal-writer) combines captioning and prompt
+writing in one node, with draggable chips controlling the reference order.
 
 And when the shortest way to a good prompt is somebody else's:
 [Prompt Presets](#minimax-h3-prompt-presets) hands over one of a thousand
@@ -82,6 +87,7 @@ If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2va
   - [MiniMax-H3 Prompt Rewriter](#minimax-h3-prompt-rewriter)
   - [MiniMax-H3 Prompt Rewriter 8B (sees frames)](#minimax-h3-prompt-rewriter-8b-sees-frames)
   - [MiniMax-H3 Prompt Rewriter Omni (sees and hears)](#minimax-h3-prompt-rewriter-omni-sees-and-hears)
+  - [MiniMax-H3 Qwen Rewriter](#minimax-h3-qwen-rewriter)
   - [MiniMax-H3 Universal Rewriter](#minimax-h3-universal-rewriter)
   - [MiniMax-H3 Rewriter Options](#minimax-h3-rewriter-options)
   - [MiniMax-H3 Prompt Writer (T2VA/I2VA/FL2VA/L2VA)](#minimax-h3-prompt-writer-t2vai2vafl2val2va)
@@ -168,7 +174,7 @@ Or install it from the Comfy registry through ComfyUI-Manager.
 
 ### Example workflows
 
-Eight workflows ship with the pack and appear in ComfyUI's template browser
+Twelve workflows ship with the pack and appear in ComfyUI's template browser
 (*Workflow → Browse Templates*) under this node pack's name once it is
 installed. Each is a card of its own and each runs on its own: nothing is
 bypassed on open, and there is no second branch to mute before pressing Run.
@@ -183,9 +189,13 @@ bypassed on open, and there is no second branch to mute before pressing Run.
 | 6 | **References to video** — the same for Ref2VA, the pictures reaching the generator through the writer, in the order its strip numbers them | the MiniMax-H3 ref2va weights |
 | 7 | **LoRA triggers and effects** — the words an adapter answers to, and MiniMax's ten effects, put into a finished prompt | nothing at all |
 | 8 | **RefMods to video** — a [RefMod](#minimax-h3-refmod), a look and a voice saved already encoded: the writer sees and hears it, and the generator is given the latent it was saved as | the MiniMax-H3 ref2va weights, and a RefMod in `models/refmods` |
+| 9 | **P-H3 text to image** | P-H3 image weights and prompt upsampler |
+| 10 | **P-H3 image editing** | P-H3 image weights, upsampler and your picture |
+| 11 | **Write through an API** | a configured local or remote API server |
+| 12 | **Write with the full Qwen model** | 9B Q5_K_M and its F16 projector, 7.39 GB together |
 
-Only 5, 6 and 8 load a MiniMax-H3 checkpoint. The rest end at the text, which
-is what most of this pack is for. 5 and 6 are ComfyUI's own gallery templates
+5, 6 and 8 generate MiniMax-H3 video; 9 and 10 generate P-H3 images. The other
+workflows produce or process prompts. 5 and 6 are ComfyUI's own gallery templates
 with the generator folded into a single subgraph box, so what is on screen is
 the prompt side plus one node — the checkpoints they name are the ones the
 stock templates use, and ComfyUI offers to download any that are missing. 8 is
@@ -485,6 +495,30 @@ references widens it instead of failing.
 **The safetensors route shows pictures only.** ComfyUI's in-process Transformers
 path has no way to hand the model a sound, so a clip or a sound on that base is
 refused rather than silently dropped from the turn. Pick a GGUF base to use them.
+
+### MiniMax-H3 Qwen Rewriter
+
+Runs the full LightX2V **Qwen3.5 9B** and **Qwen3.8 27B** SFT checkpoints, or their
+GGUF conversions with matching vision projectors. The FL2VA checkpoint serves
+T2VA, I2VA, L2VA and FL2VA; the Ref2VA checkpoint serves Ref2VA. Pick original
+SFT weights or GGUF through **Model list**, with generation and media settings
+in the separate **Qwen Rewriter Options** node.
+
+The node has the shared top reference strip, input checkboxes, **+ instr**,
+aspect/duration controls, bypass/repeat badges, prompt library and `references`
+output. It reads images and sampled video frames directly; audio uses explicit
+descriptions because these checkpoints have no audio encoder.
+
+| Checkpoint | Original SFT | GGUF Q5_K_M / Q4_K_M |
+|---|---|---|
+| Qwen3.5-9B FL2VA | [LightX2V](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA) | [pytraveler](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-GGUF) |
+| Qwen3.5-9B Ref2VA | [LightX2V](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA) | [pytraveler](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA-GGUF) |
+| Qwen3.8-27B FL2VA | [LightX2V](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA) | [pytraveler](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA-GGUF) |
+| Qwen3.8-27B Ref2VA | [LightX2V](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA) | [pytraveler](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA-GGUF) |
+
+[Setup, reference roles, outputs and conversion](docs/qwen_rewriter.md).
+
+![Qwen Rewriter Options, the full Qwen Rewriter and its generated H3 prompt](docs/qwen_rewriter_workflow.png)
 
 ### MiniMax-H3 Universal Rewriter
 

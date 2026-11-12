@@ -18,7 +18,8 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent.parent
-SCREENSHOTS = {"docs/node_options.png", "docs/api_options_node.png", "docs/api_universal_writer_node.png"}
+SCREENSHOTS = {"docs/node_options.png", "docs/api_options_node.png", "docs/api_universal_writer_node.png",
+               "docs/qwen_rewriter_workflow.png"}
 REQUIRED = {
     "__init__.py", "pyproject.toml", "requirements.txt", "LICENSE",
     "README.md", "README_RU.md", "README_ZH.md", "CHANGELOG.md", "CHANGELOG_RU.md",
@@ -27,6 +28,11 @@ REQUIRED = {
     "locales/ru/nodeDefs.json", "locales/ru/main.json",
     "example_workflows/11 - Write through an API.json",
     "example_workflows/11 - Write through an API.jpg",
+    "docs/qwen_rewriter.md", "docs/qwen_rewriter_RU.md", "docs/qwen_rewriter_ZH.md",
+    "docs/badges/hf-sft-9b-ref2va.svg", "docs/badges/hf-sft-9b-fl2va.svg",
+    "docs/badges/hf-sft-27b-ref2va.svg", "docs/badges/hf-sft-27b-fl2va.svg",
+    "example_workflows/12 - Write with the full Qwen model.json",
+    "example_workflows/12 - Write with the full Qwen model.jpg",
 } | SCREENSHOTS
 PRIVATE_DIRS = {".git", ".venv", "__pycache__", ".pytest_cache", ".codex", ".agents", "_user"}
 PRIVATE_NAMES = {"api_profiles.json", "api_secrets.enc", "auth.json", "credentials.json",

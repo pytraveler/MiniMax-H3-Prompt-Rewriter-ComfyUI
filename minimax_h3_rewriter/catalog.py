@@ -48,7 +48,7 @@ FORMATS = (FORMAT_TRANSFORMERS, FORMAT_GGUF)
 
 PLACEHOLDER = "REPLACE_ME"
 
-SECTIONS = ("models", "models_8b", "models_omni", "writers", "captioners")
+SECTIONS = ("models", "models_8b", "models_omni", "writers", "captioners", "qwen_rewriters")
 
 ADAPTERS_27B = "adapters"
 ADAPTERS_8B = "adapters_8b"

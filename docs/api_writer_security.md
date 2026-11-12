@@ -14,14 +14,13 @@ review. Dependencies are declared in `pyproject.toml` and `requirements.txt`;
 the API path does not install packages, launch a model server or execute model
 output. `model.eval()` and JavaScript `RegExp.exec()` are unrelated operations.
 
-On 2026-11-08, `tools/registry_status.py --version 0.34.0 --tries 3` confirmed
-that **0.34.0 is not published yet**. The node listing is Active; the latest
-published version remains **Flagged 0.33.0** with 12 informational scanner
-findings and no policy verdict. They match 0.32.2. That published version
-predates the API Writer changes. Historical 0.30.0 policy categories include
-remote code execution, arbitrary file read and information disclosure. Local
-tests neither remove that flag nor predict a future verdict. The status tool
-returns 1 when an explicitly requested candidate version is not listed.
+On 2026-11-12, `tools/registry_status.py --version 0.35.0 --tries 3` confirmed
+that **0.35.0 is not published yet**. The node listing is Active; the latest
+published version is **Flagged 0.34.0**, with the policy verdict
+`policy-v0.8: code-execution`. Version 0.33.0 has 12 informational scanner
+findings and no policy verdict. Local tests neither remove a published flag
+nor predict the candidate's Registry verdict. The status tool returns 1 when
+an explicitly requested candidate version is not listed.
 
 The 12 findings map to these existing operations (line numbers are from the
 published 0.33.0 report):
@@ -42,6 +41,20 @@ These explanations identify inputs and effects; they do not establish that all
 legacy HTTP routes are authorized for Internet exposure. In particular,
 desktop-open, local downloads, model-list editing and other installed packs
 remain outside the new provider editor's administrator-token boundary.
+
+## Full Qwen rewriter runtime
+
+Version 0.35.0 adds full LightX2V Qwen SFT/GGUF checkpoints. The SFT path uses
+the existing Transformers loader with `trust_remote_code=False`. The GGUF
+path starts and owns a local `llama-server` through the existing server helper,
+with an argument list and no shell. Cancellation, failure and unload close
+that owned process. Reference audio is supplied as explicit text descriptions;
+these vision checkpoints receive no waveform.
+
+The conversion and model-card scripts under `tools/` are maintainer commands,
+not runtime imports. Registry packages exclude `tools/`; GitHub release ZIPs
+include them. The model source revisions and conversion hashes accompany the
+separately hosted GGUF files.
 
 ## Local captioner thinking control
 

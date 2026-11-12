@@ -43,21 +43,25 @@ jobs:
           from minimax_h3_rewriter.nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
           from minimax_h3_rewriter.api_writer import NODE_CLASS_MAPPINGS as api_nodes
           from minimax_h3_rewriter.api_writer import NODE_DISPLAY_NAME_MAPPINGS as api_names
+          from minimax_h3_rewriter.qwen_node import NODE_CLASS_MAPPINGS as qwen_nodes
+          from minimax_h3_rewriter.qwen_node import NODE_DISPLAY_NAME_MAPPINGS as qwen_names
 
           assert set(api_nodes) == {"MiniMaxH3ApiUniversalWriter", "MiniMaxH3ApiWriterOptions"}
           assert not set(api_nodes).intersection(NODE_CLASS_MAPPINGS)
-          NODE_CLASS_MAPPINGS = {**NODE_CLASS_MAPPINGS, **api_nodes}
-          NODE_DISPLAY_NAME_MAPPINGS = {**NODE_DISPLAY_NAME_MAPPINGS, **api_names}
+          assert set(qwen_nodes) == {"MiniMaxH3QwenRewriter", "MiniMaxH3QwenRewriterOptions"}
+          assert not set(qwen_nodes).intersection(set(NODE_CLASS_MAPPINGS) | set(api_nodes))
+          NODE_CLASS_MAPPINGS = {**NODE_CLASS_MAPPINGS, **api_nodes, **qwen_nodes}
+          NODE_DISPLAY_NAME_MAPPINGS = {**NODE_DISPLAY_NAME_MAPPINGS, **api_names, **qwen_names}
           assert NODE_CLASS_MAPPINGS, "NODE_CLASS_MAPPINGS is empty"
           unnamed = sorted(set(NODE_CLASS_MAPPINGS) - set(NODE_DISPLAY_NAME_MAPPINGS))
           assert not unnamed, f"no display name for {unnamed}"
 
           catalog = json.loads(pathlib.Path("minimax_h3_rewriter/models.json").read_text("utf-8"))
-          for section in ("models", "writers", "captioners"):
+          for section in ("models", "writers", "captioners", "qwen_rewriters"):
               assert catalog.get(section), f"models.json has no {section}"
 
           print(f"{len(NODE_CLASS_MAPPINGS)} nodes:", ", ".join(sorted(NODE_CLASS_MAPPINGS)))
-          print("models.json:", ", ".join(f"{s} {len(catalog[s])}" for s in ("models", "writers", "captioners")))
+          print("models.json:", ", ".join(f"{s} {len(catalog[s])}" for s in ("models", "writers", "captioners", "qwen_rewriters")))
           PY
 
       - name: Release notes out of the changelogs

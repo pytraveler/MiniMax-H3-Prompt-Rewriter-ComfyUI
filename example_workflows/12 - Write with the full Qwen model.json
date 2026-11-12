@@ -1,0 +1,715 @@
+{
+  "id": "64260b3d-0feb-410b-9077-fea61ba416a4",
+  "revision": 0,
+  "last_node_id": 4,
+  "last_link_id": 2,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "MiniMaxH3QwenRewriter",
+      "pos": [
+        480,
+        0
+      ],
+      "size": [
+        560,
+        1080
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "ref_0",
+          "name": "ref_0",
+          "shape": 7,
+          "type": "IMAGE,VIDEO,AUDIO,H3_REWRITER_REFMOD",
+          "link": null
+        },
+        {
+          "localized_name": "options",
+          "name": "options",
+          "shape": 7,
+          "type": "H3_QWEN_REWRITER_OPTIONS",
+          "link": 1
+        },
+        {
+          "localized_name": "aspect_ratio",
+          "name": "aspect_ratio",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "localized_name": "reference_layout",
+          "name": "reference_layout",
+          "type": "STRING",
+          "widget": {
+            "name": "reference_layout"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "task",
+          "name": "task",
+          "type": "COMBO",
+          "widget": {
+            "name": "task"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "resolution",
+          "name": "resolution",
+          "type": "COMBO",
+          "widget": {
+            "name": "resolution"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "duration",
+          "name": "duration",
+          "type": "FLOAT,INT",
+          "widget": {
+            "name": "duration"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "COMBO",
+          "widget": {
+            "name": "model"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "system_prompt",
+          "name": "system_prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "system_prompt"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "greedy",
+          "name": "greedy",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "greedy"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "keep_model_loaded",
+          "name": "keep_model_loaded",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "keep_model_loaded"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "bypass",
+          "name": "bypass",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "bypass"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "repeat_last",
+          "name": "repeat_last",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "repeat_last"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "reference_instructions",
+          "name": "reference_instructions",
+          "type": "STRING",
+          "widget": {
+            "name": "reference_instructions"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "reference_descriptions",
+          "name": "reference_descriptions",
+          "type": "STRING",
+          "widget": {
+            "name": "reference_descriptions"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "library_pick",
+          "name": "library_pick",
+          "type": "STRING",
+          "widget": {
+            "name": "library_pick"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            2
+          ]
+        },
+        {
+          "localized_name": "integrated_multimodal_description",
+          "name": "integrated_multimodal_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "subject_definitions",
+          "name": "subject_definitions",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "summary",
+          "name": "summary",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "retention_analysis",
+          "name": "retention_analysis",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "detailed_description",
+          "name": "detailed_description",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "overall_soundscape",
+          "name": "overall_soundscape",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "non_diegetic_music",
+          "name": "non_diegetic_music",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "reference_assets",
+          "name": "reference_assets",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "reasoning",
+          "name": "reasoning",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "findings",
+          "name": "findings",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "report",
+          "name": "report",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "references",
+          "name": "references",
+          "type": "H3_REWRITER_REFERENCES",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "cf951b1c0cc171d1aadb27ae5aac77f893b78f64",
+        "Node name for S&R": "MiniMaxH3QwenRewriter",
+        "max_duration": 30,
+        "models": [
+          {
+            "name": "MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-Q5_K_M.gguf",
+            "url": "https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-GGUF/resolve/main/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-Q5_K_M.gguf",
+            "directory": "LLM"
+          },
+          {
+            "name": "mmproj-MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-F16.gguf",
+            "url": "https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-GGUF/resolve/main/mmproj-MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-F16.gguf",
+            "directory": "LLM"
+          }
+        ],
+        "minimax_h3_qwen_widget_order": [
+          "reference_layout",
+          "task",
+          "resolution",
+          "duration",
+          "model",
+          "prompt",
+          "system_prompt",
+          "greedy",
+          "seed",
+          "control_after_generate",
+          "keep_model_loaded",
+          "bypass",
+          "repeat_last",
+          "reference_instructions",
+          "reference_descriptions",
+          "library_pick",
+          "qwen_note",
+          "mmx_open",
+          "mmx_prompt_actions",
+          "mmx_library"
+        ]
+      },
+      "widgets_values": [
+        "{}",
+        "T2VA",
+        "16:9",
+        5,
+        "Qwen3.5 9B FL2VA GGUF Q5_K_M · 7.39 GB download — Full model and matching F16 vision projector; no separate LoRA.",
+        "A tiny paper boat travels along a rainwater stream beside a quiet city street at dusk. Keep the camera near the water.",
+        "",
+        true,
+        42,
+        "fixed",
+        false,
+        false,
+        false,
+        "{}",
+        "{}",
+        "",
+        ""
+      ],
+      "widgets_values_named": {
+        "reference_layout": "{}",
+        "task": "T2VA",
+        "resolution": "16:9",
+        "duration": 5,
+        "model": "Qwen3.5 9B FL2VA GGUF Q5_K_M · 7.39 GB download — Full model and matching F16 vision projector; no separate LoRA.",
+        "prompt": "A tiny paper boat travels along a rainwater stream beside a quiet city street at dusk. Keep the camera near the water.",
+        "system_prompt": "",
+        "greedy": true,
+        "seed": 42,
+        "control_after_generate": "fixed",
+        "keep_model_loaded": false,
+        "bypass": false,
+        "repeat_last": false,
+        "reference_instructions": "{}",
+        "reference_descriptions": "{}",
+        "library_pick": "",
+        "qwen_note": ""
+      }
+    },
+    {
+      "id": 2,
+      "type": "MiniMaxH3QwenRewriterOptions",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        400,
+        720
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "max_new_tokens",
+          "name": "max_new_tokens",
+          "type": "INT",
+          "widget": {
+            "name": "max_new_tokens"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "temperature",
+          "name": "temperature",
+          "type": "FLOAT",
+          "widget": {
+            "name": "temperature"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "top_p",
+          "name": "top_p",
+          "type": "FLOAT",
+          "widget": {
+            "name": "top_p"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "top_k",
+          "name": "top_k",
+          "type": "INT",
+          "widget": {
+            "name": "top_k"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "repetition_penalty",
+          "name": "repetition_penalty",
+          "type": "FLOAT",
+          "widget": {
+            "name": "repetition_penalty"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "thinking",
+          "name": "thinking",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "thinking"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "context_size",
+          "name": "context_size",
+          "type": "INT",
+          "widget": {
+            "name": "context_size"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "quantization",
+          "name": "quantization",
+          "type": "COMBO",
+          "widget": {
+            "name": "quantization"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "attn_implementation",
+          "name": "attn_implementation",
+          "type": "COMBO",
+          "widget": {
+            "name": "attn_implementation"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "device",
+          "name": "device",
+          "type": "COMBO",
+          "widget": {
+            "name": "device"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "gpu_layers",
+          "name": "gpu_layers",
+          "type": "INT",
+          "widget": {
+            "name": "gpu_layers"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "llama_backend",
+          "name": "llama_backend",
+          "type": "COMBO",
+          "widget": {
+            "name": "llama_backend"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "auto_download",
+          "name": "auto_download",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "auto_download"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "downloader",
+          "name": "downloader",
+          "type": "COMBO",
+          "widget": {
+            "name": "downloader"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "image_max_side",
+          "name": "image_max_side",
+          "type": "INT",
+          "widget": {
+            "name": "image_max_side"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "video_max_frames",
+          "name": "video_max_frames",
+          "type": "INT",
+          "widget": {
+            "name": "video_max_frames"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "video_sample_seconds",
+          "name": "video_sample_seconds",
+          "type": "FLOAT",
+          "widget": {
+            "name": "video_sample_seconds"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "video_max_seconds",
+          "name": "video_max_seconds",
+          "type": "FLOAT",
+          "widget": {
+            "name": "video_max_seconds"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "batch_video_fps",
+          "name": "batch_video_fps",
+          "type": "FLOAT",
+          "widget": {
+            "name": "batch_video_fps"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "self_check",
+          "name": "self_check",
+          "type": "COMBO",
+          "widget": {
+            "name": "self_check"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "repair_once",
+          "name": "repair_once",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "repair_once"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "prompt_file",
+          "name": "prompt_file",
+          "type": "COMBO",
+          "widget": {
+            "name": "prompt_file"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "options",
+          "name": "options",
+          "type": "H3_QWEN_REWRITER_OPTIONS",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "minimax-h3-prompt-rewriter",
+        "ver": "cf951b1c0cc171d1aadb27ae5aac77f893b78f64",
+        "Node name for S&R": "MiniMaxH3QwenRewriterOptions"
+      },
+      "widgets_values": [
+        3000,
+        0.7,
+        0.8,
+        20,
+        1,
+        false,
+        32768,
+        "bfloat16",
+        "sdpa",
+        "auto",
+        -1,
+        "auto",
+        true,
+        "built-in",
+        1024,
+        8,
+        1,
+        15,
+        24,
+        "all",
+        false,
+        "global",
+        ""
+      ],
+      "widgets_values_named": {
+        "max_new_tokens": 3000,
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "repetition_penalty": 1,
+        "thinking": false,
+        "context_size": 32768,
+        "quantization": "bfloat16",
+        "attn_implementation": "sdpa",
+        "device": "auto",
+        "gpu_layers": -1,
+        "llama_backend": "auto",
+        "auto_download": true,
+        "downloader": "built-in",
+        "image_max_side": 1024,
+        "video_max_frames": 8,
+        "video_sample_seconds": 1,
+        "video_max_seconds": 15,
+        "batch_video_fps": 24,
+        "self_check": "all",
+        "repair_once": false,
+        "prompt_file": "global",
+        "qwen_backend_note": ""
+      }
+    },
+    {
+      "id": 3,
+      "type": "PreviewAny",
+      "pos": [
+        1100,
+        0
+      ],
+      "size": [
+        650,
+        900
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.2",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 4,
+      "type": "Note",
+      "pos": [
+        0,
+        820
+      ],
+      "size": [
+        400,
+        240
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "Full Qwen rewriter: quick start.\n\nThe 9B FL2VA Q5_K_M model and its F16 vision projector download on first run (about 7.39 GB together).\n\nThis example disables thinking for a short run. The node default enables it.\n\nFor I2VA/L2VA/FL2VA, connect Picture frames in chip order. For reference scenes, choose a Ref2VA checkpoint and connect IMAGE, VIDEO or decoded RefMod inputs. Sound needs an explicit description.\n\nSetup: docs/qwen_rewriter.md"
+      ],
+      "widgets_values_named": {
+        "text": "Full Qwen rewriter: quick start.\n\nThe 9B FL2VA Q5_K_M model and its F16 vision projector download on first run (about 7.39 GB together).\n\nThis example disables thinking for a short run. The node default enables it.\n\nFor I2VA/L2VA/FL2VA, connect Picture frames in chip order. For reference scenes, choose a Ref2VA checkpoint and connect IMAGE, VIDEO or decoded RefMod inputs. Sound needs an explicit description.\n\nSetup: docs/qwen_rewriter.md"
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      2,
+      1,
+      0,
+      3,
+      0,
+      "STRING"
+    ],
+    [
+      1,
+      2,
+      0,
+      1,
+      1,
+      "H3_QWEN_REWRITER_OPTIONS"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.7,
+      "offset": [
+        200,
+        220
+      ]
+    }
+  },
+  "version": 0.4
+}

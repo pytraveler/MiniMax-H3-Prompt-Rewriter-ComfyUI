@@ -6,6 +6,20 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.35.0 - 2026-11-12
+
+### Added
+
+- Qwen Rewriter and Qwen Rewriter Options for LightX2V's full Qwen3.5 9B and Qwen3.8 27B FL2VA/Ref2VA checkpoints, through Transformers SFT or an owned GGUF server.
+- Ordered top reference chips, input checkboxes, per-reference instructions, first/last-frame tasks, sampled video, explicit sound descriptions, original reference passthrough, bypass/repeat and prompt-library controls.
+- A separate model-list section with four original SFT checkpoints and their Q5_K_M/Q4_K_M conversions with matching F16 vision projectors, hosted under pytraveler on Hugging Face.
+- Conversion tooling with source/file hashes and model cards, plus workflow 12 for the full Qwen model. Thinking and the final prompt use separate outputs; cancellation and unload release the node's owned runtime.
+- Qwen setup guides in English, Russian and Chinese, updated README introductions and model comparisons, and links to both original SFT and GGUF weights.
+
+### Fixed
+
+- Qwen missing sound descriptions now show an actionable Stopped notification with reference labels, input slots and exact editor controls. Enabled audio/clip-sound chips have a red ! with a tooltip and a shortcut to the instructions editor.
+
 ## 0.34.0 - 2026-11-08
 
 ### Added

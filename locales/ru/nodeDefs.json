@@ -1093,5 +1093,179 @@
         "name": "options"
       }
     }
+  },
+  "MiniMaxH3QwenRewriter": {
+    "display_name": "MiniMax-H3 Qwen Rewriter",
+    "description": "Пишет промпты H3 полными SFT-моделями LightX2V Qwen3.5 9B / Qwen3.8 27B или их GGUF-конверсиями. FL2VA обслуживает T2VA, I2VA, L2VA и FL2VA; Ref2VA - Ref2VA. Модель читает изображения и выбранные кадры видео. Для звука нужны явные текстовые описания. Оригинальные референсы передаются через references.",
+    "inputs": {
+      "reference_layout": {
+        "name": "референсы"
+      },
+      "task": {
+        "name": "режим"
+      },
+      "resolution": {
+        "name": "пропорции"
+      },
+      "duration": {
+        "name": "длительность"
+      },
+      "model": {
+        "name": "модель",
+        "tooltip": "Полный SFT-чекпойнт или GGUF с соответствующим mmproj. Для Ref2VA выберите чекпойнт Ref2VA; для остальных режимов - FL2VA. Отдельная LoRA не нужна."
+      },
+      "prompt": {
+        "name": "запрос"
+      },
+      "system_prompt": {
+        "name": "системный промпт",
+        "tooltip": "Пустое поле использует официальный префикс LightX2V и руководство нужного режима. Непустое заменяет весь системный промпт."
+      },
+      "greedy": {
+        "name": "greedy"
+      },
+      "seed": {
+        "name": "seed"
+      },
+      "keep_model_loaded": {
+        "name": "оставить модель в памяти",
+        "tooltip": "Сохраняет SFT-модель или собственный GGUF-сервер ноды. Unload model и Unload Models ComfyUI освобождают память."
+      },
+      "bypass": {
+        "name": "bypass",
+        "tooltip": "Передаёт исходный запрос и включённые референсы без загрузки модели, декодирования и генерации."
+      },
+      "repeat_last": {
+        "name": "повторить последний",
+        "tooltip": "Возвращает последний результат ноды или выбор из библиотеки без новой генерации."
+      },
+      "reference_instructions": {
+        "name": "инструкции референсов"
+      },
+      "reference_descriptions": {
+        "name": "описания референсов"
+      },
+      "library_pick": {
+        "name": "выбор из библиотеки"
+      },
+      "options": {
+        "name": "настройки"
+      },
+      "aspect_ratio": {
+        "name": "пропорции со входа"
+      },
+      "ref_0": {
+        "tooltip": "IMAGE, VIDEO, AUDIO или декодированный RefMod. Checkbox отключает референс без разрыва провода. Для аудио требуется явное описание через + instr."
+      },
+      "ref_1": {
+        "tooltip": "IMAGE, VIDEO, AUDIO или декодированный RefMod. Checkbox отключает референс без разрыва провода. Для аудио требуется явное описание через + instr."
+      },
+      "ref_2": {
+        "tooltip": "IMAGE, VIDEO, AUDIO или декодированный RefMod. Checkbox отключает референс без разрыва провода. Для аудио требуется явное описание через + instr."
+      },
+      "ref_3": {
+        "tooltip": "IMAGE, VIDEO, AUDIO или декодированный RefMod. Checkbox отключает референс без разрыва провода. Для аудио требуется явное описание через + instr."
+      },
+      "ref_4": {
+        "tooltip": "IMAGE, VIDEO, AUDIO или декодированный RefMod. Checkbox отключает референс без разрыва провода. Для аудио требуется явное описание через + instr."
+      },
+      "ref_5": {
+        "tooltip": "IMAGE, VIDEO, AUDIO или декодированный RefMod. Checkbox отключает референс без разрыва провода. Для аудио требуется явное описание через + instr."
+      },
+      "ref_6": {
+        "tooltip": "IMAGE, VIDEO, AUDIO или декодированный RefMod. Checkbox отключает референс без разрыва провода. Для аудио требуется явное описание через + instr."
+      },
+      "ref_7": {
+        "tooltip": "IMAGE, VIDEO, AUDIO или декодированный RefMod. Checkbox отключает референс без разрыва провода. Для аудио требуется явное описание через + instr."
+      },
+      "ref_8": {
+        "tooltip": "IMAGE, VIDEO, AUDIO или декодированный RefMod. Checkbox отключает референс без разрыва провода. Для аудио требуется явное описание через + instr."
+      },
+      "ref_9": {
+        "tooltip": "IMAGE, VIDEO, AUDIO или декодированный RefMod. Checkbox отключает референс без разрыва провода. Для аудио требуется явное описание через + instr."
+      },
+      "ref_10": {
+        "tooltip": "IMAGE, VIDEO, AUDIO или декодированный RefMod. Checkbox отключает референс без разрыва провода. Для аудио требуется явное описание через + instr."
+      },
+      "ref_11": {
+        "tooltip": "IMAGE, VIDEO, AUDIO или декодированный RefMod. Checkbox отключает референс без разрыва провода. Для аудио требуется явное описание через + instr."
+      }
+    }
+  },
+  "MiniMaxH3QwenRewriterOptions": {
+    "display_name": "MiniMax-H3 Qwen Rewriter Options",
+    "description": "Параметры полной Qwen-модели: генерация, thinking, контекст, точность SFT, backend GGUF, подготовка референсов и библиотека. Подключается к Qwen Rewriter; старые LoRA-настройки не используются.",
+    "inputs": {
+      "max_new_tokens": {
+        "name": "лимит выходных токенов",
+        "tooltip": "Лимит включает размышления. LightX2V использует 16384. Если бюджет закончится внутри размышления, итоговый промпт не будет готов."
+      },
+      "temperature": {
+        "name": "температура"
+      },
+      "top_p": {
+        "name": "top_p"
+      },
+      "top_k": {
+        "name": "top_k"
+      },
+      "repetition_penalty": {
+        "name": "штраф повторений"
+      },
+      "thinking": {
+        "name": "размышления модели",
+        "tooltip": "Включает собственный thinking-шаблон Qwen для SFT и GGUF. Размышления возвращаются отдельным выходом."
+      },
+      "context_size": {
+        "name": "размер контекста"
+      },
+      "quantization": {
+        "name": "точность SFT",
+        "tooltip": "Только SFT. Для GGUF точность задаётся выбранным файлом."
+      },
+      "attn_implementation": {
+        "name": "attention SFT"
+      },
+      "device": {
+        "name": "устройство"
+      },
+      "gpu_layers": {
+        "name": "слоёв на GPU (GGUF)"
+      },
+      "llama_backend": {
+        "name": "backend GGUF"
+      },
+      "auto_download": {
+        "name": "скачивать недостающее"
+      },
+      "downloader": {
+        "name": "загрузчик"
+      },
+      "image_max_side": {
+        "name": "сторона изображения"
+      },
+      "video_max_frames": {
+        "name": "кадров из видео"
+      },
+      "video_sample_seconds": {
+        "name": "интервал кадров, с"
+      },
+      "video_max_seconds": {
+        "name": "окно видео, с"
+      },
+      "batch_video_fps": {
+        "name": "fps батча"
+      },
+      "self_check": {
+        "name": "самопроверка"
+      },
+      "repair_once": {
+        "name": "одно исправление",
+        "tooltip": "Разрешает не более одной дополнительной генерации для исправления замечаний H3. Первый результат заменяется только при улучшении проверок."
+      },
+      "prompt_file": {
+        "name": "файл библиотеки"
+      }
+    }
   }
 }

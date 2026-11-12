@@ -152,6 +152,13 @@ CARDS = [
         "accent": LIGHT,
         "chain": ["your idea", "API Options", "API Writer", "H3 prompt"],
     },
+    {
+        "number": "12", "name": "12 - Write with the full Qwen model", "title": "Write with the full Qwen model",
+        "line": "A full LightX2V checkpoint writes the H3 prompt directly.",
+        "cost": "9B Q5_K_M with its vision projector: 7.39 GB. No video weights.",
+        "accent": LIGHT,
+        "chain": ["your idea", "Qwen Options", "Qwen Rewriter", "H3 prompt"],
+    },
 ]
 
 

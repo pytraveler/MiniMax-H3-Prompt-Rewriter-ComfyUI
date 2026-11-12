@@ -30,6 +30,7 @@ const NODES = [
     "MiniMaxH3UniversalWriter",
     "MiniMaxH3ApiUniversalWriter",
     "MiniMaxH3UniversalRewriter",
+    "MiniMaxH3QwenRewriter",
     "MiniMaxH3PH3Writer",
 ];
 const OPTIONS_NODE = "MiniMaxH3RewriterOptions";
@@ -138,8 +139,10 @@ function libraryFrame(wide, options) {
 function fileFor(node) {
     const link = node.inputs?.find((input) => input.name === "options")?.link;
     if (link === null || link === undefined) return DEFAULT_FILE;
-    const source = app.graph?.getNodeById?.(app.graph?.links?.[link]?.origin_id);
-    return widgetNamed(source, FILE_WIDGET)?.value || DEFAULT_FILE;
+    const graph = node.graph || app.canvas?.graph || app.graph;
+    const info = graph?.links?.get?.(link) || graph?.links?.[link];
+    const source = graph?.getNodeById?.(info?.origin_id);
+    return (source ? widgetNamed(source, FILE_WIDGET)?.value : "") || DEFAULT_FILE;
 }
 
 function pickOf(node) {
@@ -1128,6 +1131,6 @@ app.registerExtension({
     async beforeRegisterNodeDef(nodeType, nodeData) {
         if (NODES.includes(nodeData.name)) addButtons(nodeType);
         if (nodeData.name === CHECK_NODE) addSaveButton(nodeType);
-        if (nodeData.name === OPTIONS_NODE) addNewFileButton(nodeType);
+        if ([OPTIONS_NODE, "MiniMaxH3QwenRewriterOptions"].includes(nodeData.name)) addNewFileButton(nodeType);
     },
 });

@@ -1,4 +1,4 @@
-"""ComfyUI entry point for the MiniMax-H3 T2VA prompt rewriter."""
+"""ComfyUI prompt writers, rewriters and reference tools for MiniMax-H3 and P-H3."""
 
 import importlib
 import logging
@@ -22,6 +22,7 @@ for _module_name, _label in (
     ("multi_caption", "Multi Reference Caption"),
     ("universal", "Universal Writer"),
     ("api_writer", "API Universal Writer"),
+    ("qwen_node", "Qwen Rewriter"),
     ("prompt_check", "Prompt Check"),
     ("preset_node", "Prompt Presets"),
     ("reference_adapter", "Reference Adapter"),

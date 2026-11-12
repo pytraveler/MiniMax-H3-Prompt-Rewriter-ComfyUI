@@ -3,6 +3,7 @@ import { buttonRow, installStyle, setWidgetValue, told, widgetNamed } from "./mm
 import { ask, confirmed, element, footNote, frame, mayClose, warned } from "./mmx_window.js";
 
 const NODE_SECTIONS = {
+    MiniMaxH3QwenRewriter: [["model", "qwen_rewriters"]],
     MiniMaxH3PromptRewriter: [["model", "models"]],
     MiniMaxH3PromptWriter8B: [["model", "models_8b"]],
     MiniMaxH3PromptWriterOmni: [["model", "models_omni"]],

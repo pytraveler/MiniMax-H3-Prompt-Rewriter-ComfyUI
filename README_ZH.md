@@ -1,14 +1,16 @@
-# MiniMax-H3 Prompt Rewriter for ComfyUI
+# MiniMax-H3 提示词生成与重写节点（ComfyUI）
 
-面向 [LightX2V MiniMax-H3 T2VA Prompt Rewriter LoRA](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA) 的
-ComfyUI 节点。输入一句简短的提示词，输出一段结构化、可直接投入生产的音视频描述，
-供 [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) 使用 —— 全程在本地完成。
+用于生成、重写和检查 [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3)
+结构化音视频提示词的 ComfyUI 节点包。可以选择 LightX2V LoRA、
+[完整 Qwen SFT/GGUF 检查点](docs/qwen_rewriter_ZH.md)、按 MiniMax 官方指南写作的
+本地模型，或通过 [API Universal Writer](docs/api_writer.md) 连接已配置的
+本地服务器或远程服务。
+
+节点包还提供 P-H3 图像提示词、参考条件处理、已保存的 RefMod、提示词精简、
+预设，以及提示词库和模型库。本地写作节点在你的机器上运行；API 请求发送到
+你配置的服务。
 
 [English version](README.md) · [Русская версия](README_RU.md) · [更新日志](CHANGELOG.md)
-
-P-H3 image support: [P-H3 Prompt Writer](README.md#p-h3-prompt-writer-images),
-with Text2Image, Image2Image and visual RefMod references.
-
 
 > **本文档为机器翻译。** 本项目作者不懂中文，这份中文 README 是由 AI 从英文版翻译过来的。
 > 术语和措辞难免有不准确的地方；如果发现错误、意思偏了或者读不通顺的段落，欢迎到
@@ -28,6 +30,13 @@ with Text2Image, Image2Image and visual RefMod references.
   <a href="https://www.youtube.com/watch?v=PZd9fWX15VA"><img alt="Video review, in Russian" src="https://img.shields.io/badge/YouTube-review%20(RU)-FF0000?logo=youtube&logoColor=white"></a>
 </p>
 
+<p align="center">
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA"><img alt="LightX2V SFT: Qwen3.5 9B Ref2VA" src="docs/badges/hf-sft-9b-ref2va.svg"></a>
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA"><img alt="LightX2V SFT: Qwen3.5 9B FL2VA" src="docs/badges/hf-sft-9b-fl2va.svg"></a>
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA"><img alt="LightX2V SFT: Qwen3.8 27B Ref2VA" src="docs/badges/hf-sft-27b-ref2va.svg"></a>
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA"><img alt="LightX2V SFT: Qwen3.8 27B FL2VA" src="docs/badges/hf-sft-27b-fl2va.svg"></a>
+</p>
+
 ![ComfyUI 中的重写器节点，夹在选项节点和文本查看器之间：节点里是一句简短的提示词，右边是结构化的分镜描述、声景和音乐字段](docs/node_preview.png)
 
 提示词可以用底座模型读得懂的任何语言写；重写的结果一律返回英文 —— MiniMax-H3
@@ -37,7 +46,7 @@ with Text2Image, Image2Image and visual RefMod references.
 "A red fox walks through a snowy forest at dawn."  +  16:9  +  15s
                               │
                               ▼
-              Qwen3.6-27B + Prompt Rewriter LoRA
+              提示词生成 / 重写节点
                               │
                               ▼
    integrated_multimodal_description: [Shot 1] ... [Shot 2] 0:06 ...
@@ -48,28 +57,23 @@ with Text2Image, Image2Image and visual RefMod references.
               MiniMax-H3: 视频 + 同步音频
 ```
 
-拿到这样的输出有四条路，这个节点包四条都给了：
+按模型和参考素材选择节点：
 
-| | 重写器节点 | 重写器 8B | 重写器 Omni | 写作节点 |
-|---|---|---|---|---|
-| 格式从哪儿来 | LoRA —— 一个 27B 模型，一直训练到不用任何提示也会自己吐出 H3 格式 | 第二个 LoRA，底座模型还能看 | 第三个 LoRA，底座模型还能听 | MiniMax 官方的写作指南，写在系统提示词里 |
-| 模型 | 只能是 Qwen3.6-27B | 只能是 Qwen3-VL-8B-Instruct | 只能是 Qwen2.5-Omni-7B | 任何能跟随指令的 GGUF |
-| 最小可用配置 | 约 10 GB 下载，约 13 GB 显存 | 约 6.1 GB 下载，约 9 GB 显存 | 约 6.2 GB 下载，约 9 GB 显存 | **2.6 GB 下载，约 5 GB 显存** |
-| 任务 | T2VA | T2VA、I2VA、FL2VA、L2VA | T2VA、I2VA、FL2VA、L2VA、**Ref2VA** | T2VA、I2VA、FL2VA、L2VA、Ref2VA |
-| 参考帧 | 得用文字描述给它听 | **它自己看** | **它自己看** | 得用文字描述给它听 |
-| 片段和声音 | 得用文字描述给它听 | 得用文字描述给它听 | **它自己看、自己听** | 得用文字描述给它听 |
-| 质量 | 基准 | 同一套训练出来的格式，下载量只有三分之一；对齐行写得没那么稳 | 唯一听得见的一个；Ref2VA 下有六个字段 | 很接近，而且能跑在 LoRA 根本带不动的硬件上 |
+| 节点系列 | 模型或服务 | 参考素材输入 | 任务 |
+|---|---|---|---|
+| LoRA Rewriter 27B | Qwen3.6-27B + LightX2V LoRA | 文字描述 | T2VA |
+| LoRA Rewriter 8B | Qwen3-VL-8B-Instruct + LoRA | 直接读取首尾帧图像 | T2VA, I2VA, FL2VA, L2VA |
+| LoRA Rewriter Omni | Qwen2.5-Omni-7B + LoRA | 图像；GGUF 路径还可处理视频和音频 | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
+| [Qwen Rewriter](docs/qwen_rewriter_ZH.md) | 完整 LightX2V Qwen3.5 9B / Qwen3.8 27B，SFT 或 GGUF | 直接读取图像和采样视频帧；声音使用文字描述 | FL2VA 检查点：T2VA, I2VA, FL2VA, L2VA；Ref2VA 检查点：Ref2VA |
+| 按指南写作的节点 | 本地指令跟随 GGUF 模型 | 由素材描述模型提供文字 | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
+| [API Universal Writer](docs/api_writer.md) | 已配置的本地服务器或远程服务 | 按模型/服务器能力提供图像、采样视频和音频，也可使用描述模式 | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
 
-前三列也可以合成一个节点 —— [Universal Rewriter](#minimax-h3-universal-rewriter-通用重写器) ——
-换一个标签页就换掉适配器，其他东西都留在原地。
-
-四个里面有两个只读文字。[Reference Caption](#minimax-h3-reference-caption-参考素材描述)
-把图像、音频或者视频变成它们需要的文字 —— 在一个 3.4 GB 的模型上，每份素材 3 到 5 秒。
-当一整场镜头的参考素材都排着队时，[Multi Reference Caption](#minimax-h3-multi-reference-caption-多参考素材描述)
-一次全部处理 —— 或者交给 [Universal Writer](#minimax-h3-universal-writer-通用写作节点)：
-在同一个节点里既描述素材又写出提示词，而且素材的顺序是一个可以拖动的小部件，
-而不是“你当时恰好插在了哪个槽上”的结果。8B 重写器对参考*帧*完全不需要这一套：
-把图接上去，它自己读。Omni 重写器则整套都不需要 —— 一段片段、一段声音，可以原样送到它面前。
+三个 LoRA 版本也可以通过 [Universal Rewriter](#minimax-h3-universal-rewriter-通用重写器)
+使用，在标签页中选择适配器。按指南写作的节点可通过
+[Reference Caption](#minimax-h3-reference-caption-参考素材描述) 和
+[Multi Reference Caption](#minimax-h3-multi-reference-caption-多参考素材描述) 把素材转为文字。
+[Universal Writer](#minimax-h3-universal-writer-通用写作节点) 则在一个节点中完成素材描述和
+提示词写作，参考素材的顺序由可拖动的芯片控制。
 
 还有一种情况：通往好提示词的最短路径，是别人已经写好的那一条。
 [Prompt Presets](#minimax-h3-prompt-presets-提示词预设) 会从节点包内置的一千条
@@ -88,6 +92,7 @@ with Text2Image, Image2Image and visual RefMod references.
   - [MiniMax-H3 Prompt Rewriter 提示词重写器](#minimax-h3-prompt-rewriter-提示词重写器)
   - [MiniMax-H3 Prompt Rewriter 8B 看得见画面](#minimax-h3-prompt-rewriter-8b-看得见画面)
   - [MiniMax-H3 Prompt Rewriter Omni 看得见也听得见](#minimax-h3-prompt-rewriter-omni-看得见也听得见)
+  - [MiniMax-H3 Qwen Rewriter](#minimax-h3-qwen-rewriter)
   - [MiniMax-H3 Universal Rewriter 通用重写器](#minimax-h3-universal-rewriter-通用重写器)
   - [MiniMax-H3 Rewriter Options 重写器选项](#minimax-h3-rewriter-options-重写器选项)
   - [MiniMax-H3 Prompt Writer (T2VA/I2VA/FL2VA/L2VA) 提示词写作节点](#minimax-h3-prompt-writer-t2vai2vafl2val2va-提示词写作节点)
@@ -171,7 +176,7 @@ python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\MiniMax-H3-Prom
 
 ### 示例工作流
 
-节点包自带八个工作流。装好之后，它们会出现在 ComfyUI 的模板浏览器里
+节点包自带十二个工作流。装好之后，它们会出现在 ComfyUI 的模板浏览器里
 （*Workflow → Browse Templates*），归在本节点包的名字下面。每一个都是独立的一张
 卡片，也都能独立跑起来：打开时没有任何节点被绕过，也不必先静音另一条分支才能
 按下运行。
@@ -186,9 +191,12 @@ python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\MiniMax-H3-Prom
 | 6 | **References to video** —— 同样的东西，换成 Ref2VA，图片经由写作节点、按素材条的编号顺序送到生成器 | MiniMax-H3 的 ref2va 权重 |
 | 7 | **LoRA triggers and effects** —— 适配器要听的那些词，和 MiniMax 的十个特效，放进一段写好的提示词里 | 什么都不需要 |
 | 8 | **RefMods to video** —— 一份 [RefMod](#minimax-h3-refmod-已保存的参考素材)，也就是已经编码好保存下来的外观和声音：写作节点能看见也能听见它，生成器拿到的就是它保存时的潜变量 | MiniMax-H3 的 ref2va 权重，以及 `models/refmods` 里的一份 RefMod |
+| 9 | **P-H3 text to image** | P-H3 图像权重和提示词扩写模型 |
+| 10 | **P-H3 image editing** | P-H3 权重、扩写模型和你的图像 |
+| 11 | **Write through an API** | 已配置的本地或远程 API 服务器 |
+| 12 | **Write with the full Qwen model** | 9B Q5_K_M 与 F16 视觉投影器，合计 7.39 GB |
 
-会加载 MiniMax-H3 检查点的只有 5、6 和 8。其余的到文本为止就结束了，而这正是本节点包
-大部分内容存在的意义。5 和 6 是 ComfyUI 自己图库里的模板，把生成那一半折进了一个
+5、6 和 8 生成 MiniMax-H3 视频，9 和 10 生成 P-H3 图像。其他工作流生成或处理提示词。5 和 6 是 ComfyUI 自己图库里的模板，把生成那一半折进了一个
 子图方框，所以屏幕上剩下的就是提示词这一侧再加一个节点 —— 它们点名的检查点就是
 官方模板用的那些，缺了哪个 ComfyUI 会主动提出替你下载。8 就是 6，只是那个方框里用
 [Reference Encode](#minimax-h3-reference-encode-参考素材编码) 换掉了原生的参考节点，
@@ -439,6 +447,28 @@ token 的实测结果：
 **safetensors 路线只能看图。** ComfyUI 进程内的 Transformers 路径没有办法把一段声音
 递给模型，所以在那种底座上接一段片段或者声音会被拒绝，而不是从请求里悄悄丢掉。
 想用它们，就挑一个 GGUF 底座。
+
+### MiniMax-H3 Qwen Rewriter
+
+加载 LightX2V 的完整 **Qwen3.5 9B**、**Qwen3.8 27B** SFT 模型，
+也支持带配套视觉投影器的 GGUF 转换。FL2VA 模型用于 T2VA、I2VA、L2VA 和 FL2VA；
+Ref2VA 模型用于 Ref2VA。通过 **Model list** 选择原始 SFT 或 GGUF，
+生成参数和参考素材设置位于独立的 **Qwen Rewriter Options** 节点。
+
+参考芯片位于顶部，保留输入复选框、**+ instr**、宽高比、时长、bypass/repeat、
+提示词库和 `references` 输出。模型直接读取图像和采样视频帧。
+这些模型没有音频编码器，声音通过明确的文字描述提供。
+
+| 模型 | 原始 SFT | GGUF Q5_K_M / Q4_K_M |
+|---|---|---|
+| Qwen3.5-9B FL2VA | [LightX2V](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA) | [pytraveler](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-GGUF) |
+| Qwen3.5-9B Ref2VA | [LightX2V](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA) | [pytraveler](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA-GGUF) |
+| Qwen3.8-27B FL2VA | [LightX2V](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA) | [pytraveler](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA-GGUF) |
+| Qwen3.8-27B Ref2VA | [LightX2V](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA) | [pytraveler](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA-GGUF) |
+
+[设置、参考素材角色、输出与转换说明](docs/qwen_rewriter_ZH.md)。
+
+![Qwen Rewriter Options、完整 Qwen Rewriter 和生成的 H3 提示词](docs/qwen_rewriter_workflow.png)
 
 ### MiniMax-H3 Universal Rewriter 通用重写器
 

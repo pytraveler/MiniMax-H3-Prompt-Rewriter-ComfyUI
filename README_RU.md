@@ -1,8 +1,15 @@
-# MiniMax-H3 Prompt Rewriter для ComfyUI
+# MiniMax-H3 для ComfyUI: создание и переписывание промтов
 
-Ноды ComfyUI для [LightX2V MiniMax-H3 T2VA Prompt Rewriter LoRA](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-LoRA).
-На входе короткий промпт — на выходе структурированное описание аудио-видео сцены
-для [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3). Полностью локально.
+Ноды ComfyUI для создания, переписывания и проверки структурированных промтов
+к видео и звуку [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3).
+Можно использовать LoRA LightX2V, [полные Qwen-чекпойнты SFT/GGUF](docs/qwen_rewriter_RU.md),
+локальные модели с официальным гайдом MiniMax или [API Universal Writer](docs/api_writer_RU.md)
+с настроенным локальным сервером либо удалённым провайдером.
+
+В пак также входят промты для изображений P-H3, кондиционирование референсов,
+сохранённые RefMod, сокращение промтов, пресеты и библиотеки промтов и моделей.
+Локальные писатели работают на вашей машине; API-запросы отправляются
+выбранному провайдеру.
 
 [English version](README.md) · [中文版](README_ZH.md) · [История изменений](CHANGELOG_RU.md)
 
@@ -19,6 +26,13 @@
   <a href="https://www.youtube.com/watch?v=PZd9fWX15VA"><img alt="Video review, in Russian" src="https://img.shields.io/badge/YouTube-review%20(RU)-FF0000?logo=youtube&logoColor=white"></a>
 </p>
 
+<p align="center">
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA"><img alt="LightX2V SFT: Qwen3.5 9B Ref2VA" src="docs/badges/hf-sft-9b-ref2va.svg"></a>
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA"><img alt="LightX2V SFT: Qwen3.5 9B FL2VA" src="docs/badges/hf-sft-9b-fl2va.svg"></a>
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA"><img alt="LightX2V SFT: Qwen3.8 27B Ref2VA" src="docs/badges/hf-sft-27b-ref2va.svg"></a>
+  <a href="https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA"><img alt="LightX2V SFT: Qwen3.8 27B FL2VA" src="docs/badges/hf-sft-27b-fl2va.svg"></a>
+</p>
+
 ![Нода ререйтера в ComfyUI между нодой настроек и просмотрщиком текста: в самой ноде короткий промпт, справа — структурированное покадровое описание, звуковой ландшафт и музыка](docs/node_preview.png)
 
 Промпт можно писать на любом языке, который понимает базовая модель, — результат
@@ -28,7 +42,7 @@
 «Рыжая лиса идёт по заснеженному лесу на рассвете.»  +  16:9  +  15 с
                               │
                               ▼
-              Qwen3.6-27B + Prompt Rewriter LoRA
+              Писатель / рерайтер промтов
                               │
                               ▼
    integrated_multimodal_description: [Shot 1] ... [Shot 2] 0:06 ...
@@ -39,30 +53,23 @@
               MiniMax-H3: видео + синхронный звук
 ```
 
-Получить такой результат можно четырьмя способами, и в паке есть все четыре:
+Выберите семейство нод под вашу модель и референсы:
 
-| | Нода ререйтера | Ререйтер 8B | Ререйтер Omni | Ноды писателя |
-|---|---|---|---|---|
-| Откуда берётся формат | из LoRA — 27B обучали, пока формат H3 не начал выходить сам | из второй LoRA, на модели, которая ещё и видит | из третьей LoRA, на модели, которая ещё и слышит | из собственного руководства MiniMax, в системном промте |
-| Модель | только Qwen3.6-27B | только Qwen3-VL-8B-Instruct | только Qwen2.5-Omni-7B | любая GGUF, умеющая следовать инструкциям |
-| Минимальная рабочая конфигурация | ~10 ГБ загрузки, ~13 ГБ VRAM | ~6.1 ГБ загрузки, ~9 ГБ VRAM | ~6.2 ГБ загрузки, ~9 ГБ VRAM | **2.6 ГБ загрузки, ~5 ГБ VRAM** |
-| Задачи | T2VA | T2VA, I2VA, FL2VA, L2VA | T2VA, I2VA, FL2VA, L2VA, **Ref2VA** | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
-| Референсные кадры | описываются ей словами | **смотрит на них сама** | **смотрит на них сама** | описываются ей словами |
-| Клипы и звук | описываются ей словами | описываются ей словами | **смотрит и слушает сама** | описываются ей словами |
-| Качество | эталон | тот же обученный контракт при втрое меньшей загрузке; строку выравнивания пишет менее аккуратно | единственная, которая слышит; шесть полей на Ref2VA | близко — и работает там, где LoRA не запустится вовсе |
+| Семейство нод | Модель или сервис | Референсы | Задачи |
+|---|---|---|---|
+| LoRA Rewriter 27B | Qwen3.6-27B + LoRA LightX2V | Текстовые описания | T2VA |
+| LoRA Rewriter 8B | Qwen3-VL-8B-Instruct + LoRA | Сама читает изображения первого/последнего кадра | T2VA, I2VA, FL2VA, L2VA |
+| LoRA Rewriter Omni | Qwen2.5-Omni-7B + LoRA | Изображения; на пути GGUF также видео и аудио | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
+| [Qwen Rewriter](docs/qwen_rewriter_RU.md) | Полные LightX2V Qwen3.5 9B / Qwen3.8 27B, SFT или GGUF | Сама читает изображения и выборку видеокадров; звук задаётся текстовым описанием | FL2VA-чекпойнт: T2VA, I2VA, FL2VA, L2VA; Ref2VA-чекпойнт: Ref2VA |
+| Писатели по гайду | Локальная GGUF, умеющая следовать инструкциям | Описания медиа от капшенеров | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
+| [API Universal Writer](docs/api_writer_RU.md) | Настроенный локальный сервер или удалённый провайдер | Изображения, выборка видеокадров и аудио по возможностям модели/сервера; есть режим описаний | T2VA, I2VA, FL2VA, L2VA, Ref2VA |
 
-Первые три столбца есть и одной нодой — [Universal Rewriter](#minimax-h3-universal-rewriter): вкладка меняет адаптер, а остальное остаётся на месте.
-
-Две из четырёх читают только текст. [Reference Caption](#minimax-h3-reference-caption)
-превращает картинку, звук или видео в тот текст, который им нужен: 3–5 секунд на
-ассет на модели в 3.4 ГБ. А когда референсов на целый кадр, их описывает разом
-[Multi Reference Caption](#minimax-h3-multi-reference-caption) — либо
-[Universal Writer](#minimax-h3-universal-writer) опишет их и тут же напишет промт,
-а их порядок будет виджетом, который можно перетаскивать, а не следствием того,
-в какой слот что попало. Ререйтеру 8B для
-референсных *кадров* всё это не нужно: подключите картинку, и он её прочитает. А
-ререйтеру Omni не нужно ничего из этого вовсе — клип и звук доходят до него
-самими собой.
+Все три LoRA-варианта доступны и в [Universal Rewriter](#minimax-h3-universal-rewriter):
+адаптер выбирается вкладкой. Для писателей по гайду
+[Reference Caption](#minimax-h3-reference-caption) и
+[Multi Reference Caption](#minimax-h3-multi-reference-caption) превращают медиа в текст.
+[Universal Writer](#minimax-h3-universal-writer) совмещает описание референсов и
+написание промта в одной ноде; порядок референсов задаётся перетаскиванием чипов.
 
 А когда короткий путь к хорошему промту — чужой промт:
 [Prompt Presets](#minimax-h3-prompt-presets) отдаёт один из тысячи готовых
@@ -81,6 +88,7 @@
   - [MiniMax-H3 Prompt Rewriter](#minimax-h3-prompt-rewriter)
   - [MiniMax-H3 Prompt Rewriter 8B (sees frames)](#minimax-h3-prompt-rewriter-8b-sees-frames)
   - [MiniMax-H3 Prompt Rewriter Omni (sees and hears)](#minimax-h3-prompt-rewriter-omni-sees-and-hears)
+  - [MiniMax-H3 Qwen Rewriter](#minimax-h3-qwen-rewriter)
   - [MiniMax-H3 Universal Rewriter](#minimax-h3-universal-rewriter)
   - [MiniMax-H3 Rewriter Options](#minimax-h3-rewriter-options)
   - [MiniMax-H3 Prompt Writer (T2VA/I2VA/FL2VA/L2VA)](#minimax-h3-prompt-writer-t2vai2vafl2val2va)
@@ -167,7 +175,7 @@ python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\MiniMax-H3-Prom
 
 ### Готовые воркфлоу
 
-Вместе с паком идут восемь воркфлоу; после установки они появляются в браузере
+Вместе с паком идут двенадцать воркфлоу; после установки они появляются в браузере
 шаблонов ComfyUI (*Workflow → Browse Templates*) под именем этого пака. У
 каждого своя карточка, и каждый запускается сам по себе: при открытии ничего
 не отключено, и нет второй ветки, которую надо заглушить перед запуском.
@@ -182,9 +190,13 @@ python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\MiniMax-H3-Prom
 | 6 | **References to video** — то же для Ref2VA: картинки попадают в генератор через писателя, в порядке его полосы | веса MiniMax-H3 ref2va |
 | 7 | **LoRA triggers and effects** — слова, на которые отзывается адаптер, и десять эффектов MiniMax, дописанные в готовый промт | вообще ничего |
 | 8 | **RefMods to video** — [RefMod](#minimax-h3-refmod), то есть внешность и голос, сохранённые уже закодированными: писатель видит и слышит его, а генератор получает тот латент, в котором он сохранён | веса MiniMax-H3 ref2va и RefMod в `models/refmods` |
+| 9 | **P-H3 text to image** | веса P-H3 и prompt upsampler |
+| 10 | **P-H3 image editing** | веса P-H3, upsampler и ваша картинка |
+| 11 | **Write through an API** | настроенный локальный или удалённый API-сервер |
+| 12 | **Write with the full Qwen model** | 9B Q5_K_M и F16-проектор, 7.39 ГБ вместе |
 
-Чекпойнт MiniMax-H3 грузят только 5, 6 и 8. Остальные заканчиваются текстом,
-ради которого пак в основном и нужен. 5 и 6 — штатные шаблоны из галереи
+5, 6 и 8 создают видео MiniMax-H3; 9 и 10 - изображения P-H3. Остальные
+воркфлоу создают или обрабатывают промты. 5 и 6 — штатные шаблоны из галереи
 ComfyUI, у которых генератор свёрнут в один субграф, так что на экране
 остаётся промтовая часть плюс одна нода. Чекпойнты в них те же, что в штатных
 шаблонах, и недостающие ComfyUI предложит скачать сам. 8 — это 6, где в том же
@@ -477,6 +489,30 @@ safetensors идёт 26 секунд, через `Q4_K_M` идёт 10.
 Transformers в ComfyUI нет способа передать модели звук, поэтому клип или звук на
 такой базе отклоняются, а не выбрасываются молча из хода. Чтобы ими
 воспользоваться, возьмите базу GGUF.
+
+### MiniMax-H3 Qwen Rewriter
+
+Работает с полными SFT-чекпойнтами LightX2V **Qwen3.5 9B** и **Qwen3.8 27B**,
+а также с их GGUF-конверсиями и соответствующими vision-проекторами. Чекпойнт
+FL2VA обслуживает T2VA, I2VA, L2VA и FL2VA, чекпойнт Ref2VA — Ref2VA.
+Оригинальные SFT и GGUF выбираются через **Model list**; параметры генерации
+и подготовки референсов вынесены в **Qwen Rewriter Options**.
+
+Чипы расположены сверху; есть checkbox'ы входов, **+ instr**, разрешение,
+длительность, bypass/repeat, библиотека и выход `references`. Изображения
+и выбранные кадры видео читает сама модель. Аудио передаётся через явное
+описание: у этих чекпойнтов нет аудиоэнкодера.
+
+| Модель | Исходный SFT | GGUF Q5_K_M / Q4_K_M |
+|---|---|---|
+| Qwen3.5-9B FL2VA | [LightX2V](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA) | [pytraveler](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-GGUF) |
+| Qwen3.5-9B Ref2VA | [LightX2V](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA) | [pytraveler](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA-GGUF) |
+| Qwen3.8-27B FL2VA | [LightX2V](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA) | [pytraveler](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA-GGUF) |
+| Qwen3.8-27B Ref2VA | [LightX2V](https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA) | [pytraveler](https://huggingface.co/pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA-GGUF) |
+
+[Настройка, роли референсов, выходы и конверсия](docs/qwen_rewriter_RU.md).
+
+![Qwen Rewriter Options, новая Qwen Rewriter и сгенерированный H3-промт](docs/qwen_rewriter_workflow.png)
 
 ### MiniMax-H3 Universal Rewriter
 

@@ -39,9 +39,9 @@ _OWN = threading.local()
 
 
 def _engines() -> tuple:
-    from . import engine, gguf_engine
+    from . import engine, gguf_engine, qwen_engine
 
-    return (engine, gguf_engine)
+    return (engine, gguf_engine, qwen_engine)
 
 
 def held() -> list[str]:

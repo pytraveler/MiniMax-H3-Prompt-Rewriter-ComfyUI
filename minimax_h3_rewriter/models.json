@@ -408,5 +408,107 @@
       "vram": "~8 GB",
       "note": "same modalities, better prose; step up when the 3B's captions are too plain"
     }
+  ],
+  "qwen_rewriters": [
+    {
+      "name": "Qwen3.5 9B FL2VA SFT",
+      "repo": "lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA",
+      "format": "transformers",
+      "download_gb": 19.31,
+      "note": "Full multimodal SFT; no LoRA. Original LightX2V checkpoint."
+    },
+    {
+      "name": "Qwen3.5 9B Ref2VA SFT",
+      "repo": "lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA",
+      "format": "transformers",
+      "download_gb": 19.31,
+      "note": "Full multimodal SFT; no LoRA. Original LightX2V checkpoint."
+    },
+    {
+      "name": "Qwen3.8 27B FL2VA SFT",
+      "repo": "lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA",
+      "format": "transformers",
+      "download_gb": 54.71,
+      "note": "Full multimodal SFT; no LoRA. Original LightX2V checkpoint."
+    },
+    {
+      "name": "Qwen3.8 27B Ref2VA SFT",
+      "repo": "lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA",
+      "format": "transformers",
+      "download_gb": 55.56,
+      "note": "Full multimodal SFT; no LoRA. Original LightX2V checkpoint."
+    },
+    {
+      "name": "Qwen3.5 9B FL2VA GGUF Q5_K_M",
+      "repo": "pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-GGUF",
+      "format": "gguf",
+      "file": "MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-Q5_K_M.gguf",
+      "mmproj": "mmproj-MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-F16.gguf",
+      "download_gb": 7.39,
+      "note": "Full model and matching F16 vision projector; no separate LoRA."
+    },
+    {
+      "name": "Qwen3.5 9B FL2VA GGUF Q4_K_M",
+      "repo": "pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-GGUF",
+      "format": "gguf",
+      "file": "MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-Q4_K_M.gguf",
+      "mmproj": "mmproj-MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA-F16.gguf",
+      "download_gb": 6.55,
+      "note": "Full model and matching F16 vision projector; no separate LoRA."
+    },
+    {
+      "name": "Qwen3.5 9B Ref2VA GGUF Q5_K_M",
+      "repo": "pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA-GGUF",
+      "format": "gguf",
+      "file": "MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA-Q5_K_M.gguf",
+      "mmproj": "mmproj-MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA-F16.gguf",
+      "download_gb": 7.39,
+      "note": "Full model and matching F16 vision projector; no separate LoRA."
+    },
+    {
+      "name": "Qwen3.5 9B Ref2VA GGUF Q4_K_M",
+      "repo": "pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA-GGUF",
+      "format": "gguf",
+      "file": "MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA-Q4_K_M.gguf",
+      "mmproj": "mmproj-MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-Ref2VA-F16.gguf",
+      "download_gb": 6.55,
+      "note": "Full model and matching F16 vision projector; no separate LoRA."
+    },
+    {
+      "name": "Qwen3.8 27B FL2VA GGUF Q5_K_M",
+      "repo": "pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA-GGUF",
+      "format": "gguf",
+      "file": "MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA-Q5_K_M.gguf",
+      "mmproj": "mmproj-MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA-F16.gguf",
+      "download_gb": 20.16,
+      "note": "Full model and matching F16 vision projector; no separate LoRA."
+    },
+    {
+      "name": "Qwen3.8 27B FL2VA GGUF Q4_K_M",
+      "repo": "pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA-GGUF",
+      "format": "gguf",
+      "file": "MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA-Q4_K_M.gguf",
+      "mmproj": "mmproj-MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-FL2VA-F16.gguf",
+      "download_gb": 17.48,
+      "note": "Full model and matching F16 vision projector; no separate LoRA."
+    },
+    {
+      "name": "Qwen3.8 27B Ref2VA GGUF Q5_K_M",
+      "repo": "pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA-GGUF",
+      "format": "gguf",
+      "file": "MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA-Q5_K_M.gguf",
+      "mmproj": "mmproj-MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA-F16.gguf",
+      "download_gb": 20.16,
+      "note": "Full model and matching F16 vision projector; no separate LoRA."
+    },
+    {
+      "name": "Qwen3.8 27B Ref2VA GGUF Q4_K_M",
+      "repo": "pytraveler/MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA-GGUF",
+      "format": "gguf",
+      "file": "MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA-Q4_K_M.gguf",
+      "mmproj": "mmproj-MiniMax-H3-Prompt-Rewriter-Qwen3.8-27B-Ref2VA-F16.gguf",
+      "download_gb": 17.48,
+      "note": "Full model and matching F16 vision projector; no separate LoRA."
+    }
   ]
 }

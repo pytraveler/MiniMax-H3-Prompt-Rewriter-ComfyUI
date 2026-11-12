@@ -82,7 +82,7 @@ function toggleReference(node, name) {
     });
 }
 
-function editInstruction(node, entry) {
+function editInstruction(node, entry, withClear = false) {
     const dialog = document.createElement("dialog");
     dialog.className = "mmx-api-instruction";
     const title = document.createElement("div");
@@ -91,13 +91,17 @@ function editInstruction(node, entry) {
     box.value = readInstructions(node, INSTRUCTIONS)[entry.name]?.text || "";
     box.placeholder = "Keep this character's clothes, use only the lighting from this image...";
     const label = document.createElement("div");
-    label.textContent = "Description of this reference (required in descriptions mode; RefMods can use their saved description)";
+    label.textContent = withClear
+        ? entry.kind === "audio" ? "Sound description (required; this checkpoint receives text for sound)"
+            : "Optional description of this reference; saved RefMod descriptions are included."
+        : "Description of this reference (required in descriptions mode; RefMods can use their saved description)";
     const description = document.createElement("textarea");
     const current = descriptionsOf(node)[entry.name];
     description.value = typeof current === "string" ? current : current?.text || "";
     description.placeholder = "Describe the visible scene, motion, or the sound actually present.";
     const soundLabel = document.createElement("div");
-    soundLabel.textContent = "Clip sound description (required when sound is included in descriptions mode)";
+    soundLabel.textContent = withClear ? "Clip sound description (required when sound is enabled)"
+        : "Clip sound description (required when sound is included in descriptions mode)";
     const sound = document.createElement("textarea");
     sound.value = typeof current === "object" ? current?.sound || "" : "";
     const hasSound = entry.kind === "video" && !entry.refmod;
@@ -120,6 +124,12 @@ function editInstruction(node, entry) {
     if (hasSound) dialog.append(soundLabel, sound);
     const actions = document.createElement("div");
     actions.className = "mmx-api-instruction-actions";
+    if (withClear) {
+        const clear = document.createElement("button");
+        clear.textContent = "Clear";
+        clear.onclick = () => { box.value = ""; description.value = ""; sound.value = ""; box.focus(); };
+        actions.appendChild(clear);
+    }
     actions.append(save, cancel);
     dialog.appendChild(actions);
     dialog.addEventListener("close", () => dialog.remove(), { once: true });
@@ -128,7 +138,7 @@ function editInstruction(node, entry) {
     box.focus();
 }
 
-function startGesture(node, chip, role, entry, event) {
+function startGesture(node, chip, role, entry, event, allowRoleChange = true) {
     if (event.button !== 0 || event.target.closest("button")) return;
     event.preventDefault();
     event.stopPropagation();
@@ -143,19 +153,23 @@ function startGesture(node, chip, role, entry, event) {
         chip.classList.add("mmx-dragging");
         placeDragged(strip, chip, moved.clientX, moved.clientY);
     };
-    const finish = (finished) => {
+    const release = () => {
         window.removeEventListener("pointermove", move, true);
         window.removeEventListener("pointerup", finish, true);
         window.removeEventListener("pointercancel", finish, true);
         node[STATE].dragging = false;
         chip.classList.remove("mmx-dragging");
-        if (finished.type === "pointercancel") return render(node);
+        delete node[STATE].releaseGesture;
+    };
+    const finish = (finished) => {
+        release();
+        if (!node.graph || finished.type === "pointercancel") return refresh(node);
         changeLayout(node, (layout) => {
             if (dragged) layout.order = [...strip.children].map((child) => child.dataset.slot).filter(Boolean);
             else if (onLabel && entry.kind === "video" && !entry.refmod) {
                 if (layout.sound.includes(entry.name)) layout.sound = layout.sound.filter((name) => name !== entry.name);
                 else layout.sound.push(entry.name);
-            } else if (onLabel && entry.kind === "image") {
+            } else if (onLabel && entry.kind === "image" && allowRoleChange) {
                 const choices = entry.refmod ? ROLES.slice(0, 2) : ROLES;
                 layout.roles[entry.name] = choices[(choices.indexOf(entry.role) + 1) % choices.length];
             }
@@ -164,6 +178,7 @@ function startGesture(node, chip, role, entry, event) {
             else layout.off.push(entry.name);
         });
     };
+    node[STATE].releaseGesture = release;
     window.addEventListener("pointermove", move, true);
     window.addEventListener("pointerup", finish, true);
     window.addEventListener("pointercancel", finish, true);
@@ -341,6 +356,8 @@ function build(node) {
     render(node);
     queueMicrotask(() => syncSlots(node));
 }
+
+export { layoutOf, entriesOf, toggleReference, editInstruction, startGesture, syncSlots };
 
 app.registerExtension({
     name: "minimax_h3_rewriter.api_writer_widgets",
