@@ -6,6 +6,7 @@ import math
 from copy import deepcopy
 from dataclasses import dataclass
 
+from . import system_prompts
 from .api_contract import ContractError
 
 OPTIONS_TYPE = "H3_API_WRITER_OPTIONS"
@@ -22,6 +23,7 @@ OPTION_INPUTS = {
     "batch_video_fps": ("FLOAT", {"default": 24.0, "min": 1.0, "max": 240.0, "step": 1.0, "tooltip": "Clock for an IMAGE batch in the Video role. VIDEO objects and RefMods use their own timestamps."}),
     "audio_sample_rate": ([16000, 24000, 44100, 48000], {"default": 16000, "tooltip": "Rate of mono PCM16 WAV API copies. Original audio is unchanged."}),
     "repair_once": ("BOOLEAN", {"default": False, "tooltip": "Allow at most ONE additional, potentially paid request for repairable H3 findings. Off by default; no transport retries."}),
+    system_prompts.FIELD: system_prompts.input_spec(),
 }
 
 
@@ -37,6 +39,7 @@ class ApiWriterOptions:
     batch_video_fps: float = 24.0
     audio_sample_rate: int = 16000
     repair_once: bool = False
+    system_prompt_file: str = ""
 
     def __post_init__(self):
         if type(self.max_tokens) is not int or not 1 <= self.max_tokens <= 131072:
@@ -57,6 +60,8 @@ class ApiWriterOptions:
             raise ContractError("Invalid API repair option.")
         if type(self.audio_sample_rate) is not int or self.audio_sample_rate not in OPTION_INPUTS["audio_sample_rate"][0]:
             raise ContractError("Invalid API audio sample rate.")
+        if not isinstance(self.system_prompt_file, str):
+            raise ContractError("The system prompt file selection must be text.")
 
 
 def resolve_options(options, **legacy):
@@ -72,13 +77,14 @@ class MiniMaxH3ApiWriterOptions:
     @classmethod
     def INPUT_TYPES(cls):
         settings = deepcopy(OPTION_INPUTS)
-        repair = settings.pop("repair_once")
-        return {"required": settings, "optional": {"repair_once": repair}}
+        optional = {name: settings.pop(name) for name in ("repair_once", system_prompts.FIELD)}
+        return {"required": settings, "optional": optional}
 
     RETURN_TYPES = (OPTIONS_TYPE,)
     RETURN_NAMES = ("options",)
     FUNCTION = "execute"
     CATEGORY = "MiniMax-H3"
+    IS_CHANGED = staticmethod(system_prompts.stamp)
     DESCRIPTION = (
         "Settings for API Universal Writer and the API Writer mode of H3 Image Prompt Writer. "
         "H3 Image uses the token budget, temperature, response format and timeout. "

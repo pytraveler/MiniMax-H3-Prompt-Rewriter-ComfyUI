@@ -643,7 +643,7 @@ tabs in one window — `models` for the 27B tab, `models_8b` for the 8B one,
 Everything you rarely touch, kept off the main node. Leave it unconnected and the
 rewriter uses the decoding parameters the adapter was published with.
 
-![Rewriter Options with generation, model loading and device settings; captioner_thinking is off](docs/node_options.png)
+![Rewriter Options with Default guide and the System prompts button below the generation settings](docs/node_options.png)
 
 | Input | Default | Purpose |
 |---|---|---|
@@ -899,8 +899,7 @@ which fields are absent, on the node. Lower the temperature or move up a size.
 The guide is the whole of what makes this an H3 writer: it goes into the system
 prompt and nothing else in the node knows the format. So replacing that text is
 what turns these nodes into a writer for something else — LTX, Krea, Wan, or a
-house style of your own. Write it into `system_prompt` and the assembled guide is
-not used; on an empty field nothing changes.
+house style of your own. Text in `system_prompt` replaces the assembled guide.
 
 The guide is then not even fetched, which matters on a machine kept offline:
 there is no 24 KB document downloaded to be ignored.
@@ -908,6 +907,19 @@ there is no 24 KB document downloaded to be ignored.
 The shortest way in is
 [Guide Prompt (any LLM)](#minimax-h3-guide-prompt-any-llm), which hands you the
 stock system prompt on an output. Take it, edit it, connect it back.
+
+**Saved system prompts.** Open **System prompts...** on Rewriter Options,
+API Writer Options or Qwen Rewriter Options. Create a draft, import a UTF-8
+`.md` or `.txt`, or choose a task and click **Copy default guide** to edit a
+copy. **Save and select** stores a Markdown file in
+`<ComfyUI user>/minimax_h3_rewriter/system_prompts` and selects it in
+`system_prompt_file`. If a workflow moves to a different server, copy the
+file to that server's library too.
+
+![System prompts editor with import, a default guide task selector, and Save and select](docs/system_prompts_editor.png)
+
+Text in `system_prompt` takes precedence. When the field is empty, the writer
+uses the selected file. **Default guide** uses the built-in guide for the task.
 
 Two things do not move. The task message is never replaced — it carries the
 prompt, the aspect ratio and the duration, which any guide needs. And the answer
@@ -1121,6 +1133,8 @@ With no active pictures the writer expands a text-to-image prompt. With one to
 16 active pictures it writes an edit prompt. The first active picture is the base.
 Reorder the chips, disable inputs with their checkboxes, and add instructions via
 `+ instr`. An IMAGE batch contributes its first frame.
+
+![Image Prompt Writer in Local GGUF mode with a base image and an edit request](docs/image_prompt_writer_node.png)
 
 - **Local CLIP**: connect `qwen3.5_9b_w4a8_gptq.safetensors` through Load CLIP,
   type `minimax`. This is the prompt model used in the

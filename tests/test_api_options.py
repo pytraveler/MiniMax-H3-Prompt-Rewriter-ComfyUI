@@ -18,7 +18,8 @@ def test_options_node_has_only_non_secret_settings_and_returns_immutable_values(
     node = options.MiniMaxH3ApiWriterOptions()
     schema = node.INPUT_TYPES()
     fields = schema["required"] | schema["optional"]
-    assert len(fields) == 10
+    assert len(fields) == 11
+    assert list(fields)[-1] == "system_prompt_file"
     assert not {"base_url", "api_key", "headers", "model", "secret"} & fields.keys()
     value, = node.execute(max_tokens=512, temperature=0.25)
     with pytest.raises(FrozenInstanceError):

@@ -9,7 +9,7 @@ import hashlib
 import json
 import time
 
-from . import aspect, checks, guide_prompt, guides, library, memory, qwen_engine, qwen_models, qwen_prompt, repair, resident
+from . import aspect, checks, guide_prompt, guides, library, memory, qwen_engine, qwen_models, qwen_prompt, repair, resident, system_prompts
 from .api_contract import ContractError, Generation, make_job, reference_manifest
 from .api_multimedia import REFERENCE_TYPES, Transport, arrange_references
 from .api_text import read_answer
@@ -154,6 +154,7 @@ class MiniMaxH3QwenRewriter:
             progress.finish("Reused a kept prompt")
             return (reading.text,) + tuple(reading.sections.get(name, "") for name in ALL_FIELDS) + (
                 reference_text, "", checks.describe(reading.issues), report, handed)
+        system_prompt = system_prompts.resolve(system_prompt, settings.system_prompt_file, unique_id)
         choice = qwen_models.resolve(model)
         qwen_prompt.validate_family(choice.family, task, assets)
         job = make_job(profile_id="qwen", task=task, validation="h3", prompt=prompt, system_prompt=system_prompt or "Guide pending retrieval.",

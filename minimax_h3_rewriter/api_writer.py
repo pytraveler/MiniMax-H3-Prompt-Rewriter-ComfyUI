@@ -7,7 +7,7 @@ import json
 import time
 from dataclasses import replace
 
-from . import api_config, checks, guide_prompt, guides, library, memory, previews, snapshot
+from . import api_config, checks, guide_prompt, guides, library, memory, previews, snapshot, system_prompts
 from .api_client import ApiClient, ApiError, prepare_payload, validate_job
 from .api_contract import ContractError, Generation, make_job, reference_manifest
 from .api_media import MAX_REFERENCES
@@ -227,6 +227,7 @@ class MiniMaxH3ApiUniversalWriter:
         handed_on = slot_bundle((one.spec.slot, one.spec.role, one.handed, one.spec.clip_audio) for one in assets)
         given = {"task": task, "duration": duration, "resolution": resolution, "profile_id": profile_id,
                  "model": model,
+                 "system_prompt_file": settings.system_prompt_file,
                  "validation": validation, "response_format": response_format,
                  "image_max_side": image_max_side, "max_tokens": max_tokens, "media_mode": media_mode,
                  "input_digest": hashlib.sha256(str((prompt, system_prompt, reference_layout,
@@ -247,6 +248,7 @@ class MiniMaxH3ApiUniversalWriter:
             raise ContractError("Invalid API seed.")
         if not isinstance(system_prompt, str) or not isinstance(prompt, str) or not prompt.strip():
             raise ContractError("The system prompt must be text and the original prompt must not be empty.")
+        system_prompt = system_prompts.resolve(system_prompt, settings.system_prompt_file, unique_id)
         if type(auto_download_guide) is not bool or type(repair_once) is not bool:
             raise ContractError("Invalid API writer options.")
         profiles = api_config.load_profiles()

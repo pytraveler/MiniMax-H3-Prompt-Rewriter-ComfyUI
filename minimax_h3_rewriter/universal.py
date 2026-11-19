@@ -48,6 +48,7 @@ from . import (
     previews,
     refmods,
     snapshot,
+    system_prompts,
 )
 from .constants import (
     RESOLUTIONS,
@@ -789,6 +790,9 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         settings = dict(DEFAULT_OPTIONS)
         if options:
             settings.update(options)
+        system_prompt = system_prompts.resolve(
+            system_prompt, settings.get(system_prompts.FIELD, ""), cls.hidden.unique_id,
+        )
 
         if task == TEXT_TASK:
             if assets or block:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import math
 
-from . import devices, library
+from . import devices, library, system_prompts
 
 OPTIONS_TYPE = "H3_QWEN_REWRITER_OPTIONS"
 
@@ -34,6 +34,7 @@ class QwenOptions:
     self_check: str = "all"
     repair_once: bool = False
     prompt_file: str = "global"
+    system_prompt_file: str = ""
 
     def __post_init__(self):
         for name, low, high in (("max_new_tokens", 1, 131072), ("context_size", 1024, 262144),
@@ -57,6 +58,8 @@ class QwenOptions:
             raise ValueError("Invalid Qwen attention implementation.")
         if self.self_check not in ("all", "none") or not isinstance(self.prompt_file, str):
             raise ValueError("Invalid Qwen prompt checking or library options.")
+        if not isinstance(self.system_prompt_file, str):
+            raise ValueError("The system prompt file selection must be text.")
         if self.max_new_tokens >= self.context_size:
             raise ValueError("context_size must leave room for the input as well as max_new_tokens.")
         if self.llama_backend not in ("auto", "cuda", "vulkan", "cpu") or self.downloader not in ("built-in", "huggingface_hub"):
@@ -102,12 +105,14 @@ class MiniMaxH3QwenRewriterOptions:
             "prompt_file": (library.files(), {"tooltip": "Saved prompt collection used by this writer's library."}),
         }
         return {"required": {name: (kind, {**options, "default": defaults[name]})
-                             for name, (kind, options) in specs.items()}}
+                             for name, (kind, options) in specs.items()},
+                "optional": {system_prompts.FIELD: system_prompts.input_spec()}}
 
     RETURN_TYPES = (OPTIONS_TYPE,)
     RETURN_NAMES = ("options",)
     FUNCTION = "execute"
     CATEGORY = "MiniMax-H3"
+    IS_CHANGED = staticmethod(system_prompts.stamp)
 
     def execute(self, **values):
         return (QwenOptions(**values),)

@@ -19,7 +19,8 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent.parent
 SCREENSHOTS = {"docs/node_options.png", "docs/api_options_node.png", "docs/api_universal_writer_node.png",
-               "docs/qwen_rewriter_workflow.png"}
+               "docs/qwen_rewriter_workflow.png", "docs/image_prompt_writer_node.png",
+               "docs/system_prompts_editor.png"}
 REQUIRED = {
     "__init__.py", "pyproject.toml", "requirements.txt", "LICENSE",
     "README.md", "README_RU.md", "README_ZH.md", "CHANGELOG.md", "CHANGELOG_RU.md",

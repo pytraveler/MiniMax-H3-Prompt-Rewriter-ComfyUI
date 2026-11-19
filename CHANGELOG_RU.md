@@ -6,6 +6,14 @@
 workflow релиза отклонит тег, который расходится с `pyproject.toml`, и тег, для
 которого нет раздела ни в одном из двух changelog'ов.
 
+## 0.36.0 - 2026-11-20
+
+### Добавлено
+
+- MiniMax-H3 Image Prompt Writer расширяет запросы для генерации и редактирования изображений. Поддерживает до 16 упорядоченных референсов, отдаёт промт и размеры холста для MiniMax H3 Image Conditioning.
+- Для расширения промта доступны Local CLIP, Local GGUF, модель Chat Completions через API Writer и MiniMax Context IR. Для Image Edit в Local GGUF нужны модель с поддержкой изображений и её проектор.
+- **System prompts...** в Rewriter Options, API Writer Options и Qwen Rewriter Options сохраняет пользовательские гайды. Гайд можно написать с нуля, скопировать из штатного или импортировать из `.md` или `.txt` в UTF-8. Райтер использует выбранный файл, когда его поле `system_prompt` пустое.
+
 ## 0.35.0 - 2026-11-12
 
 ### Добавлено

@@ -310,8 +310,9 @@ def test_options_append_the_control_and_old_values_keep_their_positions():
                  "self_check", "fix_once", "downloader"]
     inputs = nodes.MiniMaxH3RewriterOptions.INPUT_TYPES()
     schema = inputs["required"] | inputs["optional"]
-    assert list(schema) == old_order + ["captioner_thinking"]
+    assert list(schema) == old_order + ["captioner_thinking", "system_prompt_file"]
     assert schema["captioner_thinking"][1]["default"] == "off"
+    assert schema["system_prompt_file"][1]["default"] == ""
     options, = nodes.MiniMaxH3RewriterOptions().build(max_new_tokens=512)
     assert options["captioner_thinking"] == "off" and options["max_new_tokens"] == 512
 

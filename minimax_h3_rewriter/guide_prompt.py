@@ -89,23 +89,27 @@ def _fields_block(names: tuple[str, ...]) -> str:
     return "\n".join(f"  {name}: ..." for name in names)
 
 
-def _alignment_rule(mode: str, duration: float) -> str:
+def _alignment_rule(mode: str, duration: float | None) -> str:
     if mode == "T2VA":
         return (
             "- T2VA has no image-alignment instruction: start the answer directly with "
             f"'{OUTPUT_FIELDS[0]}:'."
         )
-    line = ALIGNMENT_LINE[mode].format(seconds=f"{float(duration):.2f}")
+    seconds_value = "[duration]" if duration is None else f"{float(duration):.2f}"
+    line = ALIGNMENT_LINE[mode].format(seconds=seconds_value)
     rule = (
         "- Start the answer with exactly this line, then one blank line, then the fields:\n"
         f"    {line}"
     )
     if "N" in ALIGNMENT_LINE[mode]:
-        rule += "\n  Replace N with the number of the actual final shot. Change nothing else in it."
+        rule += "\n  Replace N with the number of the actual final shot."
+        if duration is None:
+            rule += " Replace [duration] with the requested duration in seconds, to two decimal places."
+        rule += " Change nothing else in it."
     return rule
 
 
-def _base_system(guide: str, mode: str, duration: float) -> str:
+def _base_system(guide: str, mode: str, duration: float | None) -> str:
     return "\n".join(
         [
             ROLE,
@@ -134,7 +138,7 @@ def _base_system(guide: str, mode: str, duration: float) -> str:
     )
 
 
-def _ref_system(guide: str, duration: float) -> str:
+def _ref_system(guide: str, duration: float | None) -> str:
     return "\n".join(
         [
             ROLE,
@@ -166,7 +170,7 @@ def _ref_system(guide: str, duration: float) -> str:
     )
 
 
-def system_prompt(guide: str, mode: str, duration: float) -> str:
+def system_prompt(guide: str, mode: str, duration: float | None) -> str:
     """The full system message for one mode, with the guide embedded."""
     if mode not in ALL_MODES:
         raise ValueError(f"unknown mode '{mode}'; expected one of {', '.join(ALL_MODES)}")

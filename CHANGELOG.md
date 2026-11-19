@@ -6,6 +6,14 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.36.0 - 2026-11-20
+
+### Added
+
+- MiniMax-H3 Image Prompt Writer expands text-to-image and edit requests with up to 16 ordered image references. Connect its prompt and canvas dimensions to MiniMax H3 Image Conditioning.
+- Image prompt expansion can use Local CLIP, a Local GGUF model, a Chat Completions model through API Writer, or MiniMax Context IR. Local GGUF uses a vision model with its matching projector for Image Edit.
+- **System prompts...** in Rewriter Options, API Writer Options and Qwen Rewriter Options saves reusable guides. Create one from scratch, copy the default guide or import a UTF-8 `.md` or `.txt` file. The selected file applies when the writer's `system_prompt` is empty.
+
 ## 0.35.0 - 2026-11-12
 
 ### Added

@@ -1,7 +1,7 @@
 [project]
 name = "minimax-h3-prompt-rewriter"
-version = "0.35.0"
-description = "ComfyUI prompt writers and rewriters for MiniMax-H3 and P-H3: full LightX2V Qwen SFT/GGUF checkpoints, LoRAs, guide-based local writers, API providers, ordered references, RefMods and prompt libraries."
+version = "0.36.0"
+description = "ComfyUI prompt writers and rewriters for MiniMax-H3, MiniMax-H3-Image and P-H3. Supports local Qwen SFT/GGUF, LoRAs, API providers, ordered references, RefMods and reusable system prompts."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"

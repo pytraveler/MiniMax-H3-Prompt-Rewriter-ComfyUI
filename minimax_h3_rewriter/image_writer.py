@@ -9,7 +9,10 @@ from . import library, memory, previews, snapshot
 from .api_client import ApiError
 from .api_contract import ContractError
 from .api_options import OPTIONS_TYPE
-from .nodes import CATEGORY, OPTIONS_TYPE as LOCAL_OPTIONS_TYPE, captioner_choices, writer_choices
+from .nodes import (
+    CATEGORY, OPTIONS_TYPE as LOCAL_OPTIONS_TYPE, captioner_choices, named_verdicts,
+    valid_captioner, valid_writer, writer_choices,
+)
 from .ph3_prompt import PICTURE, object_of
 from .progress import NodeProgress, announce
 from .references import SLOTS_TYPE, slot_bundle
@@ -87,6 +90,17 @@ class MiniMaxH3ImagePromptWriter(io.ComfyNode):
                 io.String.Output(display_name="summary"),
             ],
             hidden=[io.Hidden.unique_id],
+        )
+
+    @classmethod
+    def validate_inputs(cls, backend=None, writer_model=None, caption_model=None, references=None,
+                        bypass=False, repeat_last=False):
+        if backend != image.LOCAL_GGUF or bypass or repeat_last:
+            return True
+        unused = (None, "", image_gguf.SELECT_MODEL)
+        return named_verdicts(
+            ("writer_model", True if writer_model in unused else valid_writer(writer_model)),
+            ("caption_model", True if caption_model in unused else valid_captioner(caption_model)),
         )
 
     @classmethod

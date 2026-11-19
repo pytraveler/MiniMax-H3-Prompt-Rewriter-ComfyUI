@@ -574,7 +574,7 @@ MiniMax-H3 的长度是从它自己的设置里拿的，不是从这一行拿的
 所有你很少去动的东西，都从主节点上挪到了这里。不接它，重写器就用适配器发布时
 自带的那套解码参数。
 
-![Rewriter Options：生成、模型加载和设备设置，captioner_thinking 为 off](docs/node_options.png)
+![Rewriter Options 在生成设置下方显示 Default guide 和 System prompts 按钮](docs/node_options.png)
 
 | 输入 | 默认值 | 作用 |
 |---|---|---|
@@ -797,14 +797,24 @@ GGUF，架构是什么都行。这里没有哪样东西非得是 Qwen3.6-27B，�
 
 这个节点之所以是给 H3 写提示词的，全靠那份指南：它进系统提示词，而节点里再没有
 别的东西知道这个格式。所以把那段文字换掉，就等于把这些节点变成给别的东西写提示词
-的节点 —— LTX、Krea、Wan，或者你自己的一套风格。把它写进 `system_prompt`，拼好的
-指南就不再被使用；字段留空则什么都不变。
+的节点 —— LTX、Krea、Wan，或者你自己的一套风格。`system_prompt` 中的文字会替换组装好的指南。
 
 那时指南连取都不会去取，这在一台常年离线的机器上是要紧的：不会为了把它忽略掉，先
 下载一份 24 KB 的文档。
 
 最短的入口是 [Guide Prompt](#minimax-h3-guide-prompt-any-llm-指南提示词)，它把原版
 的系统提示词从一个输出交到你手上。拿走、改掉、再接回来。
+
+**保存系统提示词。** 在 Rewriter Options、API Writer Options 或 Qwen Rewriter Options 中
+打开 **System prompts...**。可以新建、导入 UTF-8 编码的 `.md` 或 `.txt` 文件，或者选择任务，
+通过 **Copy default guide** 复制并编辑默认指南。点击 **Save and select** 会将文件保存到
+`<ComfyUI user>/minimax_h3_rewriter/system_prompts`，并在 `system_prompt_file` 中选中。
+迁移工作流时，也要将指南文件复制到目标服务器的库目录。
+
+![System prompts 编辑器，含文件导入、默认指南的任务选择和 Save and select 按钮](docs/system_prompts_editor.png)
+
+写作节点优先使用 `system_prompt` 中的文字。该字段为空时使用所选文件，选择
+**Default guide** 时则使用当前任务的默认指南。
 
 有两样东西不动。任务消息永远不会被替换 —— 它带着提示词、画面比例和时长，而任何一份
 指南都需要这些。还有，答案照样会按 H3 的那几节切开，所以一份只回一段话的指南会把
@@ -988,6 +998,8 @@ Load Image、Load Video、Load Audio 或 VideoHelperSuite 的加载器，中间�
 所需的详细提示词。没有启用的图片时为文生图，启用 1 至 16 张图片时为图像编辑。
 第一张启用的图片作为底图。拖动参考卡片可以调整顺序，用输入复选框切换启用状态，
 通过 `+ instr` 添加单图指令。IMAGE 批次使用第一帧。
+
+![Image Prompt Writer 的 Local GGUF 模式，使用底图和编辑指令](docs/image_prompt_writer_node.png)
 
 - **Local CLIP**：通过 Load CLIP 加载 `qwen3.5_9b_w4a8_gptq.safetensors`，
   类型选择 `minimax`，连接到 `upsampler`。这是

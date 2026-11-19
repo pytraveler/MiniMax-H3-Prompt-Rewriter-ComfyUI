@@ -22,6 +22,7 @@ from . import (
     previews,
     refmods,
     resident,
+    system_prompts,
 )
 
 log = logging.getLogger(__name__)
@@ -275,6 +276,63 @@ def register() -> None:
     @routes.get(f"{PREFIX}/library/files")
     async def library_files(request):
         return web.json_response({"files": library.files(), "path": library.root()})
+
+    async def prompt_body(request, limit):
+        length = request.content_length
+        if (request.content_type != "application/json" or length is None or not 0 < length <= limit
+                or request.headers.get("Content-Encoding", "identity") != "identity"):
+            raise system_prompts.PromptFileError("Expected a bounded JSON system prompt request.")
+        try:
+            body = await request.json()
+        except (ValueError, RecursionError) as error:
+            raise system_prompts.PromptFileError("Invalid system prompt request.") from error
+        if not isinstance(body, dict):
+            raise system_prompts.PromptFileError("Invalid system prompt request.")
+        return body
+
+    def prompt_response(payload, status=200):
+        return web.json_response(payload, status=status, headers={"Cache-Control": "no-store"})
+
+    @routes.get(f"{PREFIX}/system_prompts")
+    async def system_prompt_read(request):
+        name = request.query.get("name")
+        try:
+            if name is None:
+                return prompt_response({"files": await asyncio.to_thread(system_prompts.files)})
+            text, revision = await asyncio.to_thread(system_prompts.read, name)
+        except system_prompts.PromptFileError as error:
+            return prompt_response({"error": str(error)}, error.status)
+        except OSError:
+            return prompt_response({"error": "Could not list the system prompt files."}, 500)
+        return prompt_response({"name": name, "text": text, "revision": revision})
+
+    @routes.post(f"{PREFIX}/system_prompts")
+    async def system_prompt_save(request):
+        try:
+            body = await prompt_body(request, 6 * system_prompts.MAX_BYTES + 4096)
+            name = body.get("name")
+            revision = await asyncio.to_thread(
+                system_prompts.save, name, body.get("text"), body.get("revision", ""),
+            )
+        except system_prompts.PromptFileError as error:
+            return prompt_response({"error": str(error)}, error.status)
+        except OSError:
+            return prompt_response({"error": "Could not save the system prompt file."}, 500)
+        return prompt_response({"name": name, "revision": revision})
+
+    @routes.post(f"{PREFIX}/system_prompts/template")
+    async def system_prompt_template(request):
+        try:
+            body = await prompt_body(request, 4096)
+            qwen, auto_download = body.get("qwen", False), body.get("auto_download", False)
+            if type(qwen) is not bool or type(auto_download) is not bool:
+                raise system_prompts.PromptFileError("Invalid default guide settings.")
+            text = await asyncio.to_thread(system_prompts.template, body.get("task"), qwen, auto_download)
+        except system_prompts.PromptFileError as error:
+            return prompt_response({"error": str(error)}, error.status)
+        except (RuntimeError, OSError, ValueError) as error:
+            return prompt_response({"error": str(error)}, 503)
+        return prompt_response({"text": text})
 
     @routes.get(f"{PREFIX}/library")
     async def library_records(request):

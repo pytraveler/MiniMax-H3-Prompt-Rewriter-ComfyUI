@@ -30,6 +30,7 @@ from . import (
     mtmd_engine,
     ollama_store,
     repair,
+    system_prompts,
 )
 from .catalog import FORMAT_GGUF, FORMAT_TRANSFORMERS
 from .constants import (
@@ -1101,6 +1102,7 @@ class MiniMaxH3RewriterOptions:
                         ),
                     },
                 ),
+                system_prompts.FIELD: system_prompts.input_spec(),
             },
         }
 
@@ -1108,6 +1110,7 @@ class MiniMaxH3RewriterOptions:
     RETURN_NAMES = ("options",)
     FUNCTION = "build"
     CATEGORY = CATEGORY
+    IS_CHANGED = staticmethod(system_prompts.stamp)
 
     def build(self, **kwargs):
         options = dict(DEFAULT_OPTIONS)
@@ -1881,6 +1884,8 @@ class MiniMaxH3GuidedWriter:
             settings.update(options)
         progress = NodeProgress(unique_id)
 
+        if not saved:
+            system_prompt = system_prompts.resolve(system_prompt, settings.get(system_prompts.FIELD, ""), unique_id)
         text = saved or _guided_text(
             task, model, prompt, resolution, duration, reference_material,
             greedy, seed, keep_model_loaded, settings, progress, system_prompt,
@@ -2063,6 +2068,8 @@ class MiniMaxH3GuidedWriterRef:
         progress = NodeProgress(unique_id)
         shown = checks.typed_kinds(reference_assets)
 
+        if not saved:
+            system_prompt = system_prompts.resolve(system_prompt, settings.get(system_prompts.FIELD, ""), unique_id)
         text = saved or _guided_text(
             guide_prompt.REF_MODE, model, prompt, resolution, duration, reference_assets,
             greedy, seed, keep_model_loaded, settings, progress, system_prompt,
