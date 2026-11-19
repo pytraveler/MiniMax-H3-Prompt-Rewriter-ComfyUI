@@ -173,6 +173,7 @@ def _at(*pairs: tuple[str, str]) -> tuple[NodeSection, ...]:
 
 NODE_SECTIONS: dict[str, tuple[NodeSection, ...]] = {
     "MiniMaxH3QwenRewriter": _at(("model", "qwen_rewriters")),
+    "MiniMaxH3ImagePromptWriter": _at(("writer_model", "writers"), ("caption_model", "captioners")),
     "MiniMaxH3PromptRewriter": _at(("model", "models")),
     "MiniMaxH3PromptWriter8B": _at(("model", "models_8b")),
     "MiniMaxH3PromptWriterOmni": _at(("model", "models_omni")),

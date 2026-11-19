@@ -3,7 +3,9 @@ import { installStyle } from "./mmx_controls.js";
 
 const SELECTOR = ".mmx-api-input-switch";
 
-export function apiInputSwitches(nodes, enabled, toggle) {
+const apiSlot = (name) => /^ref_(?:[0-9]|1[01])$/.test(name) ? name : null;
+
+export function apiInputSwitches(nodes, enabled, toggle, slotName = apiSlot) {
     let pending = false;
     const update = () => {
         const graph = app.canvas?.graph ?? app.graph;
@@ -15,7 +17,8 @@ export function apiInputSwitches(nodes, enabled, toggle) {
                 const match = /-in-(\d+)$/.exec(key || "");
                 const input = match && node.inputs?.[Number(match[1])];
                 let check = row.querySelector(SELECTOR);
-                if (!/^ref_(?:[0-9]|1[01])$/.test(input?.name || "")) {
+                const name = slotName(input?.name || "");
+                if (!name) {
                     check?.remove();
                     continue;
                 }
@@ -32,11 +35,11 @@ export function apiInputSwitches(nodes, enabled, toggle) {
                     });
                     row.appendChild(check);
                 }
-                check.mmxSlot = { node, name: input.name };
-                check.dataset.slot = input.name;
-                check.setAttribute("aria-label", `Enable ${input.name}`);
-                check.title = `Enable or disable ${input.name}; keep its connection`;
-                check.checked = enabled(node, input.name);
+                check.mmxSlot = { node, name };
+                check.dataset.slot = name;
+                check.setAttribute("aria-label", `Enable ${name}`);
+                check.title = `Enable or disable ${name}; keep its connection`;
+                check.checked = enabled(node, name);
                 check.classList.toggle("mmx-unconnected", input.link == null);
             }
         }

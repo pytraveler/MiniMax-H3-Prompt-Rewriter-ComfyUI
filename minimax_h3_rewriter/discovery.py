@@ -609,6 +609,22 @@ def gguf_header(path: str) -> dict:
     return header
 
 
+def check_encoders(mmproj_path: str, kinds: set[str]) -> None:
+    """Refuse before loading weights if the projector cannot read the inputs."""
+    header = gguf_header(mmproj_path)
+    name = os.path.basename(mmproj_path)
+    if "audio" in kinds and not header["audio"]:
+        raise RuntimeError(
+            f"'{name}' was built without an audio encoder, so this model cannot hear the clips "
+            f"you connected. Pick a captioner whose label lists 'audio', or disconnect the audio."
+        )
+    if kinds & {"image", "video"} and not header["vision"]:
+        raise RuntimeError(
+            f"'{name}' was built without a vision encoder, so this model cannot see. Pick a "
+            f"captioner whose label lists 'vision'."
+        )
+
+
 def gguf_info(path: str) -> tuple[str, str]:
     """``(general.architecture, general.type)``."""
     header = gguf_header(path)

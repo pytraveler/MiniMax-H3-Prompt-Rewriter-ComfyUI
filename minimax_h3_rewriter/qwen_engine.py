@@ -106,7 +106,7 @@ def server_messages(messages, images):
     return converted
 
 
-def _ask(server, messages, images, settings, seed, greedy, progress):
+def _ask(server, messages, images, settings, seed, greedy, progress, label="Qwen"):
     body = {"messages": server_messages(messages, images), "stream": True,
             "stream_options": {"include_usage": True}, "max_tokens": settings.max_new_tokens,
             "seed": normalize_seed(seed), "temperature": 0.0 if greedy else settings.temperature,
@@ -145,7 +145,7 @@ def _ask(server, messages, images, settings, seed, greedy, progress):
                     progress.text(("".join(pieces) or "".join(thoughts))[-1800:])
     except (OSError, urllib.error.URLError):
         llama_flags.check_interrupt()
-        raise RuntimeError("The owned Qwen llama-server stopped answering.\n" + server.tail()) from None
+        raise RuntimeError(f"The owned {label} llama-server stopped answering.\n" + server.tail()) from None
     finally:
         finished.set()
         watcher.join(timeout=2)
@@ -153,14 +153,15 @@ def _ask(server, messages, images, settings, seed, greedy, progress):
     return text, "".join(thoughts) or embedded, usage
 
 
-def _gguf(model_path, projector, messages, images, settings, seed, greedy, keep_loaded, progress):
+def generate_gguf(model_path, projector, messages, images, settings, seed, greedy, keep_loaded, progress, *, label="Qwen"):
+    """Run ordered multimodal messages on the selected GGUF and projector."""
     global _SERVER, _KEY
     binary = llamacpp.ensure_mtmd(settings.llama_backend, settings.auto_download, progress)
     binary = llamacpp.server_beside(binary)
     if not binary:
-        raise RuntimeError("GGUF Qwen rewriting needs llama-server beside llama-mtmd-cli. Set MINIMAX_H3_LLAMA_BIN to a complete current llama.cpp build.")
+        raise RuntimeError(f"GGUF {label} rewriting needs llama-server beside llama-mtmd-cli. Set MINIMAX_H3_LLAMA_BIN to a complete current llama.cpp build.")
     key = (model_path, projector, binary, settings.device, settings.gpu_layers, settings.context_size)
-    with _LOCK:
+    with resident.in_use(), _LOCK:
         if key != _KEY or _SERVER is None or not _SERVER._healthy():
             unload()
             engine.unload()
@@ -171,12 +172,12 @@ def _gguf(model_path, projector, messages, images, settings, seed, greedy, keep_
             _SERVER = server_engine.Server(binary, command, port, settings.context_size)
             _KEY = key
             try:
-                _SERVER.start(on_wait=lambda seconds: progress.text(f"Loading Qwen GGUF ({seconds:.0f}s)", force=True))
+                _SERVER.start(on_wait=lambda seconds: progress.text(f"Loading {label} GGUF ({seconds:.0f}s)", force=True))
             except BaseException:
                 unload()
                 raise
         try:
-            text, reasoning, usage = _ask(_SERVER, messages, images, settings, seed, greedy, progress)
+            text, reasoning, usage = _ask(_SERVER, messages, images, settings, seed, greedy, progress, label)
             usage["runtime"] = {"backend": "llama-server", "binary": binary,
                                 "context_size": settings.context_size, "gpu_layers_requested": settings.gpu_layers}
             return text, reasoning, usage
@@ -190,8 +191,8 @@ def _gguf(model_path, projector, messages, images, settings, seed, greedy, keep_
 
 def generate(choice, files, messages, images, settings, seed, greedy, keep_loaded, progress):
     check_support(choice, settings)
+    if choice.fmt == "gguf":
+        return generate_gguf(*files, messages, images, settings, seed, greedy, keep_loaded, progress)
     with resident.in_use():
-        if choice.fmt == "gguf":
-            return _gguf(*files, messages, images, settings, seed, greedy, keep_loaded, progress)
         unload()
         return _native(files[0], messages, images, settings, seed, greedy, keep_loaded, progress)

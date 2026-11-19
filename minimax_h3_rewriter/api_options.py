@@ -80,8 +80,9 @@ class MiniMaxH3ApiWriterOptions:
     FUNCTION = "execute"
     CATEGORY = "MiniMax-H3"
     DESCRIPTION = (
-        "Generation and media-copy settings for API Universal Writer. Connect options to the writer; "
-        "these settings then come from this node. Endpoints, models and API keys stay in local profiles."
+        "Settings for API Universal Writer and the API Writer mode of H3 Image Prompt Writer. "
+        "H3 Image uses the token budget, temperature, response format and timeout. "
+        "Endpoints, models and API keys stay in local profiles."
     )
 
     def execute(self, **settings):

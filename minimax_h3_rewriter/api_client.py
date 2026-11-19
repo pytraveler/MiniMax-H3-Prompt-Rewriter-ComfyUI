@@ -13,6 +13,7 @@ import errno
 import json
 import ssl
 import time
+from dataclasses import replace
 from typing import Callable
 
 import aiohttp
@@ -111,16 +112,20 @@ def validate_job(job: WriterJob, profile: ApiProfile, *, check_descriptions=True
             raise ContractError("The model does not support all requested native media. Choose a suitable profile or explicit descriptions mode.")
     if check_descriptions and manifest and job.media_mode == "descriptions" and any(not entry.description.strip() for entry in manifest):
         raise ContractError("Descriptions mode requires text for every reference, including clip sound.")
-    if job.response_format not in profile.capabilities.formats:
+    validate_generation(job.generation, job.response_format, profile)
+
+
+def validate_generation(generation, response_format, profile):
+    if response_format not in profile.capabilities.formats:
         raise ContractError("The model does not support this response format.")
-    options = job.generation.to_dict()
+    options = generation.to_dict()
     unsupported = sorted(set(options) - profile.capabilities.parameters)
     if unsupported:
         message = "The selected API profile does not support generation parameters: " + ", ".join(unsupported) + "."
         if "seed" in unsupported:
             message += " Set seed=-1 and control after generate=fixed to omit seed."
         raise ContractError(message)
-    if job.generation.max_tokens > profile.limits.output_tokens:
+    if generation.max_tokens > profile.limits.output_tokens:
         raise ContractError("The job exceeds the profile's output token limit.")
 
 
@@ -172,15 +177,20 @@ def prepare_payload(job: WriterJob, profile: ApiProfile, images=(), audios=()) -
     messages = job.messages()
     if images or audios:
         messages[1] = {"role": "user", "content": parts}
-    options = job.generation.to_dict()
-    payload = {"model": profile.model, "messages": messages, "stream": profile.stream, **options}
+    schema = job.output_schema() if job.response_format == "json_schema" else None
+    return chat_payload(profile, messages, job.generation, job.response_format,
+                        schema_name="minimax_h3_prompt", schema=schema)
+
+
+def chat_payload(profile, messages, generation, response_format, *, schema_name, schema):
+    payload = {"model": profile.model, "messages": messages, "stream": profile.stream, **generation.to_dict()}
     if profile.stream:
         payload["stream_options"] = {"include_usage": True}
-    if job.response_format == "json_object":
+    if response_format == "json_object":
         payload["response_format"] = {"type": "json_object"}
-    elif job.response_format == "json_schema":
+    elif response_format == "json_schema":
         payload["response_format"] = {"type": "json_schema", "json_schema": {
-            "name": "minimax_h3_prompt", "strict": True, "schema": job.output_schema(),
+            "name": schema_name, "strict": True, "schema": schema,
         }}
     data = None
     try:
@@ -312,12 +322,9 @@ class _CompletionStream:
                              "finish_reason": self.finish}], "usage": self.usage}
 
 
-async def _exchange(profile, data, token, timeout, deadline, *, models=False, health=False):
-    if type(models) is not bool or type(health) is not bool or models and health:
-        raise ContractError("Invalid API metadata request.")
-    metadata = models or health
+async def _request(url, data, token, timeout, deadline, *, network, limit, streaming=False, metadata=False):
     headers = {"Content-Type": "application/json",
-               "Accept": "text/event-stream, application/json" if profile.stream and not metadata else "application/json",
+               "Accept": "text/event-stream, application/json" if streaming else "application/json",
                "User-Agent": download.USER_AGENT}
     if token:
         headers["Authorization"] = "Bearer " + token
@@ -329,9 +336,8 @@ async def _exchange(profile, data, token, timeout, deadline, *, models=False, he
     body = bytearray()
     received = 0
     stream = None
-    url = profile.health_url if health else profile.models_url if models else profile.completions_url
     try:
-        if profile.network == "cloud":
+        if network == "cloud":
             proxies = requests.utils.get_environ_proxies(url)
             proxy = proxies.get("https") or proxies.get("all")
         async with aiohttp.ClientSession(timeout=budget, trust_env=False,
@@ -345,11 +351,10 @@ async def _exchange(profile, data, token, timeout, deadline, *, models=False, he
                 if not 200 <= status < 300:
                     code = {401: "unauthorized", 403: "forbidden", 429: "rate_limit"}.get(status)
                     raise ApiError(code or ("server" if status >= 500 else "http"), status)
-                if not metadata and profile.stream and response.content_type == "text/event-stream":
+                if streaming and response.content_type == "text/event-stream":
                     stream = _CompletionStream()
                 async for chunk in response.content.iter_chunked(65536):
                     received += len(chunk)
-                    limit = min(profile.limits.response_bytes, 8192 if health else 1 << 20) if metadata else profile.limits.response_bytes
                     if received > limit:
                         raise ApiError("response_limit")
                     if stream is None:
@@ -367,11 +372,39 @@ async def _exchange(profile, data, token, timeout, deadline, *, models=False, he
         failure_reason = _connection_reason(error)
     if failure:
         raise ApiError(failure, reason=failure_reason)
+    return body, stream
+
+
+async def _exchange(profile, data, token, timeout, deadline, *, models=False, health=False):
+    if type(models) is not bool or type(health) is not bool or models and health:
+        raise ContractError("Invalid API metadata request.")
+    metadata = models or health
+    url = profile.health_url if health else profile.models_url if models else profile.completions_url
+    limit = profile.limits.response_bytes
+    if metadata:
+        limit = min(limit, 8192 if health else 1 << 20)
+    body, stream = await _request(url, data, token, timeout, deadline, network=profile.network,
+                                  limit=limit, streaming=profile.stream and not metadata, metadata=metadata)
     if health:
         if token and token.encode("ascii") in body:
             raise ApiError("credential_echo")
         return {}
     return stream.result() if stream is not None else _json_object(body)
+
+
+async def _wait_for_request(request, cancelled):
+    operation = asyncio.create_task(request)
+    try:
+        while not operation.done():
+            _cancelled(cancelled)
+            await asyncio.wait({operation}, timeout=0.05)
+        _cancelled(cancelled)
+        return await operation
+    finally:
+        if not operation.done():
+            operation.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await operation
 
 
 def credential(profile, authorize):
@@ -414,6 +447,17 @@ def _answer(raw: dict) -> tuple[str, str, TokenUsage]:
     counts = {name: raw_usage.get(name) for name in TokenUsage.__dataclass_fields__}
     usage = TokenUsage(**{name: value if type(value) is int and value >= 0 else None for name, value in counts.items()})
     return text, reasoning, usage
+
+
+async def complete_chat(profile, data, token, timeout, deadline, *, cancelled=None):
+    _cancelled(cancelled)
+    start = time.monotonic()
+    raw = await _wait_for_request(_exchange(profile, data, token, timeout, deadline), cancelled)
+    _cancelled(cancelled)
+    text, reasoning, usage = _answer(raw)
+    if token and (token in text or token in reasoning):
+        raise ApiError("credential_echo")
+    return ApiResult(profile.id, profile.model, text, reasoning, usage, time.monotonic() - start, ())
 
 
 class ApiClient:
@@ -462,23 +506,5 @@ class ApiClient:
         profile = self._selected[key]
         data = prepare_payload(job, profile, self.images, self.audios)
         token = credential(connection, self.authorize)
-        _cancelled(cancelled)
-        start = time.monotonic()
-        operation = asyncio.create_task(_exchange(profile, data, token, self.timeout, self.deadline))
-        try:
-            while not operation.done():
-                _cancelled(cancelled)
-                await asyncio.wait({operation}, timeout=0.05)
-            _cancelled(cancelled)
-            raw = await operation
-        finally:
-            if not operation.done():
-                operation.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await operation
-        _cancelled(cancelled)
-        text, reasoning, usage = _answer(raw)
-        if token and (token in text or token in reasoning):
-            raise ApiError("credential_echo")
-        return ApiResult(profile.id, profile.model, text, reasoning, usage, time.monotonic() - start,
-                         job.manifest, job.notices)
+        result = await complete_chat(profile, data, token, self.timeout, self.deadline, cancelled=cancelled)
+        return replace(result, manifest=job.manifest, notices=job.notices)

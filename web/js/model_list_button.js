@@ -4,6 +4,7 @@ import { ask, confirmed, element, footNote, frame, mayClose, warned } from "./mm
 
 const NODE_SECTIONS = {
     MiniMaxH3QwenRewriter: [["model", "qwen_rewriters"]],
+    MiniMaxH3ImagePromptWriter: [["writer_model", "writers"], ["caption_model", "captioners"]],
     MiniMaxH3PromptRewriter: [["model", "models"]],
     MiniMaxH3PromptWriter8B: [["model", "models_8b"]],
     MiniMaxH3PromptWriterOmni: [["model", "models_omni"]],

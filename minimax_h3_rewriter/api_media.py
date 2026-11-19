@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass, field
 
 from . import api_config
-from .api_contract import ContractError, ReferenceSpec, positive_int
+from .api_contract import ContractError, ReferenceSpec, identifier, positive_int
 
 MAX_REFERENCES = 12
 MAX_IMAGES = 64
@@ -35,7 +35,7 @@ class PreparedImage:
     jpeg: bytes = field(repr=False)
 
     def __post_init__(self):
-        if not isinstance(self.slot, str) or SLOT.fullmatch(self.slot) is None:
+        if not identifier(self.slot):
             raise ContractError("Invalid image slot.")
         if any(not positive_int(value) for value in (
             self.frame, self.frames, self.source_width, self.source_height, self.width, self.height

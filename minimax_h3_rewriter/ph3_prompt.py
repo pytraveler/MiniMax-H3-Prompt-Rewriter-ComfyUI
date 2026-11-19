@@ -248,6 +248,18 @@ def generate_from_reference(clip, prompt, ratio, picture, max_length=2048, think
     return text, reasoning, description
 
 
+def vision_copy(image):
+    """Keep full-sized output references and limit the local vision model's copy."""
+    height, width = image.shape[1:3]
+    if height * width <= 1_000_000:
+        return image
+    import torch.nn.functional as functional
+
+    scale = math.sqrt(1_000_000 / (height * width))
+    size = [max(32, int(side * scale / 32) * 32) for side in (height, width)]
+    return functional.interpolate(image.movedim(-1, 1), size=size, mode="bilinear", align_corners=False).movedim(1, -1)
+
+
 def generate(clip, prompt, pictures, max_length=2048, thinking=True):
     """Keep the checkpoint's own template and native generation implementation."""
     tokenizer = type(getattr(clip, "tokenizer", None)).__name__
@@ -260,18 +272,7 @@ def generate(clip, prompt, pictures, max_length=2048, thinking=True):
         from comfy_extras.nodes_textgen import TextGenerateV2
     except ImportError as error:
         raise RuntimeError("P-H3 Prompt Writer needs ComfyUI 0.44.0 or newer (Generate Text).") from error
-    import math
-    import torch.nn.functional as functional
-
-    images = {}
-    for index, picture in enumerate(pictures, 1):
-        image = picture.image
-        height, width = image.shape[1:3]
-        if height * width > 1_000_000:
-            scale = math.sqrt(1_000_000 / (height * width))
-            size = [max(32, int(side * scale / 32) * 32) for side in (height, width)]
-            image = functional.interpolate(image.movedim(-1, 1), size=size, mode="bilinear", align_corners=False).movedim(1, -1)
-        images[f"image{index}"] = image
+    images = {f"image{index}": vision_copy(picture.image) for index, picture in enumerate(pictures, 1)}
     answer = TextGenerateV2.execute(
         clip=clip, prompt=prompt, max_length=max_length,
         sampling_mode={"sampling_mode": "off"}, thinking=thinking,

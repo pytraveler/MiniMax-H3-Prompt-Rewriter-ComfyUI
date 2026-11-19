@@ -30,12 +30,12 @@ its nodes, so an old install loses this node alone instead of all of them.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 
 from comfy_api.latest import io
 
-from . import clip_caption, discovery, media, memory, mtmd_engine, previews
+from . import clip_caption, media, memory, mtmd_engine, previews
+from .discovery import check_encoders as _check_encoders
 from .nodes import (
     BYPASS_CAPTION_TOOLTIP,
     CAPTION_LENGTHS,
@@ -189,22 +189,6 @@ def _collect(supplied: dict[str, dict | None], disabled: set[str]) -> tuple[list
                 continue
             assets.append(Asset(name, group.role, group.kind, value))
     return assets, skipped
-
-
-def _check_encoders(mmproj_path: str, kinds: set[str]) -> None:
-    """Refuse before any weights move if the projector cannot read what is connected."""
-    header = discovery.gguf_header(mmproj_path)
-    name = os.path.basename(mmproj_path)
-    if "audio" in kinds and not header["audio"]:
-        raise RuntimeError(
-            f"'{name}' was built without an audio encoder, so this model cannot hear the clips "
-            f"you connected. Pick a captioner whose label lists 'audio', or disconnect the audio."
-        )
-    if kinds & {"image", "video"} and not header["vision"]:
-        raise RuntimeError(
-            f"'{name}' was built without a vision encoder, so this model cannot see. Pick a "
-            f"captioner whose label lists 'vision'."
-        )
 
 
 class MiniMaxH3MultiReferenceCaption(io.ComfyNode):

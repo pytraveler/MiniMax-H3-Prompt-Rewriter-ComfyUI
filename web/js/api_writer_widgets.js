@@ -303,12 +303,6 @@ function build(node) {
 .mmx-api-instruction { max-width: 420px; background: var(--comfy-menu-bg, #353535); color: var(--input-text, #ddd); border: 1px solid #666; border-radius: 6px; }
 .mmx-api-instruction textarea { display: block; width: 380px; height: 120px; margin: 10px 0; }
 .mmx-api-instruction-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
-.mmx-api-models { display: flex; flex-direction: column; gap: 3px; width: 100%; height: 100%; font: 11px system-ui, sans-serif; }
-.mmx-api-model-row { display: flex; gap: 6px; min-height: 25px; }
-.mmx-api-model-row select { flex: 1 1 0; min-width: 0; }
-.mmx-api-model-row select, .mmx-api-model-row button { color: var(--input-text, #ddd); background: var(--comfy-input-bg, #2b2b2b); border: 1px solid var(--border-color, #555); border-radius: 5px; font: inherit; }
-.mmx-api-model-row button { padding: 0 8px; cursor: pointer; }
-.mmx-api-model-note { color: var(--descrip-text, #aaa); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 `);
     const holder = document.createElement("div");
     holder.className = "mmx-api-refs";

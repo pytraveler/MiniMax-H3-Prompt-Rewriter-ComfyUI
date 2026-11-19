@@ -6,7 +6,7 @@
 本地模型，或通过 [API Universal Writer](docs/api_writer.md) 连接已配置的
 本地服务器或远程服务。
 
-节点包还提供 P-H3 图像提示词、参考条件处理、已保存的 RefMod、提示词精简、
+节点包还提供 MiniMax-H3-Image 和 P-H3 提示词扩写、参考条件处理、已保存的 RefMod、提示词精简、
 预设，以及提示词库和模型库。本地写作节点在你的机器上运行；API 请求发送到
 你配置的服务。
 
@@ -98,6 +98,7 @@
   - [MiniMax-H3 Prompt Writer (T2VA/I2VA/FL2VA/L2VA) 提示词写作节点](#minimax-h3-prompt-writer-t2vai2vafl2val2va-提示词写作节点)
   - [MiniMax-H3 Prompt Writer (Ref2VA) 提示词写作节点](#minimax-h3-prompt-writer-ref2va-提示词写作节点)
   - [MiniMax-H3 Universal Writer 通用写作节点](#minimax-h3-universal-writer-通用写作节点)
+  - [MiniMax-H3 Image Prompt Writer](#minimax-h3-image-prompt-writer)
   - [P-H3 Prompt Writer (图像)](#p-h3-prompt-writer-图像)
   - [MiniMax-H3 Reference Caption 参考素材描述](#minimax-h3-reference-caption-参考素材描述)
   - [MiniMax-H3 Multi Reference Caption 多参考素材描述](#minimax-h3-multi-reference-caption-多参考素材描述)
@@ -980,6 +981,44 @@ Load Image、Load Video、Load Audio 或 VideoHelperSuite 的加载器，中间�
 > **这个节点需要较新的 ComfyUI**，理由和 Multi Reference Caption 一样：它那些会
 > 自动增长的输入是 v3 节点 API 里的 `io.Autogrow`。装在旧版本上，这两个节点会直接
 > 不出现，节点包的其余部分照常注册。
+
+### MiniMax-H3 Image Prompt Writer
+
+将简短请求扩写为 [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image)
+所需的详细提示词。没有启用的图片时为文生图，启用 1 至 16 张图片时为图像编辑。
+第一张启用的图片作为底图。拖动参考卡片可以调整顺序，用输入复选框切换启用状态，
+通过 `+ instr` 添加单图指令。IMAGE 批次使用第一帧。
+
+- **Local CLIP**：通过 Load CLIP 加载 `qwen3.5_9b_w4a8_gptq.safetensors`，
+  类型选择 `minimax`，连接到 `upsampler`。这是
+  [ComfyUI H3 Image 模板](https://docs.comfy.org/tutorials/image/minimax/minimax-h3-image)使用的扩写模型。
+- **MiniMax Context IR**：在 ComfyUI 服务端环境设置 `MINIMAX_API_KEY`，
+  或用 **API providers** 选择保存的 MiniMax 配置。配置需要
+  `https://api.minimax.io/v1`（国际站）或 `https://api.minimax.cn/v1`（中国站）、
+  凭证，以及 **Allowed models** 中的 `MiniMax-H3-Image`。
+  [扩写 API](https://platform.minimax.io/docs/api-reference/image-generation-h3-context-ir)
+  接收指令和启用的图片，MiniMax 对扩写计费。
+- **API Writer** 使用所选本地或远程 Chat Completions 服务中的模型。和
+  **API Universal Writer** 一样选择配置及模型。文生图扩写可使用文本模型。
+  图像编辑扩写需要支持图像的模型和可接收交错图文输入的服务，并在
+  **Allowed models** 中启用 `image`。启用的图片按参考卡片顺序发送。
+  [MiniMax 公开的提示词扩写方法](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image-PE)
+- **Local GGUF** 通过节点包的本地 llama.cpp 运行所选模型。文生图从
+  **Writers** 选择模型。图像编辑从 **Captioners** 选择支持图像的 GGUF
+  及其匹配的投影器。**Model list** 会显示 `models/LLM` 中的模型。
+  将 **Rewriter Options** 接到 `local_options` 可设置上下文、采样和显卡。
+  图像编辑使用带 `llama-server` 的 llama.cpp 构建，并按参考卡片顺序传递图片。
+
+在 API Writer 模式下，可连接 **API Writer Options** 以设置 token 上限、
+温度、响应格式和超时时间。使用 `text` 格式时，节点在提示词中要求模型返回 JSON。
+所选模型及服务支持时，可使用 `json_object` 或 `json_schema`。
+`summary` 显示本次请求使用的配置及模型。
+
+将 `prompt`、`width` 和 `height` 连到 ComfyUI 模板中的 **MiniMax H3 Image Conditioning**。
+`aspect_ratio=auto` 使用扩写模型建议的比例。也可以固定比例并选择 `area`，
+或保留 auto 并输入边长为 32 倍数的 `size`。编辑时 **Reference Slots** 可将
+`references` 中的第 1 至 9 张图连到 Conditioning。使用 10 至 16 张图时，
+按参考卡片顺序连接原图。**bypass** 传递原始文本，**repeat_last** 复用会话或提示词库中的结果。
 
 ### P-H3 Prompt Writer (图像)
 

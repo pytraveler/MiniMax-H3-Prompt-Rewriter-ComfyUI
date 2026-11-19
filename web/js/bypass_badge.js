@@ -11,6 +11,7 @@ const WRITERS = [
     "MiniMaxH3UniversalRewriter",
     "MiniMaxH3QwenRewriter",
     "MiniMaxH3PH3Writer",
+    "MiniMaxH3ImagePromptWriter",
 ];
 const CAPTIONERS = ["MiniMaxH3ReferenceCaption", "MiniMaxH3MultiReferenceCaption"];
 const REDUCERS = ["MiniMaxH3PromptReducer"];

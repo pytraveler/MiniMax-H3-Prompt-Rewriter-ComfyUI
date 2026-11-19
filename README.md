@@ -6,7 +6,7 @@ LightX2V LoRAs, [full Qwen SFT/GGUF checkpoints](docs/qwen_rewriter.md), local
 models following MiniMax's writing guide, or the [API Universal Writer](docs/api_writer.md)
 with a configured local server or remote provider.
 
-The pack also includes P-H3 image prompting, reference conditioning, saved
+The pack also includes MiniMax-H3-Image and P-H3 prompt expansion, reference conditioning, saved
 RefMods, prompt reduction, presets and prompt/model libraries. Local writers
 run on your machine; API requests go to the provider you configure.
 
@@ -93,6 +93,7 @@ If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2va
   - [MiniMax-H3 Prompt Writer (T2VA/I2VA/FL2VA/L2VA)](#minimax-h3-prompt-writer-t2vai2vafl2val2va)
   - [MiniMax-H3 Prompt Writer (Ref2VA)](#minimax-h3-prompt-writer-ref2va)
   - [MiniMax-H3 Universal Writer](#minimax-h3-universal-writer)
+  - [MiniMax-H3 Image Prompt Writer](#minimax-h3-image-prompt-writer)
   - [P-H3 Prompt Writer (images)](#p-h3-prompt-writer-images)
   - [MiniMax-H3 Reference Caption](#minimax-h3-reference-caption)
   - [MiniMax-H3 Multi Reference Caption](#minimax-h3-multi-reference-caption)
@@ -1112,6 +1113,51 @@ numbered, for [Reference Slots](#minimax-h3-reference-slots) to wire into
 > Caption does: its growing inputs are `io.Autogrow` from the v3 node API. On an
 > older install these two go missing and the rest of the pack registers as
 > before.
+
+### MiniMax-H3 Image Prompt Writer
+
+Expand an image request into a detailed caption for [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image).
+With no active pictures the writer expands a text-to-image prompt. With one to
+16 active pictures it writes an edit prompt. The first active picture is the base.
+Reorder the chips, disable inputs with their checkboxes, and add instructions via
+`+ instr`. An IMAGE batch contributes its first frame.
+
+- **Local CLIP**: connect `qwen3.5_9b_w4a8_gptq.safetensors` through Load CLIP,
+  type `minimax`. This is the prompt model used in the
+  [ComfyUI H3 Image templates](https://docs.comfy.org/tutorials/image/minimax/minimax-h3-image).
+- **MiniMax Context IR**: set `MINIMAX_API_KEY` in the ComfyUI server environment,
+  or use **API providers** to select a saved profile. The profile needs
+  `https://api.minimax.io/v1` (global) or `https://api.minimax.cn/v1` (China),
+  a credential, and `MiniMax-H3-Image` in **Allowed models**. This calls the
+  [prompt enhancement endpoint](https://platform.minimax.io/docs/api-reference/image-generation-h3-context-ir)
+  with the instruction and enabled pictures. MiniMax bills the expansion.
+- **API Writer** uses the selected Chat Completions model on a configured local
+  or remote server. Pick the profile and model, as in **API Universal Writer**.
+  Text-to-image works with a text model. For Image Edit, enable `image` in the
+  model's **Allowed models** settings and use a server that accepts interleaved
+  text and images. Active pictures are sent in chip order.
+  [MiniMax's public prompt expansion recipes](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image-PE)
+- **Local GGUF** loads the selected model through the pack's local llama.cpp
+  runtime. For Text-to-Image, select a model from **Writers**. For Image Edit,
+  select a vision model and matching projector from **Captioners**. Local files
+  under `models/LLM` are detected by **Model list**. Connect **Rewriter Options**
+  to `local_options` for context, sampling and GPU settings. Image editing uses
+  the llama.cpp build with `llama-server` and the same ordered pictures as API Writer.
+
+Connect **API Writer Options** in API Writer mode to set the token budget,
+temperature, response format and timeout. With response format `text`, the writer
+asks for JSON in the prompt itself. Use `json_object` or `json_schema` when the
+selected model and server support it. The `summary` output shows the profile and
+model used for the request.
+
+Connect `prompt`, `width` and `height` to **MiniMax H3 Image Conditioning**
+in the ComfyUI template. With `aspect_ratio=auto` the writer uses the expander's
+recommendation. Choose a fixed ratio and `area` for control over the canvas,
+or enter an exact `size` with edges divisible by 32 and leave the ratio on auto.
+For editing, **Reference Slots** passes pictures 1 to 9 from `references` to
+Conditioning. For 10 to 16 pictures, wire the originals to Conditioning in chip
+order. Use **bypass** to pass through your text or **repeat_last** to reuse an
+expansion from the session or prompt library.
 
 ### P-H3 Prompt Writer (images)
 

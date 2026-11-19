@@ -6,7 +6,7 @@
 локальные модели с официальным гайдом MiniMax или [API Universal Writer](docs/api_writer_RU.md)
 с настроенным локальным сервером либо удалённым провайдером.
 
-В пак также входят промты для изображений P-H3, кондиционирование референсов,
+В пак также входят расширение промтов для MiniMax-H3-Image и P-H3, кондиционирование референсов,
 сохранённые RefMod, сокращение промтов, пресеты и библиотеки промтов и моделей.
 Локальные писатели работают на вашей машине; API-запросы отправляются
 выбранному провайдеру.
@@ -94,6 +94,7 @@
   - [MiniMax-H3 Prompt Writer (T2VA/I2VA/FL2VA/L2VA)](#minimax-h3-prompt-writer-t2vai2vafl2val2va)
   - [MiniMax-H3 Prompt Writer (Ref2VA)](#minimax-h3-prompt-writer-ref2va)
   - [MiniMax-H3 Universal Writer](#minimax-h3-universal-writer)
+  - [MiniMax-H3 Image Prompt Writer](#minimax-h3-image-prompt-writer)
   - [P-H3 Prompt Writer (изображения)](#p-h3-prompt-writer-изображения)
   - [MiniMax-H3 Reference Caption](#minimax-h3-reference-caption)
   - [MiniMax-H3 Multi Reference Caption](#minimax-h3-multi-reference-caption)
@@ -1102,6 +1103,51 @@ Ref2VA и сам блок референсов. Задача, которая к�
 > **Ноде нужен свежий ComfyUI** — по той же причине, что и Multi Reference
 > Caption: её растущие входы это `io.Autogrow` из v3-API нод. На старой сборке
 > пропадают только эти две ноды, остальной пак регистрируется как прежде.
+
+### MiniMax-H3 Image Prompt Writer
+
+Разворачивает короткий запрос в подробный промпт для [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image).
+Без активных картинок нода пишет промпт для генерации по тексту. Если подключить
+от 1 до 16 картинок, она пишет промпт для редактирования. Первая активная картинка
+служит основой. Перетаскивайте чипы для смены порядка, отключайте входы чекбоксами
+и добавляйте указания через `+ instr`. Из IMAGE-батча берётся первый кадр.
+
+- **Local CLIP**: подключите `qwen3.5_9b_w4a8_gptq.safetensors` через Load CLIP
+  с типом `minimax`. Это модель расширения промптов из
+  [шаблонов H3 Image для ComfyUI](https://docs.comfy.org/tutorials/image/minimax/minimax-h3-image).
+- **MiniMax Context IR**: задайте `MINIMAX_API_KEY` в окружении сервера ComfyUI
+  или выберите через **API providers** сохранённый профиль. Укажите в нём
+  `https://api.minimax.io/v1` (global) или `https://api.minimax.cn/v1` (Китай),
+  источник ключа и `MiniMax-H3-Image` в **Allowed models**. Запрос и активные
+  картинки отправляются в [API расширения промптов](https://platform.minimax.io/docs/api-reference/image-generation-h3-context-ir).
+  MiniMax тарифицирует расширение.
+- **API Writer** использует выбранную модель на локальном или удалённом сервере
+  Chat Completions. Профиль и модель выбираются как в **API Universal Writer**.
+  Для генерации по тексту подойдёт текстовая модель. Для Image Edit выберите
+  модель с поддержкой изображений, включите `image` в **Allowed models** и
+  проверьте, что сервер принимает текст и картинки в одном запросе. Картинки
+  отправляются в порядке активных чипов.
+  [Открытые инструкции MiniMax для расширения промптов](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image-PE)
+- **Local GGUF** запускает выбранную модель через локальный рантайм llama.cpp.
+  Для генерации по тексту выберите модель из **Writers**. Для Image Edit
+  выберите пару GGUF и подходящего проектора из **Captioners**. В **Model list**
+  отображаются модели из `models/LLM`. Подключите **Rewriter Options** к
+  `local_options`, чтобы настроить контекст, сэмплирование и GPU. Для Image Edit
+  используется сборка llama.cpp с `llama-server`, картинки идут в порядке чипов.
+
+В режиме API Writer через **API Writer Options** задаются лимит токенов,
+температура, формат ответа и таймаут. С форматом `text` нода просит вернуть JSON
+в самой инструкции. Форматы `json_object` и `json_schema` можно выбрать, если их
+поддерживают модель и сервер. Выход `summary` показывает использованные профиль
+и модель.
+
+Подключите `prompt`, `width` и `height` к **MiniMax H3 Image Conditioning** из
+шаблона ComfyUI. При `aspect_ratio=auto` пропорции выбирает модель. Можно задать
+свои пропорции и `area` или точный `size` со сторонами, кратными 32, оставив
+пропорции на auto. При редактировании **Reference Slots** передаёт из
+`references` картинки с 1-й по 9-ю. Для 10–16 картинок подключите оригиналы
+к Conditioning в порядке чипов. **bypass** пропускает исходный текст, а
+**repeat_last** подставляет результат из текущей сессии или библиотеки промптов.
 
 ### P-H3 Prompt Writer (изображения)
 

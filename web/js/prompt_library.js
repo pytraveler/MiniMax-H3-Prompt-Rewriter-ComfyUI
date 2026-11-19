@@ -32,6 +32,7 @@ const NODES = [
     "MiniMaxH3UniversalRewriter",
     "MiniMaxH3QwenRewriter",
     "MiniMaxH3PH3Writer",
+    "MiniMaxH3ImagePromptWriter",
 ];
 const OPTIONS_NODE = "MiniMaxH3RewriterOptions";
 const CHECK_NODE = "MiniMaxH3PromptCheck";

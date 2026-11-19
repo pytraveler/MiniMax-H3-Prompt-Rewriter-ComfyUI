@@ -1,4 +1,38 @@
 {
+  "MiniMaxH3ImagePromptWriter": {
+    "display_name": "MiniMax-H3 Image: расширение промптов",
+    "description": "Составляет подробные промпты для MiniMax-H3-Image. Без картинок пишет промпт по тексту, с картинками составляет инструкцию для редактирования. Поддерживает Local CLIP, Local GGUF, MiniMax Context IR и API Writer.",
+    "inputs": {
+      "backend": {
+        "name": "способ расширения",
+        "tooltip": "Local CLIP использует подключённую модель. Local GGUF загружает модель из Model list. MiniMax Context IR обращается к MiniMax. API Writer обращается к выбранной модели Chat Completions."
+      },
+      "prompt": { "name": "запрос" },
+      "aspect_ratio": { "name": "пропорции" },
+      "area": { "name": "площадь холста" },
+      "upsampler": { "name": "модель расширения" },
+      "size": { "name": "точный размер" },
+      "profile_id": { "name": "профиль API" },
+      "max_length": { "name": "лимит токенов" },
+      "thinking": { "name": "размышление" },
+      "model": { "name": "модель API" },
+      "options": { "name": "настройки API" },
+      "image_max_side": { "name": "макс. сторона копии" },
+      "writer_model": { "name": "текстовая GGUF-модель" },
+      "caption_model": { "name": "GGUF-модель с проектором" },
+      "local_options": { "name": "настройки GGUF" },
+      "keep_model_loaded": { "name": "оставить модель загруженной" }
+    },
+    "outputs": {
+      "0": { "name": "промпт" },
+      "1": { "name": "ширина" },
+      "2": { "name": "высота" },
+      "3": { "name": "пропорции" },
+      "4": { "name": "референсы" },
+      "5": { "name": "размышление" },
+      "6": { "name": "сводка" }
+    }
+  },
   "MiniMaxH3PH3Writer": {
     "display_name": "P-H3: писатель промптов",
     "description": "Пишет промпты Text2Image и Image2Image официальным upsampler Pruna. Load CLIP с типом minimax загружает модель p-h3-image_prompt_upsampler. Первая включённая картинка служит основой, остальные - референсами. Визуальные RefMod разворачиваются в картинки для повторного кодирования P-H3.",
