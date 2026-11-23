@@ -6,6 +6,19 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.37.0 - 2026-11-23
+
+### Added
+
+- Star catalog entries or models found on disk in **Model list**. Favorites appear first in the corresponding node dropdowns. Search by name or file and filter by availability.
+- Select a model directly from **Model list**. Nodes with multiple model fields have a button for each field, such as **Captioner models** and **Writer models**. Each row shows the model folder or download destination relative to its configured directory.
+- Enable **Search nested folders** in **Model list** to find and use models deeper in the configured model directories. The setting applies to the whole pack and starts off. **Rescan folders** refreshes the editor and node dropdowns after you copy model files.
+
+### Changed
+
+- Model dropdowns put **[On disk]**, **[Download needed]** or **[Files missing]** before the model name. Workflows store the original model value.
+- **On disk** requires nonempty files, including the `mmproj` for multimodal GGUF and all shards listed in a safetensors index.
+
 ## 0.36.0 - 2026-11-20
 
 ### Added

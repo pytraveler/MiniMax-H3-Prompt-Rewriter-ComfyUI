@@ -60,6 +60,7 @@ from .paths import (
     adapter_is_complete,
     base_model_is_complete,
     catalog_file,
+    file_is_present,
     local_dir_for_repo,
     models_root,
     present_file,
@@ -152,6 +153,7 @@ _MODEL_MAP: dict[str, Choice] = {}
 
 
 def _build_model_map() -> dict[str, Choice]:
+    global _MODEL_MAP
     mapping: dict[str, Choice] = {}
     held = []
     try:
@@ -176,8 +178,7 @@ def _build_model_map() -> dict[str, Choice]:
     except Exception:
         log.warning("[minimax_h3_rewriter._build_model_map] gguf scan failed", exc_info=True)
 
-    _MODEL_MAP.clear()
-    _MODEL_MAP.update(mapping)
+    _MODEL_MAP = mapping
     return mapping
 
 
@@ -266,8 +267,8 @@ def named_verdicts(*verdicts: tuple[str, bool | str]) -> bool | str:
     return "\n".join(failed) if failed else True
 
 
-def model_choices() -> list[str]:
-    choices = _shown(_build_model_map())
+def model_choices(mapping=None) -> list[str]:
+    choices = _shown(_build_model_map() if mapping is None else mapping)
     return _announce(choices or [BASE_MODEL_REPO])
 
 
@@ -305,6 +306,7 @@ def _build_writer_map() -> dict[str, Choice]:
     the file is a GGUF language model with a chat template. That is what makes a
     4B on an 8 GB card a real answer rather than a consolation prize.
     """
+    global _WRITER_MAP
     mapping: dict[str, Choice] = {}
     held = []
     try:
@@ -327,13 +329,12 @@ def _build_writer_map() -> dict[str, Choice]:
     except Exception:
         log.warning("[minimax_h3_rewriter._build_writer_map] ollama scan failed", exc_info=True)
 
-    _WRITER_MAP.clear()
-    _WRITER_MAP.update(mapping)
+    _WRITER_MAP = mapping
     return mapping
 
 
-def writer_choices() -> list[str]:
-    choices = _shown(_build_writer_map())
+def writer_choices(mapping=None) -> list[str]:
+    choices = _shown(_build_writer_map() if mapping is None else mapping)
     return _announce(choices or ["(no GGUF model found — see the model list)"])
 
 
@@ -374,6 +375,7 @@ _CAPTIONER_MAP: dict[str, CaptionerChoice] = {}
 
 
 def _build_captioner_map() -> dict[str, CaptionerChoice]:
+    global _CAPTIONER_MAP
     mapping: dict[str, CaptionerChoice] = {}
     held = []
     try:
@@ -406,13 +408,12 @@ def _build_captioner_map() -> dict[str, CaptionerChoice]:
     except Exception:
         log.warning("[minimax_h3_rewriter._build_captioner_map] ollama scan failed", exc_info=True)
 
-    _CAPTIONER_MAP.clear()
-    _CAPTIONER_MAP.update(mapping)
+    _CAPTIONER_MAP = mapping
     return mapping
 
 
-def captioner_choices() -> list[str]:
-    choices = _shown(_build_captioner_map())
+def captioner_choices(mapping=None) -> list[str]:
+    choices = _shown(_build_captioner_map() if mapping is None else mapping)
     return _announce(choices or ["(no multimodal model found — see the model list)"])
 
 
@@ -571,7 +572,7 @@ def _ensure_file(repo_id: str, filename: str, label: str, settings: dict, progre
     on_disk = catalog_file(repo_id, filename)
     if on_disk:
         raise RuntimeError(
-            f"{label}: '{on_disk}' does not exist. The entry points at a folder on this "
+            f"{label}: '{on_disk}' is missing or empty. The entry points at a folder on this "
             f"machine, so nothing is downloaded — check the path and the file name."
         )
     if os.path.isabs(repo_id):
@@ -610,9 +611,9 @@ def _ensure_pair(
         return found
     on_disk = tuple(catalog_file(repo_id, name) for name in (file, mmproj))
     if all(on_disk):
-        missing = [path for path in on_disk if not os.path.isfile(path)]
+        missing = [path for path in on_disk if not file_is_present(path)]
         raise RuntimeError(
-            f"{label}: {', '.join(repr(path) for path in missing)} does not exist. The entry "
+            f"{label}: {', '.join(repr(path) for path in missing)} is missing or empty. The entry "
             f"points at a folder on this machine, so nothing is downloaded — check the path "
             f"and the file names."
         )
@@ -621,7 +622,7 @@ def _ensure_pair(
     targets = tuple(os.path.join(directory, name) for name in (file, mmproj))
 
     def complete() -> bool:
-        return all(os.path.isfile(path) and os.path.getsize(path) > 0 for path in targets)
+        return all(file_is_present(path) for path in targets)
 
     if os.path.isabs(repo_id):
         raise RuntimeError(

@@ -56,26 +56,28 @@ def _build_model_map():
                 continue
             mapping[LOCAL + label] = Choice(model, "gguf", task, mmproj=projector, local=True,
                                             copy_of=model_sections.copy_of(held, model, projector))
+        depth = paths.scan_depth(1)
         for root in paths.llm_roots():
-            if not os.path.isdir(root):
-                continue
-            for entry in os.scandir(root):
-                if not entry.is_dir():
+            for directory in paths.model_tree(root, depth).folders:
+                if paths.same_path(root, directory):
                     continue
                 try:
-                    task = family(entry.name)
+                    task = family(os.path.basename(directory))
                 except ValueError:
                     continue
-                if paths.base_model_is_complete(entry.path) and not native_problem(entry.path):
-                    mapping[LOCAL + entry.name] = Choice(entry.path, "transformers", task, local=True,
-                                                         copy_of=model_sections.copy_of(held, entry.path))
+                if paths.base_model_is_complete(directory) and not native_problem(directory):
+                    label = paths.nested_label(root, directory, 0)
+                    mapping[LOCAL + label] = Choice(directory, "transformers", task, local=True,
+                                                    copy_of=model_sections.copy_of(held, directory))
     except (OSError, ImportError):
         log.info("[minimax_h3_rewriter.qwen] local model scan unavailable")
     return mapping
 
 
-def model_choices():
-    choices = [label for label, choice in _build_model_map().items() if not choice.copy_of]
+def model_choices(mapping=None):
+    if mapping is None:
+        mapping = _build_model_map()
+    choices = [label for label, choice in mapping.items() if not choice.copy_of]
     return (["!! " + catalog.problem()] if catalog.problem() else []) + (choices or ["Add a Qwen Ref2VA or FL2VA model in Model list"])
 
 

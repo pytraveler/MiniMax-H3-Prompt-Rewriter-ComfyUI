@@ -30,8 +30,10 @@ log = logging.getLogger(__name__)
 PREFIX = "/minimax_h3_rewriter"
 
 
-def _model_list(node: str) -> dict:
+def _model_list(node: str, rescan: bool = False) -> dict:
     """Everything the model-list window needs to draw itself for one node."""
+    if rescan:
+        paths.clear_model_scan()
     wanted = model_sections.sections_of(node) or tuple(model_sections.SECTIONS)
     writable, refusal = True, ""
     try:
@@ -43,6 +45,7 @@ def _model_list(node: str) -> dict:
         "path": catalog.user_file(),
         "writable": writable,
         "problem": refusal,
+        "search_nested_folders": catalog.search_nested_folders(),
         "sections": [model_sections.listing(one) for one in wanted],
     }
 
@@ -559,7 +562,7 @@ def register() -> None:
         Anything else is a bug and is logged as one.
         """
         try:
-            return web.json_response(await off_loop(work, *args))
+            return web.json_response(await off_loop(work, *args), headers={"Cache-Control": "no-store"})
         except (RuntimeError, KeyError) as error:
             return refused(error)
         except Exception as error:  # noqa: BLE001 - the window has to say something
@@ -569,7 +572,46 @@ def register() -> None:
     @routes.get(f"{PREFIX}/model_list")
     async def model_list(request):
         """The lists one node reads, what may go in them, and what is in them now."""
-        return await answered(_model_list, request.query.get("node") or "")
+        return await answered(_model_list, request.query.get("node") or "", request.query.get("rescan") == "1")
+
+    @routes.get(f"{PREFIX}/model_list/options")
+    async def model_list_options(request):
+        """The dropdown values and their current disk and favorite states."""
+        wanted = set(request.query.get("sections", "").split(","))
+        def inventory():
+            return {
+                "ok": True,
+                "options": {one: model_sections.model_options(one) for one in model_sections.SECTIONS if one in wanted},
+            }
+
+        return await answered(inventory)
+
+    @routes.post(f"{PREFIX}/model_list/favorite")
+    async def model_list_favorite(request):
+        body = await request.json()
+        favorite = body.get("favorite")
+        if type(favorite) is not bool:
+            return refused("Choose whether to add or remove the favorite.")
+
+        def change():
+            model_sections.set_favorite(str(body.get("section") or ""), str(body.get("label") or ""), favorite)
+            return {"ok": True}
+
+        return await answered(change)
+
+    @routes.post(f"{PREFIX}/model_list/search")
+    async def model_list_search(request):
+        body = await request.json()
+        enabled = body.get("enabled")
+        if type(enabled) is not bool:
+            return refused("Choose whether to search nested model folders.")
+
+        def change():
+            catalog.set_search_nested_folders(enabled)
+            paths.clear_model_scan()
+            return {"ok": True}
+
+        return await answered(change)
 
     @routes.post(f"{PREFIX}/model_list/save")
     async def model_list_save(request):

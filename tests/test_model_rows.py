@@ -333,7 +333,112 @@ def test_the_window_marks_an_entry_that_is_already_here(live, scanned):
     shown = sections.listing("writers")
     mine = next(one for one in shown["entries"] if one["name"] == "Mine")
     assert mine["on_disk"] and mine["scanned"]
+    assert shown["options"]["details"][mine["label"]]["folder"] == "LLM"
     assert not any("mine.gguf" in one for one in shown["found"])
+
+
+def test_options_report_availability_without_changing_model_values(live, scanned):
+    catalog.add("writers", MINE)
+    broken = dict(MINE, name="Local file", repo=str(live), file="missing.gguf")
+    catalog.add("writers", broken)
+    label = catalog.entry_label(MINE)
+    before = sections.model_options("writers")
+    assert before["details"][label]["status"] == "download"
+    assert before["details"][catalog.entry_label(broken)]["status"] == "missing"
+
+    put(live, MINE["file"])
+    after = sections.model_options("writers")
+    assert after["values"] == before["values"]
+    assert after["details"][label]["status"] == "on_disk"
+
+
+def test_favorites_follow_catalog_edits_and_local_file_labels(live, scanned):
+    catalog.add("writers", MINE)
+    sections.set_favorite("writers", catalog.entry_label(MINE), True)
+    renamed = dict(MINE, name="Renamed", note="new note")
+    catalog.update("writers", MINE["name"], renamed)
+    assert sections.model_options("writers")["details"][catalog.entry_label(renamed)]["favorite"]
+
+    path = put(live, "another.gguf")
+    local = nodes.LOCAL_PREFIX + row_for(path)
+    scanned.rows = [(row_for(path), str(path))]
+    sections.set_favorite("writers", local, True)
+    catalog._DATA_CACHE.clear()
+    new_label = local.replace("0.0 GB", "1.0 GB")
+    scanned.rows = [(new_label.removeprefix(nodes.LOCAL_PREFIX), str(path))]
+    assert sections.model_options("writers")["details"][new_label]["favorite"]
+    sections.set_favorite("writers", new_label, False)
+    assert not sections.model_options("writers")["details"][new_label]["favorite"]
+
+
+def test_nested_scan_and_runtime_reuse_the_same_file(live, monkeypatch):
+    root = live / "extra" / "text" / "custom"
+    root.mkdir(parents=True)
+    model = gguf(root / MINE["file"], "{{ messages[0].content }}")
+    monkeypatch.setattr(discovery, "_comfy_roots", lambda *_: [str(live)])
+    monkeypatch.setattr(ollama_store, "scan_writers", lambda: [])
+    monkeypatch.setattr(nodes, "_fetch", lambda *a, **k: pytest.fail("downloaded again"))
+    catalog.add("writers", MINE)
+    label = catalog.entry_label(MINE)
+
+    assert str(model) not in dict(discovery.scan_writer_gguf()).values()
+    assert sections.model_options("writers")["details"][label]["status"] == "download"
+
+    catalog.set_search_nested_folders(True)
+    assert str(model) in dict(discovery.scan_writer_gguf()).values()
+    listed = sections.listing("writers")
+    assert listed["options"]["details"][label]["status"] == "on_disk"
+    assert listed["options"]["details"][label]["folder"] == "LLM/extra/text/custom"
+    assert not any(model.name in row for row in listed["found"])
+    assert nodes._ensure_file(MINE["repo"], model.name, "Writer", {"auto_download": True}, None) == str(model)
+
+
+@pytest.mark.parametrize(("section", "fields", "folder"), [
+    ("writers", {"format": "gguf", "file": "quants/mine.gguf"}, "LLM/quants"),
+    ("captioners", {"format": "gguf", "file": "quants/mine.gguf", "mmproj": "mmproj.gguf"},
+     "LLM/mine-GGUF/quants"),
+    ("models", {"format": "transformers"}, "LLM/mine-GGUF"),
+])
+def test_model_list_shows_the_loader_destination(live, scanned, section, fields, folder):
+    entry = {"name": MINE["name"], "repo": MINE["repo"], **fields}
+    catalog.add(section, entry)
+    detail = sections.listing(section)["options"]["details"][catalog.entry_label(entry)]
+    assert detail["status"] == "download"
+    assert detail["folder"] == folder
+
+
+def test_model_list_uses_a_relative_alias_for_registered_and_external_files(live, scanned, tmp_path, monkeypatch):
+    encoder_root = tmp_path / "other" / "encoders"
+    local = put(encoder_root / "alibaba" / "qwen", "qwen.gguf")
+    external = put(tmp_path / "external" / "manual", "manual.gguf")
+    scanned.rows = [(row_for(file), str(file)) for file in (local, external)]
+    monkeypatch.setattr(discovery, "_comfy_roots", lambda names: [str(encoder_root)] if names == ("text_encoders",) else [])
+
+    details = sections.listing("writers")["options"]["details"]
+    assert details[nodes.LOCAL_PREFIX + row_for(local)]["folder"] == "text_encoders/alibaba/qwen"
+    assert details[nodes.LOCAL_PREFIX + row_for(external)]["folder"] == "Local/manual"
+
+
+def test_nested_search_requires_the_pair_and_a_complete_checkpoint(live, monkeypatch):
+    monkeypatch.setattr(discovery, "_comfy_roots", lambda *_: [str(live)])
+    catalog.set_search_nested_folders(True)
+    folder = live / "family" / "year" / "quant"
+    model = put(folder, "model.gguf")
+    put(folder.parent, "mmproj.gguf")
+    repo = "someone/quant"
+    assert sections.on_disk("captioners", "gguf", repo, model.name, "mmproj.gguf") == ()
+
+    projector = put(folder, "mmproj.gguf")
+    assert paths.present_pair(repo, model.name, projector.name) == (str(model), str(projector))
+
+    checkpoint = folder / "SFT"
+    put(checkpoint, "config.json", b"{}")
+    put(checkpoint, "model.safetensors.index.json", b'{"weight_map":{"layer":"model.safetensors"}}')
+    put(checkpoint, "model.safetensors", b"")
+    assert not paths.present_folder("someone/SFT")
+    put(checkpoint, "model.safetensors")
+    paths.clear_model_scan()
+    assert paths.present_folder("someone/SFT") == str(checkpoint)
 
 
 UINT32, STRING = 4, 8

@@ -351,6 +351,7 @@ _MODEL_MAP: dict[str, BaseChoice] = {}
 
 def _build_model_map() -> dict[str, BaseChoice]:
     """The Omni base models, in both shapes the adapter is published for."""
+    global _MODEL_MAP
     mapping: dict[str, BaseChoice] = {}
     held = []
     try:
@@ -386,13 +387,12 @@ def _build_model_map() -> dict[str, BaseChoice]:
     except Exception:
         log.warning("[minimax_h3_rewriter.writer_omni] gguf scan failed", exc_info=True)
 
-    _MODEL_MAP.clear()
-    _MODEL_MAP.update(mapping)
+    _MODEL_MAP = mapping
     return mapping
 
 
-def model_choices() -> list[str]:
-    choices = _shown(_build_model_map())
+def model_choices(mapping=None) -> list[str]:
+    choices = _shown(_build_model_map() if mapping is None else mapping)
     return _announce(choices or ["(no Qwen2.5-Omni base found -- see the model list)"])
 
 

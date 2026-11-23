@@ -6,6 +6,10 @@ import json
 import logging
 import os
 import re
+import stat
+import threading
+import time
+from dataclasses import dataclass
 
 from .constants import ADAPTER_FILES, MODELS_SUBDIR
 
@@ -146,6 +150,115 @@ def llm_roots() -> list[str]:
     return found
 
 
+@dataclass(frozen=True)
+class ModelTree:
+    folders: tuple[str, ...]
+    ggufs: tuple[str, ...]
+
+
+_SCAN_TTL = 5.0
+_SCAN_LOCK = threading.Lock()
+_TREES: dict[str, tuple[float, ModelTree]] = {}
+
+
+def clear_model_scan() -> None:
+    with _SCAN_LOCK:
+        _TREES.clear()
+
+
+def _directory_link(entry: os.DirEntry) -> bool:
+    if entry.is_symlink():
+        return True
+    if os.name == "nt":
+        attrs = entry.stat(follow_symlinks=False).st_file_attributes
+        return bool(attrs & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+    return False
+
+
+def _walk_models(root: str, depth: int | None) -> ModelTree:
+    folders, ggufs = [], []
+    stack = [(root, 0)]
+    while stack:
+        directory, level = stack.pop()
+        try:
+            with os.scandir(directory) as listing:
+                entries = sorted(listing, key=lambda entry: entry.name)
+        except OSError:
+            continue
+        folders.append(directory)
+        for entry in entries:
+            try:
+                if entry.is_dir():
+                    if depth is None:
+                        if not _directory_link(entry):
+                            stack.append((entry.path, level + 1))
+                    elif level < depth:
+                        stack.append((entry.path, level + 1))
+                elif entry.name.lower().endswith(".gguf"):
+                    ggufs.append(entry.path)
+            except OSError:
+                continue
+    return ModelTree(tuple(folders), tuple(ggufs))
+
+
+def model_tree(root: str, depth: int | None) -> ModelTree:
+    """List the configured root once across model choices and file lookups."""
+    if depth is not None:
+        return _walk_models(root, depth)
+    with _SCAN_LOCK:
+        cached = _TREES.get(path_key(root))
+        if cached is not None and time.monotonic() - cached[0] < _SCAN_TTL:
+            return cached[1]
+        tree = _walk_models(root, None)
+        _TREES[path_key(root)] = (time.monotonic(), tree)
+        return tree
+
+
+def scan_depth(default: int) -> int | None:
+    from . import catalog
+
+    return None if catalog.search_nested_folders() else default
+
+
+def nested_label(root: str, path: str, default_depth: int) -> str:
+    """Keep the names of previously listed files; identify new ones by folder."""
+    relative = os.path.relpath(path, root)
+    return relative if relative.count(os.sep) > default_depth else os.path.basename(path)
+
+
+def _nested_file_roots(roots: list[str]) -> list[str]:
+    from .discovery import GGUF_FOLDERS, _comfy_roots
+
+    return list(dict.fromkeys(roots + _comfy_roots(GGUF_FOLDERS)))
+
+
+def _nested_parents(name: str, roots: list[str]):
+    """Folders containing a GGUF under its exact relative name in the repository."""
+    parts = os.path.normpath(name).split(os.sep)
+    if os.path.isabs(name) or ".." in parts or not name.lower().endswith(".gguf"):
+        return
+    for root in _nested_file_roots(roots):
+        for path in model_tree(root, None).ggufs:
+            if os.path.normcase(os.path.basename(path)) != os.path.normcase(parts[-1]):
+                continue
+            parent = path
+            for _ in parts:
+                parent = os.path.dirname(parent)
+            if same_path(path, os.path.join(parent, name)):
+                yield parent
+
+
+def _unique_location(candidates, repo_folder: str):
+    """Prefer the repo's folder. An ambiguous filename is offered via the local scan."""
+    locations = {path_key(folder): result for folder, result in candidates}
+    preferred = [
+        result for folder, result in locations.items()
+        if os.path.basename(folder) == os.path.normcase(repo_folder)
+    ]
+    matches = preferred or list(locations.values())
+    return matches[0] if len(matches) == 1 else None
+
+
 def present_file(repo: str, name: str) -> str:
     """Where one file of an entry already is, so that running it downloads nothing.
 
@@ -158,17 +271,24 @@ def present_file(repo: str, name: str) -> str:
     """
     on_disk = catalog_file(repo, name)
     if on_disk:
-        return on_disk if os.path.isfile(on_disk) else ""
+        return on_disk if file_is_present(on_disk) else ""
     if not name or os.path.isabs(repo or ""):
         return ""
     folder = (repo or "").rstrip("/").split("/")[-1]
-    for root in llm_roots():
+    roots = llm_roots()
+    for root in roots:
         candidates = [os.path.join(root, name)]
         if folder:
             candidates.append(os.path.join(root, folder, name))
         for candidate in candidates:
-            if _present(candidate):
+            if file_is_present(candidate):
                 return candidate
+    if scan_depth(0) is None:
+        candidates = (
+            (parent, os.path.join(parent, name)) for parent in _nested_parents(name, roots)
+            if file_is_present(os.path.join(parent, name))
+        )
+        return _unique_location(candidates, folder) or ""
     return ""
 
 
@@ -186,13 +306,25 @@ def present_pair(repo: str, file: str, mmproj: str) -> tuple[str, str] | None:
     """
     on_disk = (catalog_file(repo, file), catalog_file(repo, mmproj))
     if all(on_disk):
-        return on_disk if all(os.path.isfile(path) for path in on_disk) else None
+        return on_disk if all(file_is_present(path) for path in on_disk) else None
+    if not file or not mmproj or os.path.isabs(repo or ""):
+        return None
     folder = (repo or "").rstrip("/").split("/")[-1]
-    for root in llm_roots():
+    roots = llm_roots()
+    for root in roots:
         for where in ((root, folder) if folder else (root,), (root,)):
             targets = (os.path.join(*where, file), os.path.join(*where, mmproj))
-            if all(_present(path) for path in targets):
+            if all(file_is_present(path) for path in targets):
                 return targets
+    if scan_depth(0) is None:
+        candidates = (
+            (parent, (os.path.join(parent, file), os.path.join(parent, mmproj)))
+            for parent in _nested_parents(file, roots)
+        )
+        return _unique_location(
+            ((parent, pair) for parent, pair in candidates if all(file_is_present(path) for path in pair)),
+            folder,
+        )
     return None
 
 
@@ -208,10 +340,18 @@ def present_folder(value: str, default_repo: str = "", complete=None) -> str:
     if os.path.isabs(value):
         return os.path.normpath(value) if complete(value) else ""
     name = value.rstrip("/").split("/")[-1] if looks_like_repo_id(value) else value
-    for root in llm_roots():
+    roots = llm_roots()
+    for root in roots:
         candidate = os.path.join(root, name)
         if complete(candidate):
             return candidate
+    if name and os.path.basename(name) == name and scan_depth(0) is None:
+        from .discovery import SCAN_FOLDERS, _comfy_roots
+
+        for root in dict.fromkeys(roots + _comfy_roots(SCAN_FOLDERS)):
+            for folder in model_tree(root, None).folders:
+                if os.path.normcase(os.path.basename(folder)) == os.path.normcase(name) and complete(folder):
+                    return folder
     return ""
 
 
@@ -219,7 +359,11 @@ def same_path(one: str, other: str) -> bool:
     """Whether two paths name one file, however each was spelt."""
     if not one or not other:
         return False
-    return os.path.normcase(os.path.abspath(one)) == os.path.normcase(os.path.abspath(other))
+    return path_key(one) == path_key(other)
+
+
+def path_key(path: str) -> str:
+    return os.path.normcase(os.path.abspath(path))
 
 
 def resolve_source(value: str, default_repo: str) -> tuple[str, str]:
@@ -252,29 +396,34 @@ def _shard_names(directory: str) -> list[str] | None:
     try:
         with open(index, "r", encoding="utf-8") as handle:
             weight_map = json.load(handle).get("weight_map", {})
-    except (OSError, ValueError):
-        return None
+    except (OSError, ValueError, AttributeError):
+        return []
+    if not isinstance(weight_map, dict) or any(not isinstance(name, str) or not name for name in weight_map.values()):
+        return []
     return sorted(set(weight_map.values()))
 
 
-def _present(path: str) -> bool:
-    return os.path.isfile(path) and os.path.getsize(path) > 0
+def file_is_present(path: str) -> bool:
+    try:
+        return os.path.isfile(path) and os.path.getsize(path) > 0
+    except OSError:
+        return False
 
 
 def base_model_is_complete(directory: str) -> bool:
-    if not _present(os.path.join(directory, "config.json")):
+    if not file_is_present(os.path.join(directory, "config.json")):
         return False
 
     shards = _shard_names(directory)
     if shards is not None:
-        return all(_present(os.path.join(directory, name)) for name in shards)
+        return bool(shards) and all(file_is_present(os.path.join(directory, name)) for name in shards)
 
     try:
         entries = os.listdir(directory)
     except OSError:
         return False
-    return any(name.endswith(".safetensors") for name in entries)
+    return any(name.endswith(".safetensors") and file_is_present(os.path.join(directory, name)) for name in entries)
 
 
 def adapter_is_complete(directory: str) -> bool:
-    return all(_present(os.path.join(directory, name)) for name in ADAPTER_FILES)
+    return all(file_is_present(os.path.join(directory, name)) for name in ADAPTER_FILES)

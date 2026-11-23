@@ -1,4 +1,5 @@
 import { app } from "../../scripts/app.js";
+import { api } from "../../scripts/api.js";
 import { buttonRow, installStyle, setWidgetValue, told, widgetNamed } from "./mmx_controls.js";
 import { ask, confirmed, element, footNote, frame, mayClose, warned } from "./mmx_window.js";
 
@@ -39,6 +40,13 @@ const LIST_FILE = {
 };
 
 const LIST_LABEL = "Model list";
+const MODEL_BUTTON_LABELS = {
+    caption_model: "Captioner models",
+    writer_model: "Writer models",
+    model_27b: "27B models",
+    model_8b: "8B models",
+    model_omni: "Omni models",
+};
 const LIST_TOOLTIP =
     "Add, edit and delete the models this node offers, and check one before you " +
     "download it: a file already on this machine is read outright, and a Hugging " +
@@ -96,15 +104,36 @@ const STYLE = `
 .mmxmod-name { font-size: 13px; font-weight: 600; word-break: break-word; }
 .mmxmod-where { font-size: 11px; color: var(--descrip-text, #999); margin-top: 3px;
     word-break: break-all; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.mmxmod-location { display: inline-block; margin-right: 6px; padding: 1px 5px;
+    background: var(--comfy-input-bg, #2b2b2b); color: var(--input-text, #ddd);
+    border: 1px solid var(--border-color, #4e4e4e); border-radius: 4px; }
 .mmxmod-tag { display: inline-block; font-size: 9px; letter-spacing: 0.05em;
     text-transform: uppercase; padding: 1px 6px; border-radius: 999px; margin-right: 6px;
     vertical-align: 1px; color: var(--descrip-text, #999);
     border: 1px solid var(--border-color, #4e4e4e); }
-.mmxmod-acts { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
-.mmxmod-acts button { padding: 4px 12px; font-size: 12px; }
+.mmxmod-acts { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.mmxmod-acts button { padding: 4px 9px; font: inherit; font-size: 12px; cursor: pointer;
+    color: var(--input-text, #ddd); background: var(--comfy-input-bg, #2b2b2b);
+    border: 1px solid var(--border-color, #4e4e4e); border-radius: 5px; }
+.mmxmod-acts button:disabled { opacity: 0.5; cursor: not-allowed; }
+.mmxmod-acts button.mmxmod-use { border-color: #3B7DD8; white-space: nowrap; }
 .mmxmod-acts button.mmxmod-drop { color: #E08A8A; }
-.mmxmod-heading { font-size: 11px; color: var(--descrip-text, #999); margin: 14px 0 2px;
-    padding-top: 10px; border-top: 1px solid var(--border-color, #4e4e4e); }
+.mmxmod-heading { font-size: 11px; font-weight: 600; color: var(--descrip-text, #999);
+    margin: 12px 0 2px; }
+.mmxmod-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin-top: 10px; font-size: 12px; }
+.mmxlib-panel .mmxmod-tools input[type="search"] { flex: 1 1 175px; min-width: 0;
+    box-sizing: border-box; padding: 6px 8px; font: inherit; font-size: 13px;
+    color: var(--input-text, #ddd); background: var(--comfy-input-bg, #2b2b2b);
+    border: 1px solid var(--border-color, #4e4e4e); border-radius: 6px; }
+.mmxlib-panel .mmxmod-tools select { width: auto; max-width: 100%; }
+.mmxmod-panel .mmxlib-row { flex-wrap: wrap; }
+.mmxmod-nested { display: inline-flex; align-items: center; gap: 5px; }
+.mmxmod-about summary { cursor: pointer; font-size: 11px; color: var(--descrip-text, #999); }
+.mmxmod-acts button.mmxmod-star { padding: 4px 8px; line-height: 1; font-size: 16px; }
+.mmxmod-star[aria-pressed="true"] { color: #E0A45A; }
+.mmxmod-tag.mmxmod-download { color: #E0A45A; border-color: #E0A45A; }
+.mmxmod-tag.mmxmod-missing { color: #E08A8A; border-color: #E08A8A; }
 
 .mmxmod-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 10px; }
 .mmxmod-shows { margin-top: 14px; padding: 8px 11px; border-radius: 4px; font-size: 12px;
@@ -139,20 +168,75 @@ function eachGraphNode(graph, visit) {
     }
 }
 
-function applyChoices(choices) {
-    if (!choices) return;
+const STATUS = {
+    on_disk: ["On disk", "mmxmod-here", "The model files are available on this server."],
+    download: ["Download needed", "mmxmod-download", "Files will download on first use if auto_download is enabled."],
+    missing: ["Files missing", "mmxmod-missing", "Check the local paths in this entry."],
+};
+const optionLists = new Map();
+let inventoryRevision = 0;
+let refreshTimer;
+
+function modelName(value) {
+    return value.replace(/^on disk: /, "")
+        .replace(/ \u00b7 (\S+) GB download(?= \u00b7 | \u2014 |$)/, " \u00b7 $1 GB");
+}
+
+function optionLabel(value, detail) {
+    if (!detail) return value || "";
+    const star = detail.favorite ? "\u2605 " : "";
+    return `${star}[${STATUS[detail.status][0]}] ${modelName(value)}`;
+}
+
+function applyNodeChoices(item, only) {
+    let touched = false;
+    for (const [widget, section] of NODE_SECTIONS[item.type] || []) {
+        if (only && !only.has(section)) continue;
+        const list = optionLists.get(section);
+        const combo = widgetNamed(item, widget);
+        if (!list || !combo?.options || combo.type !== "combo") continue;
+        const { values, details } = list;
+        const placeholder = item.type === "MiniMaxH3ImagePromptWriter" ? combo.options.values?.[0] : null;
+        combo.options.getOptionLabel = (value) => optionLabel(value, Object.hasOwn(details, value) ? details[value] : null);
+        combo.options.values = placeholder ? [placeholder, ...values] : [...values];
+        touched = true;
+    }
+    if (touched) item.setDirtyCanvas?.(true, true);
+}
+
+function applyChoices(options, revision) {
+    const changed = new Set();
+    for (const [section, list] of Object.entries(options || {})) {
+        if (optionLists.get(section)?.revision > revision) continue;
+        const values = [...list.values].sort((a, b) =>
+            Number(Boolean(list.details[b]?.favorite)) - Number(Boolean(list.details[a]?.favorite))
+        );
+        optionLists.set(section, { ...list, values, revision });
+        changed.add(section);
+    }
+    eachGraphNode(app.graph, (item) => applyNodeChoices(item, changed));
+}
+
+async function refreshChoices(exclude = []) {
+    const wanted = new Set();
     eachGraphNode(app.graph, (item) => {
-        let touched = false;
-        for (const [widget, section] of NODE_SECTIONS[item.type] || []) {
-            const values = choices[section];
-            const combo = widgetNamed(item, widget);
-            if (!values || !combo) continue;
-            combo.options = combo.options || {};
-            combo.options.values = values;
-            touched = true;
+        for (const [, section] of NODE_SECTIONS[item.type] || []) {
+            if (!exclude.includes(section)) wanted.add(section);
         }
-        if (touched) item.setDirtyCanvas?.(true, true);
     });
+    if (!wanted.size) return;
+    const revision = ++inventoryRevision;
+    const query = new URLSearchParams({ sections: [...wanted].join(",") });
+    const { payload } = await ask(`${ROOT}/options?${query}`);
+    if (payload.ok) applyChoices(payload.options, revision);
+}
+
+function scheduleChoiceRefresh() {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(async () => {
+        await refreshChoices();
+        await heal();
+    }, 80);
 }
 
 function repoint(section, before, after) {
@@ -171,14 +255,6 @@ function repoint(section, before, after) {
 
 function nodeCount(count) {
     return count === 1 ? "1 node" : `${count} nodes`;
-}
-
-async function refreshDefinitions() {
-    try {
-        await app.refreshComboInNodes();
-    } catch (error) {
-        console.warn("[MiniMax-H3 Prompt Rewriter] could not reload node definitions", error);
-    }
 }
 
 async function heal(graph = app.graph) {
@@ -259,7 +335,6 @@ async function reveal(target) {
     return true;
 }
 
-/** A captioned text box, wrapped so a grid lays out whole fields and not halves. */
 function textField(holder, caption, value, hint) {
     const wrap = element("div", "mmxmod-field");
     wrap.appendChild(element("label", "mmxlib-field", caption));
@@ -525,41 +600,47 @@ function openEntryForm(section, held, onSaved) {
             keep.disabled = false;
             return;
         }
-        applyChoices(payload.choices);
         const carried = repoint(section.key, payload.label_before, payload.label_after);
-        await heal();
         close();
         onSaved(
             `${editing ? "Saved" : "Added"} '${payload.label_after}'.` +
                 (carried ? ` ${nodeCount(carried)} in this graph moved to the new label.` : "")
         );
-        refreshDefinitions();
     });
 
     name.focus();
 }
 
-/** One entry of a list. `done(text)` is told what an edit or a delete did. */
-function entryCard(section, held, done, writable) {
+function cardHeading(label, availability, seeded = false) {
+    const heading = element("div", "mmxmod-name");
+    if (seeded) heading.appendChild(element("span", "mmxmod-tag", "from the pack"));
+    const [status, color, hint] = STATUS[availability];
+    const badge = element("span", `mmxmod-tag ${color}`, status);
+    badge.title = hint;
+    heading.append(badge, document.createTextNode(modelName(label)));
+    return heading;
+}
+
+function cardLocation(availability, folder, source = "") {
+    const where = element("div", "mmxmod-where");
+    if (folder) {
+        const location = element("span", "mmxmod-location", folder);
+        location.title = availability === "download" ? "Download folder" : "Model folder";
+        where.appendChild(location);
+    }
+    if (source) where.appendChild(document.createTextNode(source));
+    return where;
+}
+
+function entryCard(section, held, detail, done, writable, use, star) {
     const card = element("div", "mmxmod-card");
     const body = element("div", "mmxmod-body");
-
-    const heading = element("div", "mmxmod-name");
-    if (held.seeded) heading.appendChild(element("span", "mmxmod-tag", "from the pack"));
-    if (held.on_disk) {
-        const here = element("span", "mmxmod-tag mmxmod-here", "on disk");
-        here.title =
-            "Already downloaded, so choosing it fetches nothing." +
-            (held.scanned
-                ? " Its file is not listed a second time under 'Found in your model folders'."
-                : "");
-        heading.appendChild(here);
-    }
-    heading.appendChild(document.createTextNode(held.label || held.name));
-    body.appendChild(heading);
-
-    const where = [held.format, held.repo, held.file, held.mmproj].filter(Boolean).join("  ");
-    body.appendChild(element("div", "mmxmod-where", where));
+    const repo = held.repo || "";
+    const source = /^(?:[a-z]:|[/\\])/i.test(repo) ? "" : repo;
+    const weights = [held.file, held.mmproj].map((file) => file?.split(/[/\\]/).at(-1));
+    const description = [held.format, source, ...weights].filter(Boolean).join("  ");
+    body.append(cardHeading(held.label || held.name, held.status, held.seeded),
+        cardLocation(held.status, detail?.folder, description));
     card.appendChild(body);
 
     const acts = element("div", "mmxmod-acts");
@@ -591,7 +672,6 @@ function entryCard(section, held, done, writable) {
             await warned(payload.error || "That entry could not be deleted.");
             return;
         }
-        applyChoices(payload.choices);
         const carried = repoint(section.key, payload.label_before, payload.label_after);
         const fate = !carried
             ? ""
@@ -600,7 +680,6 @@ function entryCard(section, held, done, writable) {
               : ` ${nodeCount(carried)} in this graph ${carried === 1 ? "names" : "name"} ` +
                 "it still, and a run there stops until another model is picked.";
         done(`Deleted '${held.label || held.name}'.${fate}`);
-        refreshDefinitions();
     });
     if (!writable) {
         const why = "The file cannot be written right now -- see the message in the footer.";
@@ -609,147 +688,240 @@ function entryCard(section, held, done, writable) {
             button.title = why;
         }
     }
-    acts.append(change, drop);
+    acts.append(use, star, change, drop);
     card.appendChild(acts);
     return card;
 }
 
-function scannedCard(text) {
+function scannedCard(text, detail, use, star) {
     const card = element("div", "mmxmod-card mmxmod-scanned");
     const body = element("div", "mmxmod-body");
-    body.appendChild(element("div", "mmxmod-name", text));
-    card.appendChild(body);
+    body.appendChild(cardHeading(text, "on_disk"));
+    if (detail?.folder) body.appendChild(cardLocation("on_disk", detail.folder));
+    const acts = element("div", "mmxmod-acts");
+    acts.append(use, star);
+    card.append(body, acts);
     return card;
 }
 
-function openModelList(node) {
+function openModelList(node, sectionKey) {
+    const sections = NODE_SECTIONS[node.type] || [];
+    const hasMultipleTargets = sections.length > 1;
     installStyle(STYLE_ID, STYLE);
     const { panel, close } = frame(true, { size: "models" });
     panel.classList.add("mmxmod-panel");
-
     panel.appendChild(element("h3", "mmxlib-title", "Model list"));
-    panel.appendChild(
-        element(
-            "p",
-            "mmxlib-sub",
-            "The models this node offers. Entries are kept in models.json in the ComfyUI " +
-                "user directory, so they outlive an update of the pack and are shared by " +
-                "every workflow."
-        )
-    );
 
     const tabs = element("div", "mmxmod-tabs");
-    panel.appendChild(tabs);
-    const about = element("div", "mmxmod-about");
-    panel.appendChild(about);
+    const about = element("details", "mmxmod-about");
+    const tools = element("div", "mmxmod-tools");
+    const search = element("input");
+    search.type = "search";
+    search.placeholder = "Search models";
+    search.setAttribute("aria-label", "Search models");
+    const filter = element("select");
+    filter.setAttribute("aria-label", "Model availability");
+    for (const [key, name] of [["", "All models"], ["on_disk", "On disk only"], ["download", "Download needed"], ["missing", "Files missing"]]) {
+        const option = element("option", "", name);
+        option.value = key;
+        filter.appendChild(option);
+    }
+    const nested = element("input");
+    nested.type = "checkbox";
+    const nestedLabel = element("label", "mmxmod-nested");
+    nestedLabel.title = "Search all subfolders of the configured model folders for this pack. Applies to all workflows.";
+    nestedLabel.append(nested, document.createTextNode("Search nested folders"));
+    tools.append(search, filter, nestedLabel);
     const cards = element("div", "mmxlib-list");
-    panel.appendChild(cards);
+    panel.append(tabs, about, tools, cards);
 
     let payload = null;
-    let at = 0;
+    let selectedKey = sectionKey;
+    let loadRevision = 0;
+    let shown = 0;
 
     const row = element("div", "mmxlib-row");
-    const said = footNote(() => {
-        const section = current();
-        if (!section) return "";
-        const entries = section.entries.length;
-        const found = section.found.length;
-        return (
-            (entries === 1 ? "1 entry" : `${entries} entries`) +
-            (found ? ` ${MIDDLE_DOT} ${found} more found on disk` : "")
-        );
-    });
+    const said = footNote(() => shown === 1 ? "1 model" : String(shown) + " models");
     const adding = element("button", "mmxlib-go", "Add a model");
-    const restoring = element("button", "", "Restore the packaged entries");
+    const restoring = element("button", "", "Restore packaged entries");
     const opening = element("button", "", "Open models.json");
-    opening.title =
-        "Opens the file itself, for anything this window does not cover -- the adapter " +
-        "sections, or a path to a network share, which is refused here because this " +
-        "window is reachable over the ComfyUI API and a hand-edited file is not.";
-    const reloading = element("button", "", "Reload definitions");
-    reloading.title =
-        "Ask ComfyUI to re-read every node definition. The dropdowns are already kept in " +
-        "step as you edit, so this is only needed if one looks stale -- after a model was " +
-        "copied into a folder by hand, or the list was edited from another browser tab.";
+    opening.title = "Open the server's catalog file for settings and adapter entries.";
+    const reloading = element("button", "", "Rescan folders");
+    reloading.title = "Find models added to the server and refresh the node dropdowns.";
     const shutting = element("button", "", "Close");
     row.append(said.holder, adding, restoring, opening, reloading, shutting);
     panel.appendChild(row);
 
     function current() {
-        return payload?.sections?.[at] || null;
+        return payload?.sections.find((section) => section.key === selectedKey) ?? payload?.sections[0];
     }
 
-    function after(text) {
-        said.say(text);
-        load();
+    async function after(message) {
+        said.say(message);
+        if (await load()) await heal();
+    }
+
+    function useButton(section, label) {
+        const [name] = sections.find(([, key]) => key === section.key) || [];
+        function problem() {
+            if (!node.graph) return "This node has been removed from the graph.";
+            const slot = node.inputs?.findIndex((input) => input.name === name) ?? -1;
+            if (slot >= 0 && (node.isInputConnected?.(slot) ?? (node.inputs[slot].link != null))) {
+                return "The model comes from a connected input. Change it at the source.";
+            }
+            const combo = widgetNamed(node, name);
+            if (combo?.type !== "combo" || !combo.options?.values?.includes(label)) {
+                return "This model is unavailable in the node's dropdown.";
+            }
+            return "";
+        }
+        const action = hasMultipleTargets ? `Use in ${name}` : "Use this";
+        const use = element("button", "mmxmod-use", action);
+        use.type = "button";
+        const unavailable = problem();
+        use.disabled = Boolean(unavailable);
+        use.title = unavailable || `Set ${name} in this node`;
+        use.setAttribute("aria-label", `${action}: ${modelName(label)}`);
+        use.addEventListener("click", () => {
+            const message = problem();
+            if (message) {
+                said.say(message, true);
+                return;
+            }
+            setWidgetValue(node, name, label);
+            node.setDirtyCanvas?.(true, true);
+            close();
+        });
+        return use;
+    }
+
+    function starButton(section, label, detail) {
+        const favorite = Boolean(detail?.favorite);
+        const star = element("button", "mmxmod-star", favorite ? "\u2605" : "\u2606");
+        star.type = "button";
+        star.dataset.model = label;
+        star.title = favorite ? "Remove from favorites" : "Add to favorites";
+        star.setAttribute("aria-label", star.title + ": " + modelName(label));
+        star.setAttribute("aria-pressed", String(favorite));
+        star.disabled = !payload.writable || !detail;
+        star.addEventListener("click", async () => {
+            star.disabled = true;
+            const answer = await ask(ROOT + "/favorite", { section: section.key, label, favorite: !favorite });
+            if (!answer.payload.ok) {
+                star.disabled = false;
+                said.say(answer.payload.error || "Could not update favorites.", true);
+                return;
+            }
+            const focused = document.activeElement === star;
+            if (await load() && focused) {
+                [...cards.querySelectorAll(".mmxmod-star")].find((button) => button.dataset.model === label)?.focus();
+            }
+        });
+        return star;
+    }
+
+    function drawCards() {
+        const section = current();
+        cards.replaceChildren();
+        if (!section) return;
+        const query = search.value.trim().toLocaleLowerCase();
+        const entries = section.entries.map((entry) => ({
+            label: entry.label,
+            status: entry.status,
+            entry,
+        }));
+        const scanned = section.found.map((label) => ({ label, status: "on_disk" }));
+        const { details } = section.options;
+        const visible = [...entries, ...scanned].filter(({ label, status, entry }) =>
+            (!filter.value || status === filter.value) &&
+            [label, entry?.repo, entry?.file, entry?.mmproj, details[label]?.folder]
+                .some((one) => one?.toLocaleLowerCase().includes(query))
+        );
+        shown = visible.length;
+        const isFavorite = ({ label }) => Object.hasOwn(details, label) && details[label].favorite;
+        const groups = [
+            ["Favorites", visible.filter(isFavorite)],
+            ["Catalog", visible.filter((one) => one.entry && !isFavorite(one))],
+            ["Found in model folders", visible.filter((one) => !one.entry && !isFavorite(one))],
+        ];
+        for (const [title, items] of groups) {
+            if (!items.length) continue;
+            cards.appendChild(element("div", "mmxmod-heading", title));
+            for (const { label, entry } of items) {
+                const detail = Object.hasOwn(details, label) ? details[label] : null;
+                const use = useButton(section, label);
+                const star = starButton(section, label, detail);
+                cards.appendChild(entry
+                    ? entryCard(section, entry, detail, after, payload.writable, use, star)
+                    : scannedCard(label, detail, use, star));
+            }
+        }
+        if (!visible.length) cards.appendChild(element("div", "mmxlib-none",
+            query || filter.value ? "No models match." : "Add a model or rescan the folders."));
+        said.paint();
     }
 
     function draw() {
         const section = current();
         tabs.replaceChildren();
-        if ((payload?.sections?.length || 0) > 1) {
-            payload.sections.forEach((one, index) => {
-                const tab = element("div", "mmxmod-tab" + (index === at ? " mmxmod-on" : ""), one.title);
+        if (payload.sections.length > 1) {
+            for (const one of payload.sections) {
+                const active = one.key === section?.key;
+                const tab = element("button", "mmxmod-tab" + (active ? " mmxmod-on" : ""), one.title);
+                tab.setAttribute("aria-pressed", String(active));
                 tab.addEventListener("click", () => {
-                    at = index;
+                    selectedKey = one.key;
                     said.say("");
                     draw();
                 });
                 tabs.appendChild(tab);
-            });
+            }
         }
 
         about.replaceChildren();
-        cards.replaceChildren();
         if (!section) return;
-
-        about.appendChild(element("div", "mmxmod-blurb", section.blurb));
+        about.append(element("summary", "", "Model requirements"), element("div", "mmxmod-blurb", section.blurb));
         const needs = element("ul", "mmxmod-needs");
         for (const line of section.requirements) needs.appendChild(element("li", "", line));
         about.appendChild(needs);
 
-        for (const held of section.entries) {
-            cards.appendChild(entryCard(section, held, after, payload.writable));
-        }
-        if (!section.entries.length) {
-            cards.appendChild(
-                element("div", "mmxlib-none", "Nothing in this list. 'Add a model' puts one here.")
-            );
-        }
-        if (section.found.length) {
-            cards.appendChild(
-                element(
-                    "div",
-                    "mmxmod-heading",
-                    "Found in your model folders. These are offered too, and there is nothing " +
-                        "to edit: they are files on disk, not entries in the file. A file an " +
-                        "entry above already downloaded is not repeated here."
-                )
-            );
-            for (const text of section.found) cards.appendChild(scannedCard(text));
-        }
-
-        const coming = section.restorable.length;
-        restoring.disabled = !coming || !payload.writable;
-        restoring.title = coming
-            ? `Offer these again: ${section.restorable.join(", ")}`
-            : "Every entry the pack ships with is already in this list.";
+        restoring.disabled = !section.restorable.length || !payload.writable;
+        restoring.title = section.restorable.join(", ");
         adding.disabled = !payload.writable;
-        said.paint();
+        nested.checked = payload.search_nested_folders;
+        nested.disabled = !payload.writable;
+        drawCards();
     }
 
-    async function load() {
-        const answer = await ask(`${ROOT}?node=${encodeURIComponent(node.type)}`);
+    async function load(rescan = false) {
+        const revision = ++inventoryRevision;
+        loadRevision = revision;
+        const query = new URLSearchParams({ node: node.type, rescan: rescan ? "1" : "0" });
+        const answer = await ask(ROOT + "?" + query);
+        if (revision !== loadRevision || !panel.isConnected) return false;
         if (!answer.payload?.ok) {
-            said.stand(answer.payload?.error || "The model list could not be read.");
-            return;
+            said.say(answer.payload?.error || "The model list could not be read.", true);
+            return false;
         }
         payload = answer.payload;
         said.stand(payload.problem || "");
-        if (at >= payload.sections.length) at = 0;
+        applyChoices(Object.fromEntries(payload.sections.map((section) => [section.key, section.options])), revision);
         draw();
+        return true;
     }
 
+    async function refresh(rescan) {
+        reloading.disabled = true;
+        if (await load(rescan)) {
+            await refreshChoices(payload.sections.map((section) => section.key));
+            await heal();
+            said.say("");
+        }
+        reloading.disabled = false;
+    }
+
+    search.addEventListener("input", drawCards);
+    filter.addEventListener("change", drawCards);
     adding.addEventListener("click", () => {
         const section = current();
         if (section) openEntryForm(section, null, after);
@@ -758,36 +930,41 @@ function openModelList(node) {
         const section = current();
         if (!section) return;
         restoring.disabled = true;
-        const answer = await ask("/minimax_h3_rewriter/model_list/restore", {
-            section: section.key,
-        });
+        const answer = await ask(ROOT + "/restore", { section: section.key });
         if (!answer.payload.ok) {
             said.say(answer.payload.error || "Those could not be restored.", true);
             restoring.disabled = false;
             return;
         }
-        applyChoices(answer.payload.choices);
-        await heal();
         const back = answer.payload.restored || [];
-        after(back.length ? `Put back: ${back.join(", ")}.` : "Nothing was missing.");
-        refreshDefinitions();
+        await after(back.length ? "Restored: " + back.join(", ") + "." : "Nothing was missing.");
     });
     opening.addEventListener("click", async () => {
         if (await reveal(LIST_FILE)) told(opening, "Opened");
     });
-    reloading.addEventListener("click", async () => {
-        reloading.disabled = true;
-        try {
-            await app.refreshComboInNodes();
-            told(reloading, "Reloaded");
-        } catch (error) {
-            said.say(`Could not reload the node definitions: ${error}`, true);
+    nested.addEventListener("change", async () => {
+        nested.disabled = true;
+        const answer = await ask(ROOT + "/search", { enabled: nested.checked });
+        if (!answer.payload.ok) {
+            nested.checked = payload.search_nested_folders;
+            nested.disabled = !payload.writable;
+            said.say(answer.payload.error || "Could not change the folder search.", true);
+            return;
         }
-        reloading.disabled = false;
+        payload.search_nested_folders = nested.checked;
+        said.say("Scanning model folders...");
+        await refresh(false);
+        nested.disabled = !payload.writable;
+    });
+    reloading.addEventListener("click", () => {
+        said.say("Scanning model folders...");
+        refresh(true);
     });
     shutting.addEventListener("click", close);
 
-    load();
+    for (const control of [adding, restoring, nested]) control.disabled = true;
+    said.say("Reading the model list...");
+    load().then((ok) => { if (ok) said.say(""); });
 }
 
 async function unloadModel(button) {
@@ -807,7 +984,9 @@ async function unloadModel(button) {
 }
 
 function addButtons(nodeType, nodeData) {
-    const owns = Boolean(NODE_SECTIONS[nodeData.name]);
+    const sections = NODE_SECTIONS[nodeData.name] || [];
+    const owns = sections.length > 0;
+    const hasMultipleTargets = sections.length > 1;
     const guided = GUIDE_NODES.includes(nodeData.name);
     const keeps = Boolean(
         nodeData.input?.required?.[KEEP_WIDGET] ?? nodeData.input?.optional?.[KEEP_WIDGET]
@@ -819,11 +998,11 @@ function addButtons(nodeType, nodeData) {
         const result = onNodeCreated?.apply(this, arguments);
         const node = this;
         const wanted = [];
-        if (owns) {
+        for (const [widget, section] of sections) {
             wanted.push({
-                label: LIST_LABEL,
-                tooltip: LIST_TOOLTIP,
-                onClick: () => openModelList(node),
+                label: hasMultipleTargets ? MODEL_BUTTON_LABELS[widget] : LIST_LABEL,
+                tooltip: hasMultipleTargets ? `Open the model list for ${widget}.` : LIST_TOOLTIP,
+                onClick: () => openModelList(node, section),
             });
         }
         if (guided) {
@@ -843,16 +1022,29 @@ function addButtons(nodeType, nodeData) {
             });
         }
         buttonRow(this, "mmx_open", wanted);
+        if (owns) {
+            applyNodeChoices(node);
+            scheduleChoiceRefresh();
+        }
         return result;
     };
 }
 
 app.registerExtension({
     name: "minimax_h3_rewriter.model_list",
+    setup() {
+        for (const event of ["execution_success", "execution_error", "execution_interrupted"]) {
+            api.addEventListener(event, scheduleChoiceRefresh);
+        }
+    },
     async beforeRegisterNodeDef(nodeType, nodeData) {
         addButtons(nodeType, nodeData);
     },
     afterConfigureGraph() {
-        heal();
+        scheduleChoiceRefresh();
+    },
+    async refreshComboInNodes() {
+        await refreshChoices();
+        await heal();
     },
 });

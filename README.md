@@ -2742,16 +2742,32 @@ guide is the cheapest way to fit a small model's context.
 
 ### The model list
 
-The **Model list** button on any model-loading node opens a window over the
-graph: the models that node offers, with **Add a model**, **Edit** and
-**Delete** beside them, and a **Check it** that reads the model before you spend
-a download on it. Everything is kept in
+On a node with one model field, **Model list** opens its catalog. On a node with
+several model fields, open the catalog using the button for that field.
+Use **Add a model**, **Edit**, or **Delete** to manage catalog entries.
+**Check it** inspects an entry before you download the model. The catalog is saved in
 
 ```text
 ComfyUI/user/minimax_h3_rewriter/models.json
 ```
 
-which is seeded from the packaged copy on first use, so updating the node pack
+The editor and node dropdowns show **On disk**, **Download needed**, or **Files
+missing**. A multimodal GGUF needs both the model and its `mmproj` to show as
+**On disk**. In **Model list**, use the search field or **On disk only** to narrow the
+list. Click the star beside a model to put it in **Favorites** and bring it to the
+top of the corresponding node dropdowns.
+
+**Use this** selects a model on the node that opened the list. On nodes with
+several model fields, buttons such as **Captioner models** and **Writer models**
+open the corresponding tab. **Use in writer_model** sets the named field.
+The folder badge shows the local model directory or download destination, such as
+`LLM/quant`.
+
+Turn on **Search nested folders** to include all subfolders of the configured
+model directories. This setting and your favorites are saved on the ComfyUI
+server. Click **Rescan folders** after copying models to the server.
+
+The file is seeded from the packaged copy on first use, so updating the node pack
 never overwrites your edits. **Open models.json** in the window's footer still
 opens that file in your desktop's JSON editor — on the machine running ComfyUI,
 which is not necessarily the one looking at the browser tab — for the two things
@@ -2761,21 +2777,14 @@ network share.
 The window shows only the lists the node it was opened from actually reads,
 because the adapters take different architectures and an entry from one list
 will not load in another's node. The Universal Rewriter therefore opens on three
-tabs and the captioner on one. Under the tabs is what that list requires — the
-architecture, the block count and width, whether a projector is needed and which
-encoders it has to carry — and below the entries, greyed out, the models the pack
-found by itself, in your ComfyUI model folders or in an Ollama store: those are
-offered in the dropdown too, and there is nothing to edit, because they are files
-on disk rather than lines in a file. A file an entry has already downloaded is not
-repeated there: the entry carries an **on disk** tag instead, and the dropdown
-offers that model once, under the entry's name.
+tabs and the reference captioner on one. Expand **Model requirements** to see
+the architecture, model shape, and projector requirements for the open list.
+**Found in model folders** shows additional models discovered in your ComfyUI
+directories and Ollama stores. These models also appear in the node dropdown.
+When a catalog entry points to a discovered file, its **On disk** row represents
+that file in both places.
 
-![The Model list window over the graph, headed “Model list” above the line “The models this node offers. Entries are kept in models.json in the ComfyUI user directory, so they outlive an update of the pack and are shared by every workflow.” Two tabs, Captioners lit and Guided writers beside it, over what that list requires: GGUF only, one file run by llama.cpp rather than a folder of safetensors; any architecture as long as the file is a language model with an embedded chat template; and a pair — the model and its ‘mmproj’ projector, from the same conversion. Below them two entries badged FROM THE PACK — Qwen2.5-Omni-3B, a 3.4 GB download needing about 5 GB, and Qwen2.5-Omni-7B, 5.8 GB needing about 8 — each showing its format, repository, file and projector in monospace, with Edit and Delete buttons at the right. Under a rule, “Found in your model folders. These are offered too, and there is nothing to edit: they are files on disk, not entries in the file.” heads three unbuttoned rows: on disk: Qwen3VL-8B-Instruct-Q4\_K\_M.gguf [+mmproj, vision, 5.4 GB], and the Omni 3B and 7B pairs, both marked vision and audio](docs/model_list_dialog.png)
-
-*Opened here from a node that reads two lists, so there are two tabs; the
-Universal Rewriter opens on three and the reference captioner on one. What the
-list requires sits above the entries, because it is the reason an entry belongs
-in this list and not another one.*
+![Model list on the Guided writers tab with Search nested folders enabled. Installed models show On disk badges, relative folders, Use in writer_model buttons, and favorite stars.](docs/model_list_dialog.png)
 
 The footer counts the entries in the open list and says what the last save,
 delete or restore did — including how many nodes in this graph moved to an entry's

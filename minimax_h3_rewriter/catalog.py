@@ -30,6 +30,8 @@ import logging
 import os
 import shutil
 import tempfile
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 
 from .constants import ADAPTER_REPO
@@ -71,6 +73,9 @@ OFFERED_KEY = "seed_offered"
 VERSION_KEY = "seed_version"
 
 OLLAMA_KEY = "ollama_stores"
+FAVORITES_KEY = "model_favorites"
+NESTED_KEY = "search_nested_model_folders"
+_LOCK = threading.RLock()
 
 
 @dataclass
@@ -299,10 +304,8 @@ def _write(path: str, data: dict, backup: bool = True) -> None:
     back -- and a window that rewrites the list on every click would spend that
     one snapshot within seconds of the merge that earned it.
 
-    The cache is cleared here rather than by the callers, because its key is
-    ``(path, size, whole seconds)`` and two edits inside one second can produce
-    a file of exactly the same size: renaming a note from "8 GB" to "9 GB" does
-    it. The next read would then be served the copy from before the edit.
+    Clear the cache here so writes are immediately visible even on filesystems
+    with coarse timestamps.
     """
     directory = os.path.dirname(path) or "."
     handle, staging = tempfile.mkstemp(prefix=FILE_NAME, suffix=".part", dir=directory)
@@ -333,10 +336,15 @@ def _data() -> dict:
     re-reading two files each time would be wasteful. Writing the merge back
     changes the mtime, so the next call re-reads and finds nothing left to do.
     """
+    with _LOCK:
+        return _read_data()
+
+
+def _read_data() -> dict:
     path = user_file()
     try:
         stat = os.stat(path)
-        key = (os.path.normcase(path), stat.st_size, int(stat.st_mtime))
+        key = (os.path.normcase(path), stat.st_size, stat.st_mtime_ns)
     except OSError:
         key = None
 
@@ -367,7 +375,7 @@ def _data() -> dict:
         else:
             try:
                 stat = os.stat(path)
-                key = (os.path.normcase(path), stat.st_size, int(stat.st_mtime))
+                key = (os.path.normcase(path), stat.st_size, stat.st_mtime_ns)
             except OSError:
                 key = None
 
@@ -620,6 +628,46 @@ def _mutable() -> tuple[str, dict]:
     return path, json.loads(json.dumps(_data()))
 
 
+@contextmanager
+def _edit():
+    with _LOCK:
+        path, data = _mutable()
+        yield data
+        _write(path, data, backup=False)
+
+
+def search_nested_folders() -> bool:
+    return _data().get(NESTED_KEY) is True
+
+
+def set_search_nested_folders(enabled: bool) -> None:
+    with _edit() as data:
+        data[NESTED_KEY] = enabled
+
+
+def favorite_keys(section: str, data: dict | None = None) -> set[str]:
+    saved = (_data() if data is None else data).get(FAVORITES_KEY)
+    keys = saved.get(section) if isinstance(saved, dict) else None
+    return {key for key in keys if isinstance(key, str)} if isinstance(keys, list) else set()
+
+
+def _store_favorites(data: dict, section: str, keys: set[str]) -> None:
+    saved = data.get(FAVORITES_KEY)
+    saved = saved if isinstance(saved, dict) else {}
+    saved[section] = sorted(keys)
+    data[FAVORITES_KEY] = saved
+
+
+def set_favorite(section: str, keys: tuple[str, ...], favorite: bool) -> None:
+    with _edit() as data:
+        pinned = favorite_keys(section, data)
+        if favorite:
+            pinned.add(keys[0])
+        else:
+            pinned.difference_update(keys)
+        _store_favorites(data, section, pinned)
+
+
 def raw_entries(section: str) -> list[dict]:
     """One list as it is written, for something that edits it.
 
@@ -759,45 +807,52 @@ def _refuse_clash(entries: list, entry: dict, skip: int = -1) -> None:
 
 def add(section: str, entry: dict) -> dict:
     """Append one entry to a list. Returns it as written."""
-    path, data = _mutable()
-    entries = _entries_of(data, section)
-    _refuse_clash(entries, entry)
-    entries.append(entry)
-    data[section] = entries
-    _write(path, data, backup=False)
+    with _edit() as data:
+        entries = _entries_of(data, section)
+        _refuse_clash(entries, entry)
+        entries.append(entry)
+        data[section] = entries
     return entry
 
 
 def update(section: str, name: str, entry: dict) -> dict:
     """Replace the entry called ``name``. Returns it as written."""
-    path, data = _mutable()
-    entries = _entries_of(data, section)
-    at = _find(entries, name)
-    if at < 0:
-        raise CatalogWriteError(
-            f"'{name}' is not in this list any more -- something else changed the file. "
-            f"Reopen this window to see what is there now."
-        )
-    _refuse_clash(entries, entry, skip=at)
-    entries[at] = entry
-    data[section] = entries
-    if str(entry.get("name") or "") != name:
-        _record_offered(data, section, name)
-    _write(path, data, backup=False)
+    with _edit() as data:
+        entries = _entries_of(data, section)
+        at = _find(entries, name)
+        if at < 0:
+            raise CatalogWriteError(
+                f"'{name}' is not in this list any more -- something else changed the file. "
+                f"Reopen this window to see what is there now."
+            )
+        _refuse_clash(entries, entry, skip=at)
+        entries[at] = entry
+        data[section] = entries
+        new_name = str(entry.get("name") or "")
+        if new_name != name:
+            _record_offered(data, section, name)
+            pinned = favorite_keys(section, data)
+            if f"entry:{name}" in pinned:
+                pinned.remove(f"entry:{name}")
+                pinned.add(f"entry:{new_name}")
+                _store_favorites(data, section, pinned)
     return entry
 
 
 def remove(section: str, name: str) -> bool:
     """Delete one entry, and record it so the next merge does not bring it back."""
-    path, data = _mutable()
-    entries = _entries_of(data, section)
-    at = _find(entries, name)
-    if at < 0:
-        return False
-    entries.pop(at)
-    data[section] = entries
-    _record_offered(data, section, name)
-    _write(path, data, backup=False)
+    with _edit() as data:
+        entries = _entries_of(data, section)
+        at = _find(entries, name)
+        if at < 0:
+            return False
+        entries.pop(at)
+        data[section] = entries
+        _record_offered(data, section, name)
+        pinned = favorite_keys(section, data)
+        if f"entry:{name}" in pinned:
+            pinned.remove(f"entry:{name}")
+            _store_favorites(data, section, pinned)
     return True
 
 
@@ -810,14 +865,13 @@ def restore_packaged(section: str) -> list[str]:
     button for what the file's own comment block already tells people to do by
     hand.
     """
-    path, data = _mutable()
-    coming = _missing_from(data, section)
-    if not coming:
-        return []
-    offered = dict(data.get(OFFERED_KEY) or {})
-    offered.pop(section, None)
-    data[OFFERED_KEY] = offered
-    _write(path, data, backup=False)
+    with _edit() as data:
+        coming = _missing_from(data, section)
+        if not coming:
+            return []
+        offered = dict(data.get(OFFERED_KEY) or {})
+        offered.pop(section, None)
+        data[OFFERED_KEY] = offered
     return coming
 
 

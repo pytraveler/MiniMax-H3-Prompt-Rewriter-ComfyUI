@@ -194,6 +194,7 @@ def _build_model_map() -> dict[str, BaseChoice]:
     in. Either way the architecture filter is the point: any multimodal pair
     will caption, but only a Qwen3-VL of this size can carry this LoRA.
     """
+    global _MODEL_MAP
     mapping: dict[str, BaseChoice] = {}
     held = []
     try:
@@ -234,13 +235,12 @@ def _build_model_map() -> dict[str, BaseChoice]:
     except Exception:
         log.warning("[minimax_h3_rewriter.writer_8b] local scan failed", exc_info=True)
 
-    _MODEL_MAP.clear()
-    _MODEL_MAP.update(mapping)
+    _MODEL_MAP = mapping
     return mapping
 
 
-def model_choices() -> list[str]:
-    choices = _shown(_build_model_map())
+def model_choices(mapping=None) -> list[str]:
+    choices = _shown(_build_model_map() if mapping is None else mapping)
     return _announce(choices or ["(no Qwen3-VL model found - see the model list)"])
 
 

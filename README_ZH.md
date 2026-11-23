@@ -2319,33 +2319,40 @@ ComfyUI/user/minimax_h3_rewriter/guides/
 
 ### 模型列表
 
-任何一个要加载模型的节点上，那个 **Model list** 按钮都会在图上方开一个窗口：这个
-节点提供的那些模型，旁边是 **Add a model**、**Edit** 和 **Delete**，还有一个
-**Check it** —— 在你把一次下载花出去之前先把模型读一读。这一切都存在
+节点只有一个模型字段时，点击 **Model list** 打开模型目录。有多个模型字段时，
+点击对应字段的按钮。通过 **Add a model**、**Edit** 和 **Delete** 管理目录条目，
+用 **Check it** 在下载模型前检查条目。目录保存在
 
 ```text
 ComfyUI/user/minimax_h3_rewriter/models.json
 ```
 
-里，它在第一次使用时由随包附带的那一份种下，所以更新节点包永远不会覆盖你的改动。
+编辑器和节点下拉列表会显示 **On disk**（已在磁盘上）、**Download needed**（需要下载）
+或 **Files missing**（缺少文件）。多模态 GGUF 需要同时找到模型和对应的 `mmproj`，
+才会显示 **On disk**。在 **Model list** 中可以搜索模型，或用 **On disk only** 只显示
+本地模型。点击星标可将模型加入 **Favorites**，并在对应的节点下拉列表中优先显示。
+
+点击 **Use this** 可在打开列表的节点中选用模型。节点有多个模型字段时，
+**Captioner models** 和 **Writer models** 等按钮会打开对应的标签页，
+**Use in writer_model** 会将模型应用到指定字段。目录标签显示模型所在位置或下载目标，
+例如 `LLM/quant`。
+
+开启 **Search nested folders** 可搜索已配置模型目录下的所有子目录。
+该设置和收藏都保存在 ComfyUI 服务器上。复制模型后可点击 **Rescan folders** 刷新列表。
+
+此文件在首次使用时由随包附带的副本生成，更新节点包会保留你的改动。
 窗口底部的 **Open models.json** 仍然会用你桌面上的 JSON 编辑器打开那个文件 ——
 是在跑 ComfyUI 的那台机器上，而那不一定就是正看着浏览器标签页的这一台 —— 用来做
 窗口有意不碰的那两件事：`adapters` 那几节，以及指向网络共享的路径。
 
 窗口只显示打开它的那个节点真正会读的那几份列表，因为几个适配器吃的是不同的架构，
 一份列表里的条目在另一个节点上根本加载不起来。所以通用重写器打开时是三个标签页，
-而描述节点只有一个。标签页下面是这份列表的要求 —— 架构、块数和宽度、需不需要投影器，
-以及它得带着哪些编码器 —— 而在那些条目下面、灰着的，是节点包自己找到的模型，在你的
-ComfyUI 模型目录里或者一个 Ollama 仓库里：那些同样会出现在下拉框里，而且没什么可
-编辑的，因为它们是硬盘上的文件，不是文件里的行。某个条目已经下载好的文件不会在那里
-再出现一次：那个条目会带上一个 **on disk** 标记，而下拉框只提供这个模型一次，用的是
-条目的名字。
+而描述节点只有一个。展开 **Model requirements** 可查看架构、模型尺寸和投影器要求。
+**Found in model folders** 显示在 ComfyUI 模型目录和 Ollama 仓库中找到的其他模型，
+这些模型也会出现在节点的下拉列表中。如果目录条目指向已找到的文件，两个列表都用
+该条目的名称和 **On disk** 标记来显示这个文件。
 
-![图上方的模型列表窗口，标题 “Model list”，底下一行 “The models this node offers. Entries are kept in models.json in the ComfyUI user directory, so they outlive an update of the pack and are shared by every workflow.”。两个标签页，Captioners 亮着，Guided writers 在它旁边，下面是这份列表的要求：只收 GGUF，一个由 llama.cpp 运行的文件，而不是一个装着 safetensors 的文件夹；架构不限，只要这个文件是一个内嵌了聊天模板的语言模型；以及要成对 —— 模型和它的 “mmproj” 投影器，出自同一次转换。再下面是两个带 FROM THE PACK 徽记的条目 —— Qwen2.5-Omni-3B，下载 3.4 GB、约需 5 GB，以及 Qwen2.5-Omni-7B，5.8 GB、约需 8 GB —— 每一个都用等宽字体显示着它的格式、仓库、文件和投影器，右边是 Edit 和 Delete 按钮。一条分割线之下，“Found in your model folders. These are offered too, and there is nothing to edit: they are files on disk, not entries in the file.” 领着三行没有按钮的条目：on disk: Qwen3VL-8B-Instruct-Q4\_K\_M.gguf [+mmproj, vision, 5.4 GB]，以及 Omni 3B 和 7B 那两对，都标着 vision 和 audio](docs/model_list_dialog.png)
-
-*这里是从一个读两份列表的节点上打开的，所以有两个标签页；通用重写器打开时是三个，
-参考素材描述节点是一个。这份列表的要求排在条目上方，因为正是它决定了一个条目属于
-这份列表，而不属于另一份。*
+![Model list 窗口的 Guided writers 标签页，已勾选 Search nested folders。已安装模型显示 On disk 标记、相对目录、Use in writer_model 按钮和收藏星标。](docs/model_list_dialog.png)
 
 窗口底部数着当前这份列表里的条目，并说出上一次保存、删除或恢复做了什么 —— 包括
 这张图里有多少个节点换到了条目的新标签上，或者还握着一个已经删掉的条目的名字。

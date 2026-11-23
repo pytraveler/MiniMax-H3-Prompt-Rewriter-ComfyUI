@@ -21,6 +21,7 @@ import os
 import re
 from dataclasses import dataclass, field
 
+from . import paths
 from .constants import install_command
 
 log = logging.getLogger(__name__)
@@ -443,13 +444,11 @@ def scan_local(shape: Shape = SHAPE_27B) -> list[tuple[str, str]]:
             label += " (unusable)"
         found.append((label, directory))
 
+    depth = paths.scan_depth(1)
     for root in _comfy_roots():
-        try:
-            entries = sorted(os.listdir(root))
-        except OSError:
-            continue
-        for entry in entries:
-            consider(os.path.join(root, entry), entry)
+        for directory in sorted(paths.model_tree(root, depth).folders):
+            if not paths.same_path(root, directory):
+                consider(directory, paths.nested_label(root, directory, 0))
 
     for cache_root in _hf_cache_roots():
         for snapshot in _snapshot_dirs(cache_root):
@@ -718,24 +717,6 @@ def gguf_problem_omni(path: str) -> str:
     )
 
 
-def _gguf_candidates(root: str, depth: int) -> list[str]:
-    found = []
-    stack = [(root, 0)]
-    while stack:
-        directory, level = stack.pop()
-        try:
-            entries = sorted(os.scandir(directory), key=lambda e: e.name)
-        except OSError:
-            continue
-        for entry in entries:
-            if entry.is_dir():
-                if level < depth:
-                    stack.append((entry.path, level + 1))
-            elif entry.name.lower().endswith(".gguf"):
-                found.append(entry.path)
-    return found
-
-
 def _scan_gguf(
     kind: str,
     arch: str | None = GGUF_ARCH,
@@ -753,8 +734,9 @@ def _scan_gguf(
     found: list[tuple[str, str]] = []
     seen: set[str] = set()
 
+    depth = paths.scan_depth(GGUF_SCAN_DEPTH)
     for root in _comfy_roots(folders):
-        for path in _gguf_candidates(root, GGUF_SCAN_DEPTH):
+        for path in paths.model_tree(root, depth).ggufs:
             key = os.path.normcase(os.path.abspath(path))
             if key in seen:
                 continue
@@ -771,7 +753,8 @@ def _scan_gguf(
             except OSError:
                 size = 0.0
             tag = "gguf" if arch is not None else header["arch"]
-            label = f"{os.path.basename(path)} [{tag}, {size:.1f} GB]"
+            name = paths.nested_label(root, path, GGUF_SCAN_DEPTH)
+            label = f"{name} [{tag}, {size:.1f} GB]"
             if arch is not None and kind == "model" and gguf_problem(path):
                 label += " (wrong size for the adapter)"
             found.append((label, path))
@@ -860,9 +843,11 @@ def scan_captioner_gguf(arch: str | None = None) -> list[tuple[str, str, str]]:
     found: list[tuple[str, str, str]] = []
     seen: set[str] = set()
     by_directory: dict[str, tuple[list[str], list[str]]] = {}
+    names = {}
 
+    depth = paths.scan_depth(GGUF_SCAN_DEPTH)
     for root in _comfy_roots(GGUF_FOLDERS):
-        for path in _gguf_candidates(root, GGUF_SCAN_DEPTH):
+        for path in paths.model_tree(root, depth).ggufs:
             key = os.path.normcase(os.path.abspath(path))
             if key in seen:
                 continue
@@ -876,6 +861,7 @@ def scan_captioner_gguf(arch: str | None = None) -> list[tuple[str, str, str]]:
                 projectors.append(path)
             elif header["kind"] == "model":
                 models.append(path)
+                names[path] = paths.nested_label(root, path, GGUF_SCAN_DEPTH)
 
     for directory, (models, projectors) in sorted(by_directory.items()):
         if not projectors:
@@ -898,7 +884,7 @@ def scan_captioner_gguf(arch: str | None = None) -> list[tuple[str, str, str]]:
                 size = (os.path.getsize(model) + os.path.getsize(projector)) / 1024 ** 3
             except OSError:
                 size = 0.0
-            label = f"{os.path.basename(model)} [+mmproj, {modalities}, {size:.1f} GB]"
+            label = f"{names[model]} [+mmproj, {modalities}, {size:.1f} GB]"
             found.append((label, model, projector))
         if unpaired:
             log.debug(

@@ -16,11 +16,13 @@ against the JavaScript.
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import logging
 import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from . import catalog, discovery, paths
 
@@ -266,7 +268,7 @@ _CHOICE_SOURCE = {
 }
 
 
-def choices(section: str) -> list[str]:
+def choices(section: str, mapping: dict | None = None) -> list[str]:
     """The dropdown for this list as ``INPUT_TYPES`` would build it right now.
 
     Taken from the node rather than rebuilt, so what the window puts into an
@@ -277,7 +279,8 @@ def choices(section: str) -> list[str]:
     module, name = _CHOICE_SOURCE[section]
     try:
         found = importlib.import_module(f".{module}", __package__)
-        return list(getattr(found, name)())
+        build = getattr(found, name)
+        return list(build() if mapping is None else build(mapping))
     except Exception:
         log.warning(
             "[minimax_h3_rewriter.model_sections] could not read the '%s' dropdown",
@@ -492,21 +495,10 @@ def _local_copy(repo: str, name: str) -> str:
     folder a pair is fetched into -- in every ``LLM`` folder, not only the one
     downloads go to.
     """
-    if not name:
-        return ""
-    found = paths.catalog_file(repo, name)
-    if found:
-        return found if os.path.isfile(found) else ""
-    if not paths.looks_like_repo_id(repo):
-        return ""
-    folder = repo.rstrip("/").split("/")[-1]
     try:
-        roots = paths.llm_roots()
+        return paths.present_file(repo, name)
     except Exception:
         return ""
-    candidates = [os.path.join(root, name) for root in roots]
-    candidates += [os.path.join(root, folder, name) for root in roots]
-    return next((one for one in candidates if os.path.isfile(one)), "")
 
 
 def _say(lines: list, level: str, text: str) -> None:
@@ -870,7 +862,7 @@ def check(section: str, entry: dict) -> dict:
             size = _check_remote(section, entry, lines, picks)
     else:
         reference = str(entry.get("repo") or "")
-        directory = reference if os.path.isdir(reference) else ""
+        directory = paths.present_folder(reference) or (reference if os.path.isdir(reference) else "")
         if directory:
             report = discovery.inspect_local(directory, found.shape or discovery.SHAPE_27B)
             if report.usable:
@@ -893,6 +885,137 @@ PROBLEM_PREFIX = "!! "
 SCANNED_PREFIXES = (LOCAL_PREFIX, OLLAMA_PREFIX)
 
 
+def _entry_keys(mapping: dict, label: str, entry: dict | None) -> tuple[str, ...]:
+    if entry:
+        keys = [f"entry:{entry['name']}"]
+        files = [one.reference for one in mapping.values() if getattr(one, "copy_of", "") == label]
+    else:
+        keys = []
+        choice = mapping.get(label)
+        files = [choice.reference] if getattr(choice, "local", False) else []
+    for path in files:
+        digest = hashlib.sha256(os.fsencode(paths.path_key(path))).hexdigest()
+        keys.append(f"file:{digest}")
+    return tuple(keys)
+
+
+def _status(entry: dict, held: tuple[str, ...]) -> str:
+    if held:
+        return "on_disk"
+    repo = str(entry.get("repo") or "")
+    local_file = any(os.path.isabs(str(entry.get(key) or "")) for key in ("file", "mmproj"))
+    if local_file or os.path.isdir(repo) or not paths.looks_like_repo_id(repo):
+        return "missing"
+    return "download"
+
+
+def _folder_roots() -> list[tuple[Path, str]]:
+    """Pair physical model roots with the names used in ComfyUI settings."""
+    roots: dict[Path, str] = {}
+    try:
+        for root in paths.llm_roots():
+            roots[Path(os.path.abspath(root))] = paths.MODELS_SUBDIR
+    except (ImportError, OSError):
+        pass
+    for name in dict.fromkeys(discovery.GGUF_FOLDERS + discovery.SCAN_FOLDERS):
+        for root in discovery._comfy_roots((name,)):
+            roots.setdefault(Path(os.path.abspath(root)), name)
+    return sorted(roots.items(), key=lambda item: len(item[0].parts), reverse=True)
+
+
+def _folder_label(directory: str, roots: list[tuple[Path, str]]) -> str:
+    """Display a model folder using its configured root or its own name."""
+    if not directory:
+        return ""
+    folder = Path(os.path.abspath(directory))
+    for root, label in roots:
+        if folder.is_relative_to(root):
+            return "/".join((label, *folder.relative_to(root).parts))
+    return f"Local/{folder.name}" if folder.name else "Local"
+
+
+def _entry_directory(section: str, entry: dict, held: tuple[str, ...], status: str) -> str:
+    """Folder holding the weights, or the destination the loader will use."""
+    fmt = str(entry.get("format") or spec(section).default_format).lower()
+    repo = str(entry.get("repo") or "")
+    if fmt != catalog.FORMAT_GGUF:
+        return held[0] if held else paths.resolve_source(repo, "")[1]
+    if held:
+        return os.path.dirname(held[0])
+    file = str(entry.get("file") or "")
+    if status == "download":
+        root = paths.local_dir_for_repo(repo) if spec(section).needs_mmproj else paths.models_root()
+        return os.path.dirname(os.path.join(root, file))
+    local = paths.catalog_file(repo, file)
+    if not local and os.path.isabs(repo):
+        local = os.path.join(repo, file)
+    return os.path.dirname(local)
+
+
+def _scanned_folder(section, label, choice, roots) -> str:
+    if label.startswith(OLLAMA_PREFIX):
+        return "Ollama"
+    if label.startswith(LOCAL_PREFIX + "HF cache: "):
+        return "HF cache"
+    directory = choice.reference
+    if getattr(choice, "fmt", spec(section).default_format) == catalog.FORMAT_GGUF:
+        directory = os.path.dirname(directory)
+    return _folder_label(directory, roots)
+
+
+def model_options(
+    section: str,
+    mapping: dict | None = None,
+    entries: list[dict] | None = None,
+    *,
+    include_folders: bool = False,
+) -> dict:
+    """Keep availability and favorites separate from the saved dropdown values."""
+    if mapping is None:
+        mapping = _map(section)
+    if entries is None:
+        entries = catalog.raw_entries(section)
+    by_label = {catalog.entry_label(entry): entry for entry in entries}
+    pinned = catalog.favorite_keys(section)
+    values = choices(section, mapping)
+    details = {}
+    roots = _folder_roots() if include_folders else []
+    for label in values:
+        choice = mapping.get(label)
+        if choice is None:
+            continue
+        entry = by_label.get(label)
+        held = _held(section, entry) if entry else ()
+        status = _status(entry, held) if entry else "on_disk"
+        details[label] = {
+            "status": status,
+            "favorite": any(key in pinned for key in _entry_keys(mapping, label, entry)),
+        }
+        if include_folders:
+            try:
+                if entry:
+                    folder = _folder_label(_entry_directory(section, entry, held, status), roots)
+                else:
+                    folder = _scanned_folder(section, label, choice, roots)
+            except (ImportError, OSError, ValueError):
+                folder = ""
+            details[label]["folder"] = folder
+    return {"values": values, "details": details}
+
+
+def set_favorite(section: str, label: str, favorite: bool) -> None:
+    spec(section)
+    mapping = _map(section)
+    choice = mapping.get(label)
+    if choice is None or getattr(choice, "copy_of", ""):
+        raise catalog.CatalogWriteError("This model is no longer in the list. Rescan the model folders.")
+    entry = next((one for one in catalog.raw_entries(section) if catalog.entry_label(one) == label), None)
+    keys = _entry_keys(mapping, label, entry)
+    if not keys:
+        raise catalog.CatalogWriteError("This model cannot be added to favorites.")
+    catalog.set_favorite(section, keys, favorite)
+
+
 def listing(section: str) -> dict:
     """One list as the window shows it: what the file holds, and what the scan found.
 
@@ -905,11 +1028,13 @@ def listing(section: str) -> dict:
     for raw in catalog.raw_entries(section):
         entries.append(dict(raw, label=catalog.entry_label(raw)))
     mapping = _map(section)
+    options = model_options(section, mapping, entries, include_folders=True)
     copied = {getattr(one, "copy_of", "") for one in mapping.values()} - {""}
     seeded = seed_names_of(section)
     for entry in entries:
         entry["seeded"] = entry.get("name") in seeded
-        entry["on_disk"] = bool(_held(section, entry))
+        entry["status"] = options["details"].get(entry["label"], {}).get("status") or _status(entry, _held(section, entry))
+        entry["on_disk"] = entry["status"] == "on_disk"
         entry["scanned"] = entry["label"] in copied
     found = spec(section)
     return {
@@ -920,6 +1045,7 @@ def listing(section: str) -> dict:
         "formats": list(found.formats),
         "default_format": found.default_format,
         "mmproj": found.mmproj,
+        "options": options,
         "entries": entries,
         "found": [
             label for label, one in mapping.items()
